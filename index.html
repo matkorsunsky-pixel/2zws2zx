@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Межа</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@600&display=swap">
+<style>
+/* Layout: cartographer's workbench — a narrow instrument rail on the left, the map table fills the rest. */
+:root {
+  --bg: #e9edf1;
+  --panel: #f8fafb;
+  --ink: #17202a;
+  --muted: #5b6774;
+  --line: #d3dae1;
+  --accent: #0e6a70;
+  --accent-soft: #d6ecec;
+  --stage: #d9e0e6;
+  --stage-dot: #c4ccd4;
+  --chip: #ffffff;
+  --danger: #b23a2b;
+  --shadow: 0 1px 2px rgb(20 30 40 / .10), 0 4px 14px rgb(20 30 40 / .08);
+  --f-ui: "Golos Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --f-brand: "Unbounded", "Golos Text", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161b; --panel: #171d23; --ink: #e3e8ee; --muted: #93a0ad; --line: #29323b;
+    --accent: #4bb7b9; --accent-soft: #173638; --stage: #0b0f13; --stage-dot: #1b232b;
+    --chip: #1e252d; --danger: #ef7a68;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 14px rgb(0 0 0 / .35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161b; --panel: #171d23; --ink: #e3e8ee; --muted: #93a0ad; --line: #29323b;
+  --accent: #4bb7b9; --accent-soft: #173638; --stage: #0b0f13; --stage-dot: #1b232b;
+  --chip: #1e252d; --danger: #ef7a68;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 14px rgb(0 0 0 / .35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 var(--f-ui);
+  display: grid; grid-template-columns: 300px 1fr; overflow: hidden;
+}
+aside {
+  background: var(--panel); border-right: 1px solid var(--line);
+  overflow-y: auto; min-width: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 16px;
+  padding-block: 16px 24px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { font: 600 22px/1 var(--f-brand); margin: 0; letter-spacing: .01em; }
+.brand span { color: var(--muted); font-size: 12px; }
+section { display: flex; flex-direction: column; gap: 10px; }
+h2 {
+  margin: 0; font: 600 11px/1 var(--f-ui); text-transform: uppercase;
+  letter-spacing: .09em; color: var(--muted);
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, .btn {
+  font: 500 13px/1 var(--f-ui); color: var(--ink); background: var(--chip);
+  border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+button:hover, .btn:hover { border-color: var(--muted); }
+button:focus-visible, .btn:focus-within, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
+
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tools button { justify-content: flex-start; padding: 9px 10px; }
+.tools button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.tools button.wide { grid-column: span 2; }
+.tools kbd { margin-left: auto; font: 11px var(--f-mono); color: var(--muted); }
+.tools svg { flex: none; }
+
+.field { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.field label { font-size: 13px; }
+.field output { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.field input[type=range] { grid-column: span 2; width: 100%; accent-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); margin-top: 2px; }
+select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px; width: 100%; }
+
+#countries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.country {
+  display: grid; grid-template-columns: 26px 1fr auto 26px; gap: 8px; align-items: center;
+  padding: 5px 6px; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+}
+.country:hover { background: var(--bg); }
+.country.on { border-color: var(--accent); background: var(--accent-soft); }
+.country .sw { width: 26px; height: 26px; border-radius: 6px; overflow: hidden; position: relative; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
+.country .sw input { position: absolute; inset: -6px; width: 40px; height: 40px; border: 0; padding: 0; cursor: pointer; background: none; }
+.country .cname { min-width: 0; font: 500 13px var(--f-ui); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 4px 5px; }
+.country .cname:hover, .country .cname:focus { border-color: var(--line); background: var(--chip); }
+.country .area { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.country .del { padding: 0; width: 26px; height: 26px; justify-content: center; background: transparent; border-color: transparent; color: var(--muted); font-size: 16px; }
+.country .del:hover { color: var(--danger); border-color: var(--line); }
+
+.help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.help b { color: var(--ink); font-weight: 500; }
+
+main { position: relative; min-width: 0; min-height: 0; background-color: var(--stage);
+  background-image: radial-gradient(var(--stage-dot) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+main.drop::after { content: "Отпустите, чтобы открыть карту"; position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-items: center; font: 600 16px var(--f-ui); color: var(--accent); background: rgb(0 0 0 / .04); pointer-events: none; }
+.bar {
+  position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  display: flex; gap: 6px; background: var(--panel); padding: 5px; border-radius: 10px; box-shadow: var(--shadow); align-items: center;
+}
+.bar button { padding: 7px 9px; border-color: transparent; background: transparent; }
+.bar button:hover:not(:disabled) { background: var(--bg); }
+#zoom { font: 12px var(--f-mono); color: var(--muted); min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+.status {
+  position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 10px; justify-content: space-between; align-items: flex-end; pointer-events: none;
+}
+.status > div { background: var(--panel); box-shadow: var(--shadow); border-radius: 8px; padding: 7px 10px; font-size: 12px; max-width: 60ch; }
+#where { font-family: var(--f-mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#toast {
+  position: absolute; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); text-align: center;
+}
+#toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 58%) 1fr; }
+  main { grid-row: 1; }
+  aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .status > div:first-child { display: none; }
+  .status { justify-content: flex-end; }
+}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><h1>Межа</h1><span>редактор границ</span></div>
+
+  <section>
+    <h2>Карта</h2>
+    <div class="row">
+      <label class="btn primary" style="background:var(--accent);border-color:var(--accent);color:var(--panel)">
+        <input type="file" id="fileMap" accept="image/*,.json">Открыть карту…
+      </label>
+      <button id="btnSample">Пример</button>
+    </div>
+    <p class="hint">Любая картинка: PNG, JPG, WebP, SVG. Её можно перетащить на поле или вставить через Ctrl+V.</p>
+  </section>
+
+  <section>
+    <h2>Инструмент</h2>
+    <div class="tools" id="tools">
+      <button data-tool="warp" class="wide">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c5 0 5-12 10-12"/><path d="M13 12h8"/><path d="M18 9l3 3-3 3"/></svg>
+        Тянуть границу<kbd>1</kbd></button>
+      <button data-tool="brush">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l10-10a2.1 2.1 0 0 1 3 3L12 18"/><path d="M8 15c-2.5 0-4 1.5-4 4 0 1-1 2-2 2 4 1 9 0 9-3a3 3 0 0 0-3-3z"/></svg>
+        Кисть<kbd>2</kbd></button>
+      <button data-tool="eraser">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M4.5 15.5l9-9a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L12 20H8.5z"/><path d="M9 11l6 6"/></svg>
+        Ластик<kbd>3</kbd></button>
+      <button data-tool="fill">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l9 9-7 7a2 2 0 0 1-2.8 0L3.8 12.6a2 2 0 0 1 0-2.8z"/><path d="M4 12h14"/><path d="M21 16s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z"/></svg>
+        Заливка<kbd>4</kbd></button>
+      <button data-tool="pan">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
+        Двигать карту<kbd>5</kbd></button>
+    </div>
+
+    <div class="field" id="fSize">
+      <label for="size">Размер захвата</label><output id="sizeOut">90 px</output>
+      <input type="range" id="size" min="4" max="400" value="90">
+    </div>
+    <div class="field" id="fTol" hidden>
+      <label for="tol">Допуск по цвету</label><output id="tolOut">40</output>
+      <input type="range" id="tol" min="0" max="160" value="40">
+    </div>
+    <div id="fMode" hidden>
+      <select id="fillMode" aria-label="Режим заливки">
+        <option value="image">Заливать область карты (по цвету картинки)</option>
+        <option value="owner">Перекрасить целую территорию</option>
+      </select>
+    </div>
+    <label class="check" id="fProtect"><input type="checkbox" id="protect" checked><span>Не заходить на нейтральные земли и море</span></label>
+  </section>
+
+  <section>
+    <h2>Страны</h2>
+    <ul id="countries"></ul>
+    <div class="row"><button id="btnAdd">+ Добавить страну</button></div>
+    <p class="hint">Щелчок по строке выбирает страну для кисти и заливки. Alt + щелчок по карте выбирает страну под курсором.</p>
+  </section>
+
+  <section>
+    <h2>Вид</h2>
+    <div class="field">
+      <label for="alpha">Насыщенность заливки</label><output id="alphaOut">50%</output>
+      <input type="range" id="alpha" min="0" max="100" value="50">
+    </div>
+    <div class="field">
+      <label for="bw">Толщина границы</label><output id="bwOut">2 px</output>
+      <input type="range" id="bw" min="0" max="5" value="2">
+    </div>
+  </section>
+
+  <section>
+    <h2>Файл</h2>
+    <div class="row">
+      <button id="btnPng" class="dl">Сохранить картинку</button>
+      <button id="btnProj" class="dl">Сохранить проект</button>
+      <label class="btn"><input type="file" id="fileProj" accept=".json,application/json">Открыть проект…</label>
+    </div>
+    <p class="hint" id="autosave">Работа сохраняется в браузере автоматически.</p>
+  </section>
+
+  <section>
+    <h2>Управление</h2>
+    <ul class="help">
+      <li><b>Колёсико</b> — масштаб, <b>правая кнопка</b> или <b>пробел</b> — двигать карту</li>
+      <li><b>[ ]</b> — размер захвата, <b>F</b> — показать всю карту</li>
+      <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
+    </ul>
+  </section>
+</aside>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div class="bar">
+    <button id="btnUndo" title="Отменить (Ctrl+Z)" aria-label="Отменить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button id="btnRedo" title="Вернуть (Ctrl+Shift+Z)" aria-label="Вернуть"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+    <button id="btnZoomOut" aria-label="Отдалить">−</button>
+    <span id="zoom">100%</span>
+    <button id="btnZoomIn" aria-label="Приблизить">+</button>
+    <button id="btnFit" title="Вся карта (F)">Вся карта</button>
+  </div>
+  <div class="status">
+    <div id="hint"></div>
+    <div id="where">—</div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), cv = $('#view'), ctx = cv.getContext('2d');
+const MAXDIM = 1800;
+const PALETTE = ['#d0473f', '#3766c9', '#2f9e5b', '#e0a526', '#8a4fc7', '#d4689f', '#1f9aa8', '#8c6d46', '#5a6b2f', '#c4652a'];
+const HINTS = {
+  warp: 'Зажмите кнопку мыши у границы и тяните. Территория едет за курсором — выигрывает та сторона, с которой вы начали.',
+  brush: 'Рисуйте цветом выбранной страны.',
+  eraser: 'Стирает принадлежность: область станет нейтральной.',
+  fill: 'Щёлкните по области карты — она зальётся цветом выбранной страны.',
+  pan: 'Перетаскивайте карту. Колёсико — масштаб.'
+};
+
+// ---------- state ----------
+let W = 0, H = 0;
+const base = document.createElement('canvas');
+const bctx = base.getContext('2d', { willReadFrequently: true });
+let basePix = null;
+const over = document.createElement('canvas');
+const octx = over.getContext('2d');
+let oimg = null;
+let own = null, own0 = null;          // ownership per cell: 0 = neutral, k = countries[k-1]
+let countries = [];
+let rgb = [null];
+let active = 1;
+let tool = 'warp';
+let brush = 90, tol = 40, fillMode = 'image', protect = true;
+let alpha = 0.5, borderW = 2;
+const view = { s: 1, x: 0, y: 0 };
+let dpr = 1;
+let hist = [], redoStack = [];
+let dirty = null, raf = 0;
+let hover = null;                     // grid point under cursor
+let drag = null;
+const pointers = new Map();
+let spaceDown = false;
+let userView = false;              // true once the user has zoomed or panned
+const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+// ---------- helpers ----------
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const hex2rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+let toastT = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+function addDirty(x0, y0, x1, y1) {
+  if (!dirty) dirty = [x0, y0, x1, y1];
+  else { dirty[0] = Math.min(dirty[0], x0); dirty[1] = Math.min(dirty[1], y0); dirty[2] = Math.max(dirty[2], x1); dirty[3] = Math.max(dirty[3], y1); }
+  requestDraw();
+}
+function requestDraw() { if (!raf) raf = requestAnimationFrame(draw); }
+function toGrid(p) { return { x: (p.x - view.x) / view.s, y: (p.y - view.y) / view.s }; }
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+// ---------- map setup ----------
+function setMap(src, w, h) {
+  W = w; H = h;
+  base.width = W; base.height = H;
+  bctx.clearRect(0, 0, W, H);
+  bctx.drawImage(src, 0, 0, W, H);
+  basePix = bctx.getImageData(0, 0, W, H).data;
+  over.width = W; over.height = H;
+  oimg = octx.createImageData(W, H);
+  own = new Uint8Array(W * H);
+  own0 = new Uint8Array(W * H);
+  hist = []; redoStack = []; updUndo();
+  fit();
+}
+function histMax() { return clamp(Math.floor(160e6 / Math.max(1, W * H)), 5, 60); }
+
+function recolor() { rgb = [null, ...countries.map(c => hex2rgb(c.color))]; addDirty(0, 0, W, H); }
+
+function renderRect(x0, y0, x1, y1) {
+  const t = borderW;
+  x0 = Math.max(0, x0 - t - 1); y0 = Math.max(0, y0 - t - 1);
+  x1 = Math.min(W, x1 + t + 1); y1 = Math.min(H, y1 + t + 1);
+  if (x1 <= x0 || y1 <= y0) return;
+  const d = oimg.data, a = Math.round(alpha * 255);
+  for (let y = y0; y < y1; y++) {
+    let i = y * W + x0;
+    for (let x = x0; x < x1; x++, i++) {
+      const o = own[i], p = i * 4;
+      if (!o) { d[p + 3] = 0; continue; }
+      const c = rgb[o] || [128, 128, 128];
+      let vsOther = false, vsNeutral = false;
+      for (let k = 1; k <= t && !vsOther; k++) {
+        let n;
+        if (x - k >= 0) { n = own[i - k]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
+        if (x + k < W) { n = own[i + k]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
+        if (y - k >= 0) { n = own[i - k * W]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
+        if (y + k < H) { n = own[i + k * W]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
+      }
+      if (vsOther) { d[p] = 24; d[p + 1] = 28; d[p + 2] = 36; d[p + 3] = 235; }
+      else if (vsNeutral) { d[p] = c[0] * .55; d[p + 1] = c[1] * .55; d[p + 2] = c[2] * .55; d[p + 3] = 220; }
+      else { d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = a; }
+    }
+  }
+  octx.putImageData(oimg, 0, 0, x0, y0, x1 - x0, y1 - y0);
+}
+
+// ---------- drawing ----------
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const r = stage.getBoundingClientRect();
+  cv.width = Math.max(1, Math.round(r.width * dpr));
+  cv.height = Math.max(1, Math.round(r.height * dpr));
+  requestDraw();
+}
+function draw() {
+  raf = 0;
+  if (dirty && own) { renderRect(dirty[0], dirty[1], dirty[2], dirty[3]); }
+  dirty = null;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!W) return;
+  ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
+  ctx.imageSmoothingEnabled = view.s < 2;
+  ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 12 * dpr;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+  ctx.drawImage(base, 0, 0);
+  ctx.drawImage(over, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
+    const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = brush * view.s;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.8)';
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+    if (tool === 'warp') { ctx.fillStyle = 'rgba(20,25,32,.9)'; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  $('#zoom').textContent = Math.round(view.s * 100) + '%';
+}
+function fit() {
+  if (!W) return;
+  userView = false;
+  const r = stage.getBoundingClientRect();
+  const s = Math.min(r.width / W, r.height / H) * 0.92;
+  view.s = s; view.x = (r.width - W * s) / 2; view.y = (r.height - H * s) / 2;
+  requestDraw();
+}
+function zoomAt(p, k) {
+  userView = true;
+  const ns = clamp(view.s * k, 0.05, 40), kk = ns / view.s;
+  view.x = p.x - (p.x - view.x) * kk; view.y = p.y - (p.y - view.y) * kk; view.s = ns;
+  requestDraw();
+}
+
+// ---------- editing operations ----------
+function stamp(a, b, val) {
+  const R = brush, R2 = R * R;
+  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  const n = Math.max(1, Math.ceil(dist / Math.max(1, R / 3)));
+  let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
+  for (let s = 0; s <= n; s++) {
+    const cx = a.x + (b.x - a.x) * s / n, cy = a.y + (b.y - a.y) * s / n;
+    const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W, Math.ceil(cx + R + 1));
+    const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H, Math.ceil(cy + R + 1));
+    for (let y = y0; y < y1; y++) {
+      const dy = y + .5 - cy, dy2 = dy * dy;
+      for (let x = x0; x < x1; x++) {
+        const dx = x + .5 - cx;
+        if (dx * dx + dy2 <= R2) own[y * W + x] = val;
+      }
+    }
+    if (x1 > x0 && y1 > y0) { bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1); }
+  }
+  if (bx1 > bx0) addDirty(bx0, by0, bx1, by1);
+}
+
+// Rubber-sheet drag of the ownership map: cells near the cursor are pulled from
+// where they were when the drag started, with a smooth falloff to the edge of the ring.
+function warpTo(p0, q) {
+  const R = brush, R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y;
+  const nb = [Math.max(0, Math.floor(q.x - R - 1)), Math.max(0, Math.floor(q.y - R - 1)),
+              Math.min(W, Math.ceil(q.x + R + 2)), Math.min(H, Math.ceil(q.y + R + 2))];
+  const wb = drag.box ? [Math.min(nb[0], drag.box[0]), Math.min(nb[1], drag.box[1]), Math.max(nb[2], drag.box[2]), Math.max(nb[3], drag.box[3])] : nb;
+  for (let y = wb[1]; y < wb[3]; y++) {
+    const dy = y + .5 - q.y;
+    let i = y * W + wb[0];
+    for (let x = wb[0]; x < wb[2]; x++, i++) {
+      const dx = x + .5 - q.x;
+      const r2 = (dx * dx + dy * dy) / R2;
+      const o0 = own0[i];
+      if (r2 >= 1) { own[i] = o0; continue; }
+      // flat-topped falloff: the whole core of the ring moves together, the rim blends out
+      const r = Math.sqrt(r2);
+      let w = 1;
+      if (r > .35) { const t = (r - .35) / .65; w = 1 - t * t * (3 - 2 * t); }
+      const sx = clamp(Math.floor(x + .5 - ddx * w), 0, W - 1);
+      const sy = clamp(Math.floor(y + .5 - ddy * w), 0, H - 1);
+      const s = own0[sy * W + sx];
+      if (o0 === 0 && protect) own[i] = 0;
+      else if (s === 0 && o0 !== 0) own[i] = o0;
+      else own[i] = s;
+    }
+  }
+  drag.box = nb;
+  if (wb[2] > wb[0] && wb[3] > wb[1]) addDirty(wb[0], wb[1], wb[2], wb[3]);
+  return wb;
+}
+function commitBox(b) {
+  for (let y = b[1]; y < b[3]; y++) { const s = y * W + b[0], e = y * W + b[2]; own0.set(own.subarray(s, e), s); }
+}
+function warpStep() {
+  if (!drag || drag.mode !== 'warp') return;
+  const maxStep = Math.max(1.5, brush * 0.25);
+  let dx = drag.p.x - drag.p0.x, dy = drag.p.y - drag.p0.y;
+  let len = Math.hypot(dx, dy);
+  // long drags are applied as a chain of short pulls so the sheet never folds over itself
+  while (len > maxStep) {
+    const q = { x: drag.p0.x + dx / len * maxStep, y: drag.p0.y + dy / len * maxStep };
+    commitBox(warpTo(drag.p0, q));
+    drag.p0 = q; drag.box = null;
+    dx = drag.p.x - drag.p0.x; dy = drag.p.y - drag.p0.y; len = Math.hypot(dx, dy);
+  }
+  warpTo(drag.p0, drag.p);
+}
+
+function fillAt(g) {
+  const gx = Math.floor(g.x), gy = Math.floor(g.y);
+  if (gx < 0 || gy < 0 || gx >= W || gy >= H) return false;
+  const start = gy * W + gx;
+  const stack = new Int32Array(W * H);
+  const seen = new Uint8Array(W * H);
+  let sp = 0, bx0 = gx, by0 = gy, bx1 = gx + 1, by1 = gy + 1, count = 0;
+  let test;
+  if (fillMode === 'owner') {
+    const target = own[start];
+    if (target === active) return false;
+    test = i => own[i] === target;
+  } else {
+    const r = basePix[start * 4], gg = basePix[start * 4 + 1], b = basePix[start * 4 + 2];
+    test = i => { const p = i * 4; return Math.abs(basePix[p] - r) <= tol && Math.abs(basePix[p + 1] - gg) <= tol && Math.abs(basePix[p + 2] - b) <= tol; };
+  }
+  stack[sp++] = start; seen[start] = 1;
+  while (sp) {
+    const i = stack[--sp];
+    own[i] = active; count++;
+    const x = i % W, y = (i - x) / W;
+    if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
+    if (x > 0 && !seen[i - 1]) { seen[i - 1] = 1; if (test(i - 1)) stack[sp++] = i - 1; }
+    if (x < W - 1 && !seen[i + 1]) { seen[i + 1] = 1; if (test(i + 1)) stack[sp++] = i + 1; }
+    if (y > 0 && !seen[i - W]) { seen[i - W] = 1; if (test(i - W)) stack[sp++] = i - W; }
+    if (y < H - 1 && !seen[i + W]) { seen[i + W] = 1; if (test(i + W)) stack[sp++] = i + W; }
+  }
+  addDirty(bx0, by0, bx1, by1);
+  return count > 0;
+}
+
+// ---------- history ----------
+function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active }; }
+function pushHist() { hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
+function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); }
+function afterChange() { recolor(); renderCountries(); updUndo(); scheduleSave(); }
+function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
+function redo() { if (!redoStack.length || drag) return; hist.push(snap()); restore(redoStack.pop()); afterChange(); }
+function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
+
+// ---------- countries panel ----------
+function areas() {
+  const n = new Float64Array(countries.length + 1);
+  for (let i = 0; i < own.length; i++) n[own[i]]++;
+  let tot = 0; for (let k = 1; k < n.length; k++) tot += n[k];
+  return { n, tot };
+}
+function renderCountries() {
+  const ul = $('#countries');
+  ul.textContent = '';
+  const { n, tot } = own ? areas() : { n: [], tot: 0 };
+  countries.forEach((c, k) => {
+    const idx = k + 1;
+    const li = document.createElement('li');
+    li.className = 'country' + (idx === active ? ' on' : '');
+    li.dataset.i = idx;
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = c.color;
+    const ci = document.createElement('input'); ci.type = 'color'; ci.value = c.color; ci.id = 'color-' + idx; ci.setAttribute('aria-label', 'Цвет: ' + c.name);
+    ci.addEventListener('input', () => { c.color = ci.value; sw.style.background = ci.value; recolor(); });
+    ci.addEventListener('change', scheduleSave);
+    sw.append(ci);
+    const nm = document.createElement('input'); nm.className = 'cname'; nm.value = c.name; nm.id = 'name-' + idx; nm.setAttribute('aria-label', 'Название страны');
+    nm.addEventListener('change', () => { c.name = nm.value.trim() || ('Страна ' + idx); nm.value = c.name; scheduleSave(); });
+    const ar = document.createElement('span'); ar.className = 'area';
+    ar.textContent = tot ? (n[idx] / tot * 100).toFixed(1) + '%' : '—';
+    ar.title = Math.round(n[idx] || 0).toLocaleString('ru') + ' клеток';
+    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', 'Удалить ' + c.name);
+    del.addEventListener('click', ev => { ev.stopPropagation(); removeCountry(idx); });
+    li.append(sw, nm, ar, del);
+    li.addEventListener('click', ev => { if (ev.target === nm || ev.target === ci) { setActive(idx, false); return; } setActive(idx); });
+    ul.append(li);
+  });
+}
+function setActive(idx, rerender = true) {
+  active = idx;
+  if (rerender) renderCountries();
+  else document.querySelectorAll('.country').forEach(li => li.classList.toggle('on', +li.dataset.i === idx));
+}
+function addCountry(name, color) {
+  if (countries.length >= 250) { toast('Слишком много стран'); return; }
+  if (own) pushHist();
+  const k = countries.length;
+  countries.push({ name: name || ('Страна ' + (k + 1)), color: color || PALETTE[k % PALETTE.length] });
+  active = countries.length;
+  afterChange();
+}
+function removeCountry(idx) {
+  pushHist();
+  const name = countries[idx - 1].name;
+  countries.splice(idx - 1, 1);
+  for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
+  if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
+  afterChange();
+  toast('«' + name + '» удалена. Ctrl+Z вернёт её.');
+}
+
+// ---------- tools UI ----------
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  $('#fSize').hidden = !(t === 'warp' || t === 'brush' || t === 'eraser');
+  $('#fTol').hidden = !(t === 'fill' && fillMode === 'image');
+  $('#fMode').hidden = t !== 'fill';
+  $('#fProtect').hidden = t !== 'warp';
+  $('#hint').textContent = HINTS[t];
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : 'crosshair';
+  requestDraw();
+}
+function setBrush(v) { brush = clamp(Math.round(v), 4, 400); $('#size').value = brush; $('#sizeOut').textContent = brush + ' px'; requestDraw(); }
+
+// ---------- pointer input ----------
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const p = pos(e);
+  pointers.set(e.pointerId, p);
+  if (pointers.size === 2) {
+    // second finger: abandon the stroke and switch to pinch-zoom
+    if (drag && (drag.mode === 'warp' || drag.mode === 'paint') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); }
+    const [a, b] = [...pointers.values()];
+    drag = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, c0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
+    return;
+  }
+  if (pointers.size > 2) return;
+  if (e.button === 1 || e.button === 2 || tool === 'pan' || spaceDown || !W) {
+    drag = { mode: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y };
+    cv.style.cursor = 'grabbing';
+    return;
+  }
+  if (e.button !== 0) return;
+  const g = toGrid(p);
+  const gx = Math.floor(g.x), gy = Math.floor(g.y);
+  const inside = gx >= 0 && gy >= 0 && gx < W && gy < H;
+  if (e.altKey) {
+    if (inside && own[gy * W + gx]) { setActive(own[gy * W + gx]); toast('Выбрана: ' + countries[active - 1].name); }
+    return;
+  }
+  if (tool === 'warp') {
+    pushHist(); own0.set(own);
+    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false };
+    const o = inside ? own[gy * W + gx] : 0;
+    $('#hint').textContent = o ? 'Тянете в пользу: ' + countries[o - 1].name : HINTS.warp;
+  } else if (tool === 'brush' || tool === 'eraser') {
+    if (tool === 'brush' && !active) { toast('Сначала добавьте страну'); return; }
+    pushHist();
+    const val = tool === 'brush' ? active : 0;
+    drag = { mode: 'paint', last: g, val };
+    stamp(g, g, val);
+  } else if (tool === 'fill') {
+    if (!active) { toast('Сначала добавьте страну'); return; }
+    if (!inside) return;
+    pushHist();
+    if (fillAt(g)) { renderCountries(); scheduleSave(); } else { hist.pop(); updUndo(); }
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const p = pos(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+  hover = W ? toGrid(p) : null;
+  updWhere();
+  if (!drag) { requestDraw(); return; }
+  if (drag.mode === 'pinch') {
+    if (pointers.size < 2) return;
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const ns = clamp(drag.v0.s * d / drag.d0, 0.05, 40);
+    view.x = c.x - (drag.c0.x - drag.v0.x) * ns / drag.v0.s;
+    view.y = c.y - (drag.c0.y - drag.v0.y) * ns / drag.v0.s;
+    view.s = ns; userView = true; requestDraw();
+  } else if (drag.mode === 'pan') {
+    userView = true;
+    view.x = drag.vx + p.x - drag.sx; view.y = drag.vy + p.y - drag.sy; requestDraw();
+  } else if (drag.mode === 'warp') {
+    drag.p = toGrid(p);
+    if (!drag.pending) { drag.pending = true; requestAnimationFrame(() => { if (drag && drag.mode === 'warp') { drag.pending = false; warpStep(); } }); }
+  } else if (drag.mode === 'paint') {
+    const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
+  }
+});
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (!drag) return;
+  if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
+  if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
+  const wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
+  drag = null;
+  setTool(tool);
+  if (wasEdit) { renderCountries(); scheduleSave(); }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestDraw(); } });
+cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(pos(e), Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015))); }, { passive: false });
+
+function updWhere() {
+  if (!hover || !W) { $('#where').textContent = '—'; return; }
+  const x = Math.floor(hover.x), y = Math.floor(hover.y);
+  if (x < 0 || y < 0 || x >= W || y >= H) { $('#where').textContent = '—'; return; }
+  const o = own[y * W + x];
+  $('#where').textContent = x + ', ' + y + ' · ' + (o ? countries[o - 1].name : 'нейтральная');
+}
+
+// ---------- keyboard ----------
+window.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && (t.type === 'text' || t.type === 'search')))) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'я')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { e.preventDefault(); redo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'pan' };
+  if (tools[e.code]) { setTool(tools[e.code]); return; }
+  if (e.code === 'BracketLeft') setBrush(brush / 1.2);
+  else if (e.code === 'BracketRight') setBrush(brush * 1.2 + 1);
+  else if (e.code === 'KeyF') fit();
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; setTool(tool); } });
+
+// ---------- loading maps ----------
+function loadImageFile(file) {
+  if (!file) return;
+  if (/json/.test(file.type) || /\.json$/i.test(file.name)) { loadProjectFile(file); return; }
+  if (!/^image\//.test(file.type)) { toast('Это не картинка. Откройте PNG, JPG, WebP или SVG.'); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    let w = img.naturalWidth || 1200, h = img.naturalHeight || 800;
+    const k = Math.min(1, MAXDIM / Math.max(w, h));
+    if (/svg/.test(file.type) && Math.max(w, h) < 1000) { const kk = 1400 / Math.max(w, h); w *= kk; h *= kk; }
+    else { w *= k; h *= k; }
+    setMap(img, Math.round(w), Math.round(h));
+    URL.revokeObjectURL(url);
+    if (!countries.length) { countries = [{ name: 'Страна 1', color: PALETTE[0] }, { name: 'Страна 2', color: PALETTE[1] }]; active = 1; }
+    afterChange();
+    saveImage();
+    setTool('fill');
+    toast('Карта открыта. Залейте области цветами стран, потом тяните границы.');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('Не удалось открыть картинку.'); };
+  img.src = url;
+}
+$('#fileMap').addEventListener('change', e => { loadImageFile(e.target.files[0]); e.target.value = ''; });
+$('#fileProj').addEventListener('change', e => { loadProjectFile(e.target.files[0]); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add('drop'); }));
+['dragleave', 'drop'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove('drop'); }));
+stage.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadImageFile(f); });
+window.addEventListener('paste', e => {
+  const items = e.clipboardData ? [...e.clipboardData.items] : [];
+  const it = items.find(i => i.type.startsWith('image/'));
+  if (it) { e.preventDefault(); loadImageFile(it.getAsFile()); }
+});
+
+// ---------- sample map ----------
+function makeSample() {
+  const w = 1200, h = 800;
+  const seed = 1337;
+  const hash = (x, y) => { let n = Math.imul(x, 374761393) + Math.imul(y, 668265263) + seed | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const noise = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+  const fbm = (x, y) => { let s = 0, amp = .5, f = 1; for (let o = 0; o < 5; o++) { s += amp * noise(x * f, y * f); amp *= .5; f *= 2; } return s; };
+  const elev = new Float32Array(w * h), land = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const nx = (x - w / 2) / (w * .44), ny = (y - h / 2) / (h * .42);
+    const fall = 1 - Math.sqrt(nx * nx + ny * ny);
+    const e = fall * .95 + (fbm(x / 170, y / 170) - .5) * 1.15;
+    const i = y * w + x; elev[i] = e; land[i] = e > .08 ? 1 : 0;
+  }
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const cx = c.getContext('2d'); const im = cx.createImageData(w, h); const d = im.data;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const sample = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, p = i * 4, e = elev[i];
+    let r, g, b;
+    if (!land[i]) {
+      const t = clamp((.08 - e) * 2.2, 0, 1);
+      r = lerp(186, 122, t); g = lerp(214, 165, t); b = lerp(228, 194, t);
+      if (x % 100 === 0 || y % 100 === 0) { r -= 14; g -= 10; b -= 6; }
+    } else {
+      const t = clamp((e - .08) / .7, 0, 1);
+      if (t < .5) { const u = t / .5; r = lerp(200, 216, u); g = lerp(214, 204, u); b = lerp(166, 160, u); }
+      else { const u = (t - .5) / .5; r = lerp(216, 168, u); g = lerp(204, 152, u); b = lerp(160, 130, u); }
+      const sh = (noise(x / 6, y / 6) - .5) * 10; r += sh; g += sh; b += sh;
+      const coast = (x > 0 && !land[i - 1]) || (x < w - 1 && !land[i + 1]) || (y > 0 && !land[i - w]) || (y < h - 1 && !land[i + w]);
+      if (coast) { r = 70; g = 88; b = 98; }
+      const border = w * .5 + 70 * Math.sin(y / 110) + (fbm(x / 90 + 50, y / 90) - .5) * 140;
+      sample[i] = x < border ? 1 : 2;
+    }
+    d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = 255;
+  }
+  cx.putImageData(im, 0, 0);
+  return { canvas: c, w, h, own: sample };
+}
+function loadSample() {
+  const s = makeSample();
+  setMap(s.canvas, s.w, s.h);
+  countries = [{ name: 'Аргония', color: '#d0473f' }, { name: 'Борея', color: '#3766c9' }];
+  active = 1;
+  own.set(s.own);
+  afterChange();
+  saveImage();
+  setTool('warp');
+}
+$('#btnSample').addEventListener('click', () => { loadSample(); toast('Открыт пример: два государства на одном острове.'); });
+
+// ---------- project files ----------
+function rle(a) { const out = []; let v = a[0], n = 0; for (let i = 0; i < a.length; i++) { if (a[i] === v && n < 1e9) n++; else { out.push(v, n); v = a[i]; n = 1; } } out.push(v, n); return out; }
+function unrle(r, len) { const a = new Uint8Array(len); let p = 0; for (let k = 0; k < r.length; k += 2) { a.fill(r[k], p, p + r[k + 1]); p += r[k + 1]; } return a; }
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('#btnPng').addEventListener('click', () => {
+  if (!W) return;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.drawImage(base, 0, 0); x.drawImage(over, 0, 0);
+  c.toBlob(b => download(b, 'karta.png'), 'image/png');
+});
+$('#btnProj').addEventListener('click', () => {
+  if (!W) return;
+  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own) };
+  download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
+});
+function loadProjectFile(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      if (d.format !== 'mezha') throw new Error('format');
+      const img = new Image();
+      img.onload = () => {
+        setMap(img, d.w, d.h);
+        countries = d.countries; active = d.active || 1;
+        own.set(unrle(d.own, W * H));
+        afterChange(); saveImage(); setTool('warp');
+        toast('Проект открыт.');
+      };
+      img.src = d.image;
+    } catch (e) { toast('Этот файл не похож на проект Межи.'); }
+  };
+  fr.readAsText(file);
+}
+
+// ---------- autosave (IndexedDB, this browser only) ----------
+function idb() {
+  return new Promise((res, rej) => {
+    try { const r = indexedDB.open('mezha', 1); r.onupgradeneeded = () => r.result.createObjectStore('p'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    catch (e) { rej(e); }
+  });
+}
+async function dbPut(key, val) {
+  const db = await idb();
+  return new Promise((res, rej) => { const tx = db.transaction('p', 'readwrite'); tx.objectStore('p').put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+}
+async function dbGet(key) {
+  const db = await idb();
+  return new Promise((res, rej) => { const rq = db.transaction('p').objectStore('p').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); });
+}
+let saveT = 0;
+function scheduleSave() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    if (!own) return;
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW }).catch(() => {});
+  }, 600);
+}
+function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
+async function restoreSaved() {
+  try {
+    const [st, img] = await Promise.all([dbGet('state'), dbGet('image')]);
+    if (!st || !img || !st.own) return false;
+    const url = URL.createObjectURL(img);
+    const im = new Image();
+    await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = url; });
+    setMap(im, st.w, st.h);
+    URL.revokeObjectURL(url);
+    if (st.own.length !== W * H) return false;
+    own.set(st.own); countries = st.countries || []; active = st.active || 1;
+    if (typeof st.alpha === 'number') { alpha = st.alpha; $('#alpha').value = Math.round(alpha * 100); $('#alphaOut').textContent = Math.round(alpha * 100) + '%'; }
+    if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
+    afterChange();
+    return true;
+  } catch (e) { return false; }
+}
+
+// ---------- controls ----------
+document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('#size').addEventListener('input', e => setBrush(+e.target.value));
+$('#tol').addEventListener('input', e => { tol = +e.target.value; $('#tolOut').textContent = tol; });
+$('#fillMode').addEventListener('change', e => { fillMode = e.target.value; setTool(tool); });
+$('#protect').addEventListener('change', e => { protect = e.target.checked; });
+$('#alpha').addEventListener('input', e => { alpha = e.target.value / 100; $('#alphaOut').textContent = e.target.value + '%'; addDirty(0, 0, W, H); scheduleSave(); });
+$('#bw').addEventListener('input', e => { borderW = +e.target.value; $('#bwOut').textContent = borderW + ' px'; addDirty(0, 0, W, H); scheduleSave(); });
+$('#btnAdd').addEventListener('click', () => addCountry());
+$('#btnUndo').addEventListener('click', undo);
+$('#btnRedo').addEventListener('click', redo);
+$('#btnFit').addEventListener('click', fit);
+$('#btnZoomIn').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 1.25); });
+$('#btnZoomOut').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 0.8); });
+if (inFrame) {
+  document.querySelectorAll('.dl').forEach(b => b.hidden = true);
+  $('#autosave').textContent = 'Работа сохраняется в этом браузере автоматически. Чтобы сохранять картинку и проект в файл, откройте index.html из репозитория у себя на компьютере.';
+}
+
+new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
+resize();
+setBrush(90);
+setTool('warp');
+restoreSaved().then(ok => { if (!ok) loadSample(); fit(); });
+})();
+</script>
+</body>
+</html>
