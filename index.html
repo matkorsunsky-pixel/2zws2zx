@@ -268,7 +268,8 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <button id="geoRefine">Детализировать то, что на экране</button>
       <button id="geoBack">Вернуться к прежней области</button>
       <p class="hint" id="geoInfo"></p>
-      <p class="hint">Возьмите инструмент «Область» (0) и обведите рамкой город или район. Внутри рамки клетки территории станут по 2–10 м, а приближать можно до улиц и домов. Снаружи остаются снимки и общая карта. Нарисованное переносится между уровнями.</p>
+      <p class="hint" id="geoNewHint">Обводите и заливайте страны прямо на карте мира, хоть целые континенты. Приближайтесь к любому городу — детализация растёт сама, до улиц и домов. Всё нарисованное хранится на всех уровнях сразу: подробности видны вблизи, общая картина — издалека.</p>
+      <p class="hint" id="geoOldHint">Возьмите инструмент «Область» (0) и обведите рамкой город или район. Внутри рамки клетки территории станут по 2–10 м, а приближать можно до улиц и домов. Снаружи остаются снимки и общая карта. Нарисованное переносится между уровнями.</p>
     </div>
     <p class="hint">Любая картинка: PNG, JPG, WebP, SVG. Её можно перетащить на поле или вставить через Ctrl+V.</p>
   </section>
@@ -636,6 +637,7 @@ function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - 
 // ---------- map setup ----------
 function setMap(src, w, h, geoExt) {
   W = w; H = h;
+  if (typeof geoStore !== 'undefined') { geoStore = false; win = null; winOwn0 = null; }
   geo = geoExt || null;
   base.width = W; base.height = H;
   if (geo) bctx.clearRect(0, 0, W, H);                   // the Earth is drawn from imagery tiles instead
@@ -941,7 +943,7 @@ function drawGeoBackdrop() {
   ctx.imageSmoothingEnabled = true;
   const k = view.s * dpr, ox = view.x * dpr, oy = view.y * dpr;
   drawGeoTiles(ctx, k, ox, oy, cv.width, cv.height);
-  drawParentTerritory(ctx, k, ox, oy);
+  if (geoStore) drawStoreBackdrop(ctx, k, ox, oy); else drawParentTerritory(ctx, k, ox, oy);
   ctx.restore();
 }
 let parentCv = null, parentKey = '';
@@ -983,7 +985,10 @@ function drawRegionFrame() {
 const latAtY = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
 function metersPerCell() { return geo ? (geo.x1 - geo.x0) * 40075016 * Math.cos(latAtY((geo.y0 + geo.y1) / 2) * Math.PI / 180) / W : 1; }
 // how far in you may zoom: down to about 0.3 m of ground per screen pixel
-function maxZoom() { return geo ? clamp(metersPerCell() / .3, 40, 2500) : 40; }
+function maxZoom() {
+  if (geoStore && win) return win.L < LMAX ? 1e4 : 6;   // past the finest level a cell would grow bigger than the brush
+  return geo ? clamp(metersPerCell() / .3, 40, 2500) : 40;
+}
 function geoLatLon(gx, gy) {
   const wx = geo.x0 + gx * geoWpcX(), wy = geo.y0 + gy * geoWpcY();
   return [Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180 / Math.PI, wx * 360 - 180];
@@ -1008,15 +1013,11 @@ function geoDims(ext, root) {
   return [Math.max(60, w), Math.max(60, h)];
 }
 function openEarth() {
-  setBattles(false);
-  const ext = { x0: 0, y0: .1, x1: 1, y1: .75 };
-  const [w, h] = geoDims(ext, true);
-  geoStack = [];
-  setMap(null, w, h, ext);
+  startEarthStore();
   if (!countries.length) { countries = [{ name: 'Страна 1', color: PALETTE[0] }, { name: 'Страна 2', color: PALETTE[1] }]; active = 1; }
   afterChange(); saveImage(); renderGeoPanel();
-  setTool('pan');
-  toast('Найдите место (поиск или колёсико), возьмите инструмент «Область» (0) и обведите город или район.');
+  setTool('pan'); fitWorld();
+  toast('Обводите страны прямо на карте мира. Приближайтесь хоть до улиц — детализация растёт сама.');
 }
 // objects on the map, in grid cells, carried between two extents
 function moveObjects(fromExt, fromW, fromH, toExt, toW, toH) {
@@ -1101,24 +1102,28 @@ async function geoSearch(q) {
   const bb = res[0].boundingbox.map(Number);   // south, north, west, east
   const x0 = lonToX(bb[2]), x1 = lonToX(bb[3]), y0 = latToY(bb[1]), y1 = latToY(bb[0]);
   const g = [(x0 - geo.x0) / geoWpcX(), (y0 - geo.y0) / geoWpcY(), (x1 - geo.x0) / geoWpcX(), (y1 - geo.y0) / geoWpcY()];
-  if (g[2] < 0 || g[3] < 0 || g[0] > W || g[1] > H) { toast('«' + res[0].display_name.split(',')[0] + '» вне текущей области. Вернитесь к прежней области кнопкой ниже.'); return; }
+  if (!geoStore && (g[2] < 0 || g[3] < 0 || g[0] > W || g[1] > H)) { toast('«' + res[0].display_name.split(',')[0] + '» вне текущей области. Вернитесь к прежней области кнопкой ниже.'); return; }
   const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight;
   const bw = Math.max(g[2] - g[0], 2), bh = Math.max(g[3] - g[1], 2);
-  view.s = clamp(Math.min(r.width / bw, (r.height - strip) / bh) * .8, .05, maxZoom());
+  view.s = clamp(Math.min(r.width / bw, (r.height - strip) / bh) * .8, geoStore ? 1 / 64 : .05, maxZoom());
   view.x = r.width / 2 - (g[0] + g[2]) / 2 * view.s; view.y = (r.height - strip) / 2 - (g[1] + g[3]) / 2 * view.s;
   userView = true; requestDraw();
   toast('Найдено: ' + res[0].display_name.split(',').slice(0, 2).join(','));
+  viewChanged();
 }
 function renderGeoPanel() {
   $('#geoPanel').hidden = !geo;
   $('#attrib').hidden = !geo;
+  ['#geoRefine', '#geoBack', '#geoRegionBtn', '#geoOldHint'].forEach(id => { const el = $(id); if (el) el.hidden = !!geoStore; });
+  $('#geoNewHint').hidden = !geoStore;
   if (!geo) { const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = true; if (tool === 'region') setTool('warp'); return; }
   $('#geoLayer').value = geoLayer; $('#geoLabels').checked = geoLabels;
   $('#geoBack').disabled = !geoStack.length;
-  const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = !geo;
+  const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = !geo || geoStore;
   $('#attrib').textContent = (GEO_LAYERS[geoLayer] || GEO_LAYERS.sat).attr + (geoLabels ? ' · подписи Esri' : '');
   const km = (geo.x1 - geo.x0) * 40075 * Math.cos(geoLatLon(W / 2, H / 2)[0] * Math.PI / 180);
   $('#geoInfo').textContent = 'Область ' + fmtMeters(km * 1000) + ' в ширину, одна клетка ≈ ' + fmtMeters(km * 1000 / W) + '. Уровней детализации: ' + geoStack.length + '.';
+  if (geoStore) updateDetailInfo();
 }
 // PNG export: imagery at the export scale (needs tiles that allow it)
 function exportGeoBase(c) {
@@ -1145,6 +1150,335 @@ function exportGeoBase(c) {
   });
 }
 
+// ---------- Earth territory store: the whole planet at every level of detail ----------
+// Territory is kept in 256×256 tiles on 17 levels (level l has 256·2^l cells around the world, from
+// ~156 km down to ~0.6 m per cell). Only tiles that were drawn on exist; everything else is read from
+// the nearest coarser level and smoothed while it is enlarged. The tools work on a window of one
+// level around what is on screen; when you zoom or pan, edits are written back to every level and
+// the window is reloaded at the level that matches the zoom.
+const TS = 256, LMAX = 16;
+let geoStore = false;
+let store = new Map();                // tile key -> Uint8Array(65536) or one owner number for a uniform tile
+let levelTiles = [];                  // level -> Set of tile keys
+let storeDirty = new Set();           // tiles to write to browser storage
+let win = null;                       // { L, cx0, cy0 }: the working grid is W×H cells of level L from (cx0, cy0)
+let winOwn0 = null;                   // working grid as last written to the store
+const tk = (l, x, y) => (l * 65536 + y) * 65536 + x;
+const tkL = k => Math.floor(k / 4294967296), tkY = k => Math.floor(k / 65536) % 65536, tkX = k => k % 65536;
+const worldCells = l => TS * Math.pow(2, l);
+const ZS = () => geoStore ? 1 / view.s : 1;      // sizes given in screen pixels → grid cells
+const BR = () => brush * ZS();
+function storeReset() { store = new Map(); levelTiles = []; storeDirty = new Set(); tileSet(0, 0, 0, 0); }
+function tileSet(l, x, y, t) {
+  const k = tk(l, x, y);
+  if (!store.has(k)) (levelTiles[l] || (levelTiles[l] = new Set())).add(k);
+  store.set(k, t); storeDirty.add(k);
+}
+// one cell of level l, read from the deepest stored level at or above it
+function cellAt(l, gx, gy) {
+  const n = worldCells(l);
+  if (gy < 0 || gy >= n) return 0;
+  gx = ((gx % n) + n) % n;
+  for (let k = l; k >= 0; k--) {
+    const sh = l - k, x = gx >> sh, y = gy >> sh, t = store.get(tk(k, x >> 8, y >> 8));
+    if (t !== undefined) return typeof t === 'number' ? t : t[((y & 255) << 8) | (x & 255)];
+  }
+  return 0;
+}
+// The 256×256 cells of tile (l, tx, ty): stored, or enlarged from the deepest coarser tile.
+// Enlarging blends the four nearest coarse cells, so borders come out as smooth slopes, not blocks.
+function tileBlock(l, tx, ty) {
+  const n = 1 << l;
+  if (ty < 0 || ty >= n) return 0;
+  tx = ((tx % n) + n) % n;
+  const own_ = store.get(tk(l, tx, ty));
+  if (own_ !== undefined) return own_;
+  let k = l - 1;
+  while (k >= 0 && store.get(tk(k, tx >> (l - k), ty >> (l - k))) === undefined) k--;
+  if (k < 0) return 0;
+  const d = l - k, sc = 1 / (1 << d);
+  const ax = (tx * TS + .5) * sc - .5, ay = (ty * TS + .5) * sc - .5;
+  const px0 = Math.floor(ax) - 1, py0 = Math.floor(ay) - 1;
+  const pw = Math.floor(((tx + 1) * TS - .5) * sc - .5) - px0 + 3, ph = Math.floor(((ty + 1) * TS - .5) * sc - .5) - py0 + 3;
+  const patch = new Uint8Array(pw * ph);
+  let first = -1, uniform = true;
+  for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+    const v = cellAt(k, px0 + x, py0 + y);
+    patch[y * pw + x] = v;
+    if (first < 0) first = v; else if (v !== first) uniform = false;
+  }
+  if (uniform) return first;
+  // Enlarge with cubic B-spline weights over the 4×4 nearest coarse cells: each owner gets a smooth
+  // "presence" field and the strongest one wins, so coarse outlines come out round instead of stepped.
+  const out = new Uint8Array(TS * TS), wxs = new Float64Array(4), wys = new Float64Array(4);
+  const vals = new Int32Array(16), wts = new Float64Array(16);
+  const bs = (t, o) => o === 0 ? (1 - t) * (1 - t) * (1 - t) / 6 : o === 1 ? (3 * t * t * t - 6 * t * t + 4) / 6 : o === 2 ? (-3 * t * t * t + 3 * t * t + 3 * t + 1) / 6 : t * t * t / 6;
+  for (let y = 0; y < TS; y++) {
+    const fy = (ty * TS + y + .5) * sc - .5, iy = Math.floor(fy), ty_ = fy - iy, ry = iy - 1 - py0;
+    for (let o = 0; o < 4; o++) wys[o] = bs(ty_, o);
+    for (let x = 0; x < TS; x++) {
+      const fx = (tx * TS + x + .5) * sc - .5, ix = Math.floor(fx), tx_ = fx - ix, rx = ix - 1 - px0;
+      const c0 = patch[(ry + 1) * pw + rx + 1];
+      // quick path: the 4×4 neighbourhood has one owner
+      let same = true;
+      for (let j = 0; j < 4 && same; j++) { const r = (ry + j) * pw + rx; for (let i = 0; i < 4; i++) if (patch[r + i] !== c0) { same = false; break; } }
+      if (same) { out[(y << 8) | x] = c0; continue; }
+      for (let o = 0; o < 4; o++) wxs[o] = bs(tx_, o);
+      let nv = 0;
+      for (let j = 0; j < 4; j++) {
+        const r = (ry + j) * pw + rx;
+        for (let i = 0; i < 4; i++) {
+          const v = patch[r + i], w = wxs[i] * wys[j];
+          let q = 0; while (q < nv && vals[q] !== v) q++;
+          if (q === nv) { vals[nv] = v; wts[nv] = 0; nv++; }
+          wts[q] += w;
+        }
+      }
+      let best = vals[0], bw = wts[0];
+      for (let q = 1; q < nv; q++) if (wts[q] > bw) { bw = wts[q]; best = vals[q]; }
+      out[(y << 8) | x] = best;
+    }
+  }
+  return out;
+}
+function ensureTile(l, tx, ty) {
+  const k = tk(l, tx, ty), t = store.get(k);
+  if (t instanceof Uint8Array) return t;
+  if (typeof t === 'number') { const a = new Uint8Array(TS * TS).fill(t); tileSet(l, tx, ty, a); return a; }
+  const b = tileBlock(l, tx, ty);
+  const a = typeof b === 'number' ? new Uint8Array(TS * TS).fill(b) : b;
+  tileSet(l, tx, ty, a);
+  return a;
+}
+// write the working grid back into the store, then carry the change to every other level
+function commitWindow() {
+  if (!geoStore || !win || !own || !winOwn0) return false;
+  const { L, cx0, cy0 } = win, n = worldCells(L), changed = new Map();
+  for (let y = 0; y < H; y++) {
+    const gy = cy0 + y;
+    if (gy < 0 || gy >= n) continue;
+    let i = y * W;
+    for (let x = 0; x < W; x++, i++) {
+      if (own[i] === winOwn0[i]) continue;
+      const gx = (((cx0 + x) % n) + n) % n, tx = gx >> 8, ty = gy >> 8, key = tk(L, tx, ty);
+      let c = changed.get(key);
+      if (!c) { c = { x: tx, y: ty, t: ensureTile(L, tx, ty), m: new Uint8Array(TS * TS) }; changed.set(key, c); }
+      const j = ((gy & 255) << 8) | (gx & 255);
+      c.t[j] = own[i]; c.m[j] = 1;
+      storeDirty.add(key);
+    }
+  }
+  winOwn0.set(own);
+  if (!changed.size) return false;
+  for (const c of changed.values()) { pushDown(L, c); pushUp(L, c.x, c.y); }
+  storeAreaStamp = 0;
+  scheduleTileSave();
+  return true;
+}
+const mode4 = (a, b, c, d) => (a === b || a === c || a === d) ? a : (b === c || b === d) ? b : (c === d) ? c : a;
+function pushUp(l, x, y) {
+  for (let k = l; k > 0; k--) {
+    const child = ensureTile(k, x, y), px = x >> 1, py = y >> 1, par = ensureTile(k - 1, px, py);
+    const ox = (x & 1) * 128, oy = (y & 1) * 128;
+    for (let j = 0; j < 128; j++) {
+      const r0 = (2 * j) << 8, r1 = (2 * j + 1) << 8, pr = (oy + j) << 8;
+      for (let i = 0; i < 128; i++) par[pr + ox + i] = mode4(child[r0 + 2 * i], child[r0 + 2 * i + 1], child[r1 + 2 * i], child[r1 + 2 * i + 1]);
+    }
+    storeDirty.add(tk(k - 1, px, py));
+    x = px; y = py;
+  }
+}
+function pushDown(l, c) {
+  for (let d = l + 1; d <= LMAX; d++) {
+    const set = levelTiles[d];
+    if (!set || !set.size) continue;
+    const sh = d - l;
+    for (const key of set) {
+      const x = tkX(key), y = tkY(key);
+      if ((x >> sh) !== c.x || (y >> sh) !== c.y) continue;
+      const t = ensureTile(d, x, y);
+      let touched = false;
+      for (let cy = 0; cy < TS; cy++) {
+        const ly = (((y << 8) + cy) >> sh) - (c.y << 8);
+        for (let cx = 0; cx < TS; cx++) {
+          const lx = (((x << 8) + cx) >> sh) - (c.x << 8), j = (ly << 8) | lx;
+          if (c.m[j]) { t[(cy << 8) | cx] = c.t[j]; touched = true; }
+        }
+      }
+      if (touched) storeDirty.add(key);
+    }
+  }
+}
+// fill a grid of level l starting at (cx0, cy0) from the store
+function readGrid(l, cx0, cy0, w, h, dst) {
+  const tx0 = Math.floor(cx0 / TS), tx1 = Math.floor((cx0 + w - 1) / TS), ty0 = Math.floor(cy0 / TS), ty1 = Math.floor((cy0 + h - 1) / TS);
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const b = tileBlock(l, tx, ty);
+    const x0 = Math.max(cx0, tx * TS), x1 = Math.min(cx0 + w, (tx + 1) * TS), y0 = Math.max(cy0, ty * TS), y1 = Math.min(cy0 + h, (ty + 1) * TS);
+    for (let y = y0; y < y1; y++) {
+      const drow = (y - cy0) * w - cx0;
+      if (typeof b === 'number') dst.fill(b, drow + x0, drow + x1);
+      else { const srow = (y - ty * TS) << 8; for (let x = x0; x < x1; x++) dst[drow + x] = b[srow + x - tx * TS]; }
+    }
+  }
+}
+// territory shares measured on the whole planet (level 3), weighted by real area
+let storeAreaCache = null, storeAreaStamp = 0;
+function storeAreas() {
+  const now = performance.now();
+  if (storeAreaCache && storeAreaStamp && now - storeAreaStamp < 1500) return storeAreaCache;
+  const l = 3, n = worldCells(l), cnt = new Float64Array(countries.length + 1), row = new Uint8Array(n * TS);
+  for (let ty = 0; ty < (1 << l); ty++) {
+    readGrid(l, 0, ty * TS, n, TS, row);
+    for (let y = 0; y < TS; y++) {
+      const lat = latAtY((ty * TS + y + .5) / n) * Math.PI / 180, w = Math.cos(lat) * Math.cos(lat), r = y * n;
+      for (let x = 0; x < n; x++) { const o = row[r + x]; if (o && o < cnt.length) cnt[o] += w; }
+    }
+  }
+  let tot = 0; for (let k = 1; k < cnt.length; k++) tot += cnt[k];
+  storeAreaCache = { n: cnt, tot }; storeAreaStamp = now;
+  return storeAreaCache;
+}
+
+// ---- the working window follows the view ----
+function windowExt(L, cx0, cy0, w, h) { const n = worldCells(L); return { x0: cx0 / n, y0: cy0 / n, x1: (cx0 + w) / n, y1: (cy0 + h) / n }; }
+function allocGrid(w, h) {
+  W = w; H = h;
+  base.width = W; base.height = H;
+  basePix = new Uint8ClampedArray(W * H * 4);
+  over.width = W; over.height = H;
+  oimg = octx.createImageData(W, H);
+  own = new Uint8Array(W * H); own0 = new Uint8Array(W * H); pocket = new Uint8Array(W * H);
+  pockets = []; vec = null; dirty = [];
+}
+let settleT = 0;
+function viewChanged() { if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
+function maybeReload() {
+  if (!geoStore || !win) return;
+  if (drag || pointers.size) { viewChanged(); return; }
+  const r = stage.getBoundingClientRect(), L = win.L;
+  const tl = clamp(L + Math.round(Math.log2(view.s)), 0, LMAX), f = Math.pow(2, tl - L), n = worldCells(tl);
+  const v = visibleGrid();
+  const nOld = worldCells(L);
+  const vy0 = Math.max(v[1], -win.cy0), vy1 = Math.min(v[3], nOld - win.cy0);
+  if (tl === L && v[0] >= 0 && vy0 >= 0 && v[2] <= W && vy1 <= H) { updateDetailInfo(); return; }
+  let gx0 = (win.cx0 + v[0]) * f, gx1 = (win.cx0 + v[2]) * f, gy0 = Math.max(0, (win.cy0 + v[1]) * f), gy1 = Math.min(n, (win.cy0 + v[3]) * f);
+  if (gy1 <= gy0) return;
+  const vw = gx1 - gx0, vh = gy1 - gy0;
+  let mx = vw * .2, my = vh * .2;
+  const cap = 4e6;
+  while ((vw + 2 * mx) * (vh + 2 * my) > cap && (mx > 1 || my > 1)) { mx *= .7; my *= .7; }
+  let w = Math.min(n, Math.ceil(vw + 2 * mx)), nx0 = Math.floor(gx0 - mx);
+  if (w === n) nx0 = 0;
+  let ny0 = clamp(Math.floor(gy0 - my), 0, n - 1), h = Math.min(n - ny0, Math.ceil(vh + 2 * my));
+  if (w * h > cap * 1.3) return;                 // still too big: wait for a closer zoom
+  reloadWindow(tl, nx0, ny0, Math.max(16, w), Math.max(16, h));
+}
+function reloadWindow(tl, nx0, ny0, w, h) {
+  commitWindow();
+  const old = win, f = Math.pow(2, tl - old.L);
+  const T = p => ({ x: (p.x + old.cx0) * f - nx0, y: (p.y + old.cy0) * f - ny0 });
+  for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); }
+  for (const c of cities) { const q = T(c); c.x = q.x; c.y = q.y; }
+  for (const a of arrows) a.pts = a.pts.map(T);
+  const s0 = view.s;
+  view.x += (nx0 / f - old.cx0) * s0; view.y += (ny0 / f - old.cy0) * s0; view.s = s0 / f;
+  win = { L: tl, cx0: nx0, cy0: ny0 };
+  allocGrid(w, h);
+  geo = windowExt(tl, nx0, ny0, w, h);
+  readGrid(tl, nx0, ny0, w, h, own);
+  winOwn0 = own.slice();
+  hist = []; redoStack = []; updUndo();
+  spriteCache.clear();
+  backdrop = null;
+  recolor(); computePockets(); renderPockets();
+  updateDetailInfo();
+  scheduleSave();
+}
+function updateDetailInfo() {
+  if (!geoStore || !win) return;
+  const m = metersPerCell();
+  $('#geoInfo').textContent = 'Детализация: уровень ' + win.L + ' из ' + LMAX + ', клетка ≈ ' + fmtMeters(m) + '. Приближайте — подробность растёт сама, нарисованное сохраняется на всех уровнях.';
+}
+// coarse territory around the window, so nothing goes blank while you pan
+let backdrop = null;
+function buildBackdrop() {
+  const LB = Math.max(0, win.L - 3), f = Math.pow(2, win.L - LB), n = worldCells(LB);
+  const bx0 = Math.floor((win.cx0 - W) / f), by0 = clamp(Math.floor((win.cy0 - H) / f), 0, n - 1);
+  const bw = Math.min(n, Math.ceil(3 * W / f) + 2), bh = Math.min(n - by0, Math.ceil(3 * H / f) + 2);
+  const data = new Uint8Array(bw * bh);
+  readGrid(LB, bx0, by0, bw, bh, data);
+  const cvb = document.createElement('canvas'); cvb.width = bw; cvb.height = bh;
+  backdrop = { LB, bx0, by0, bw, bh, data, cv: cvb, key: '' };
+}
+function drawStoreBackdrop(c, k, ox, oy) {
+  if (!win) return;
+  if (!backdrop) buildBackdrop();
+  const b = backdrop, key = rgb.map(x => x ? x.join(',') : '').join(';') + '|' + alpha;
+  if (b.key !== key) {
+    b.key = key;
+    const x = b.cv.getContext('2d'), im = x.createImageData(b.bw, b.bh), d = im.data, a = Math.round(alpha * 255 * .9);
+    for (let i = 0; i < b.data.length; i++) { const o = b.data[i], col = rgb[o]; if (o && col) { const p = i * 4; d[p] = col[0]; d[p + 1] = col[1]; d[p + 2] = col[2]; d[p + 3] = a; } }
+    x.putImageData(im, 0, 0);
+    const f = Math.pow(2, win.L - b.LB);
+    x.clearRect((win.cx0 / f - b.bx0), (win.cy0 / f - b.by0), W / f, H / f);
+  }
+  const f = Math.pow(2, win.L - b.LB);
+  const X = g => ((b.bx0 + g) * f - win.cx0) * k + ox, Y = g => ((b.by0 + g) * f - win.cy0) * k + oy;
+  const per = X(1) - X(0);
+  const sx0 = clamp(Math.floor(-X(0) / per), 0, b.bw), sx1 = clamp(Math.ceil((cv.width - X(0)) / per), 0, b.bw);
+  const sy0 = clamp(Math.floor(-Y(0) / per), 0, b.bh), sy1 = clamp(Math.ceil((cv.height - Y(0)) / per), 0, b.bh);
+  if (sx1 <= sx0 || sy1 <= sy0) return;
+  c.drawImage(b.cv, sx0, sy0, sx1 - sx0, sy1 - sy0, X(sx0), Y(sy0), X(sx1) - X(sx0), Y(sy1) - Y(sy0));
+}
+// owner of a point outside the working window (cities far away)
+function storeOwnerAtGrid(gx, gy) { return cellAt(win.L, Math.floor(win.cx0 + gx), Math.floor(win.cy0 + gy)); }
+function fitWorld() {
+  if (!geoStore || !win) return fit();
+  const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight, n = worldCells(win.L);
+  const y0 = latToY(78) * n - win.cy0, y1 = latToY(-58) * n - win.cy0, x0 = -win.cx0, x1 = n - win.cx0;
+  view.s = Math.min(r.width / (x1 - x0), (r.height - strip) / (y1 - y0)) * .96;
+  view.x = (r.width - (x1 - x0) * view.s) / 2 - x0 * view.s; view.y = (r.height - strip - (y1 - y0) * view.s) / 2 - y0 * view.s;
+  userView = true; requestDraw(); viewChanged();
+}
+function startEarthStore() {
+  setBattles(false);
+  storeReset(); clearTileDB();
+  const L = 3, n = worldCells(L), cy0 = Math.round(.1 * n), h = Math.round(.65 * n);
+  geoStack = [];
+  setMap(null, n, h, windowExt(L, 0, cy0, n, h));
+  geoStore = true;
+  win = { L, cx0: 0, cy0 };
+  winOwn0 = own.slice();
+}
+// browser storage for tiles
+let tileSaveT = 0;
+function scheduleTileSave() {
+  clearTimeout(tileSaveT);
+  tileSaveT = setTimeout(async () => {
+    if (!storeDirty.size) return;
+    const keys = [...storeDirty]; storeDirty.clear();
+    try {
+      const db = await idb();
+      await new Promise((res, rej) => { const tx = db.transaction('tiles', 'readwrite'), os = tx.objectStore('tiles'); for (const k of keys) { const t = store.get(k); if (t !== undefined) os.put(t, k); } tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    } catch (e) { keys.forEach(k => storeDirty.add(k)); }
+  }, 1200);
+}
+async function clearTileDB() { try { const db = await idb(); db.transaction('tiles', 'readwrite').objectStore('tiles').clear(); } catch (e) {} }
+async function loadTileDB() {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const m = new Map(), rq = db.transaction('tiles').objectStore('tiles').openCursor();
+    rq.onsuccess = () => { const cur = rq.result; if (cur) { m.set(cur.key, cur.value); cur.continue(); } else res(m); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function adoptTiles(m) {
+  store = new Map(); levelTiles = []; storeDirty = new Set();
+  for (const [k, t] of m) { store.set(k, t); const l = tkL(k); (levelTiles[l] || (levelTiles[l] = new Set())).add(k); }
+  if (!store.has(tk(0, 0, 0))) tileSet(0, 0, 0, 0);
+}
+
 // ---------- drawing ----------
 function resize() {
   dpr = window.devicePixelRatio || 1;
@@ -1168,7 +1502,7 @@ function drawMap() {
   if (geo) drawGeoBackdrop();
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
   if (!geo) { ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
-  if (view.s >= VEC_ZOOM) drawVectorMap(ctx);
+  if (view.s >= (geoStore ? .9 : VEC_ZOOM)) drawVectorMap(ctx);   // on the Earth borders are always drawn as curves
   else { ctx.imageSmoothingEnabled = true; ctx.drawImage(over, 0, 0); }
   if (geo) drawRegionFrame();
   visCache = new Map();
@@ -1191,7 +1525,7 @@ function drawUi() {
     ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#a87b12'; ctx.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); ctx.setLineDash([]);
   }
   if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
-    const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = brush * view.s;
+    const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = BR() * view.s;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.8)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
@@ -1217,7 +1551,7 @@ function drawUi() {
     const c = rgb[drag.owner] || [20, 25, 32];
     ctx.beginPath();
     drag.pts.forEach((q, k) => { const sx = q.x * view.s + view.x, sy = q.y * view.s + view.y; k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
-    ctx.lineWidth = Math.max(2, arrowWidth * view.s); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, arrowWidth * (geoStore ? 1 : view.s)); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},.55)`; ctx.stroke();
   }
   if (drag && drag.mode === 'lasso' && drag.pts.length > 1) {
@@ -1241,14 +1575,14 @@ function fit() {
 }
 function zoomAt(p, k) {
   userView = true;
-  const ns = clamp(view.s * k, 0.05, maxZoom()), kk = ns / view.s;
+  const ns = clamp(view.s * k, geoStore ? 1 / 64 : 0.05, maxZoom()), kk = ns / view.s;
   view.x = p.x - (p.x - view.x) * kk; view.y = p.y - (p.y - view.y) * kk; view.s = ns;
-  requestDraw();
+  requestDraw(); viewChanged();
 }
 
 // ---------- editing operations ----------
 function stamp(a, b, val) {
-  const R = brush, R2 = R * R;
+  const R = BR(), R2 = R * R;
   const dist = Math.hypot(b.x - a.x, b.y - a.y);
   const n = Math.max(1, Math.ceil(dist / Math.max(1, R / 3)));
   let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
@@ -1271,7 +1605,7 @@ function stamp(a, b, val) {
 // Rubber-sheet drag of the ownership map: cells near the cursor are pulled from
 // where they were when the drag started, with a smooth falloff to the edge of the ring.
 function warpTo(p0, q) {
-  const R = brush, R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y;
+  const R = BR(), R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y;
   const nb = [Math.max(0, Math.floor(q.x - R - 1)), Math.max(0, Math.floor(q.y - R - 1)),
               Math.min(W, Math.ceil(q.x + R + 2)), Math.min(H, Math.ceil(q.y + R + 2))];
   const wb = drag.box ? [Math.min(nb[0], drag.box[0]), Math.min(nb[1], drag.box[1]), Math.max(nb[2], drag.box[2]), Math.max(nb[3], drag.box[3])] : nb;
@@ -1304,7 +1638,7 @@ function commitBox(b) {
 }
 function warpStep() {
   if (!drag || drag.mode !== 'warp') return;
-  const maxStep = Math.max(1.5, brush * 0.25);
+  const maxStep = Math.max(1.5, BR() * 0.25);
   let dx = drag.p.x - drag.p0.x, dy = drag.p.y - drag.p0.y;
   let len = Math.hypot(dx, dy);
   // long drags are applied as a chain of short pulls so the sheet never folds over itself
@@ -1492,7 +1826,7 @@ function renderPockets() {
   $('#btnTakeAll').hidden = pockets.length < 2;
 }
 // called after every finished edit
-function edited() { computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); if (typeof game !== 'undefined') { logPockets(); if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); } }
+function edited() { if (geoStore) commitWindow(); computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); if (typeof game !== 'undefined') { logPockets(); if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); } }
 
 // ---------- troops ----------
 // Glyphs are drawn in a frame centred on 0,0; w and h are the frame's half-width and half-height.
@@ -1648,15 +1982,16 @@ function drawUnit(c, u, S, selected) {
 // every frame until something about it changes.
 const spriteCache = new Map();
 const measureCtx = document.createElement('canvas').getContext('2d');
-function unitKey(u, S, q, sel) {
+function unitKey(u, P, sel) {
   const g = u.gen && genById(u.gen);
   const showHp = battlesOn || (u.hp !== undefined && u.hp < 100);
-  return [u.era, u.type, rgb[u.owner] ? rgb[u.owner].join(',') : '-', u.ech || '', u.label || '', S.toFixed(2), q, sel ? 1 : 0,
+  return [u.era, u.type, rgb[u.owner] ? rgb[u.owner].join(',') : '-', u.ech || '', u.label || '', P.toFixed(1), sel ? 1 : 0,
     g ? g.id + ':' + g.name + ':' + g.photo.length + ':' + (portrait(g) ? 1 : 0) + ':' + (g.id === selGen ? 1 : 0) + ':' + g.owner : '',
     showHp ? Math.round(hpOf(u) / 5) * 5 : '', u.oos ? 1 : 0].join('|');
 }
-function unitSprite(u, S, q, sel) {
-  const key = unitKey(u, S, q, sel);
+// P = marker height in device pixels; the bitmap is built at exactly that size
+function unitSprite(u, P, sel) {
+  const key = unitKey(u, P, sel), S = P;
   let sp = spriteCache.get(key);
   if (sp) return sp;
   const h = S / 2, w = S * .75;
@@ -1664,11 +1999,11 @@ function unitSprite(u, S, q, sel) {
   if (u.label) { measureCtx.font = `600 ${S * .38}px ${FONT_UI}`; lw = measureCtx.measureText(u.label).width + S * .3; }
   const left = Math.max(w + S * .5, lw / 2), top = h + S * .8, bottom = h * 1.2 + S * 1.05;
   const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.ceil(left * 2 * q)); c.height = Math.max(1, Math.ceil((top + bottom) * q));
+  c.width = Math.max(1, Math.ceil(left * 2)); c.height = Math.max(1, Math.ceil(top + bottom));
   const x = c.getContext('2d');
-  x.scale(q, q); x.translate(left, top);
+  x.translate(left, top);
   drawUnit(x, Object.assign({}, u, { x: 0, y: 0 }), S, sel);
-  sp = { c, left, top, q };
+  sp = { c, left, top };
   if (spriteCache.size > 800) { let k = 0; for (const key of spriteCache.keys()) { spriteCache.delete(key); if (++k >= 200) break; } }
   spriteCache.set(key, sp);
   return sp;
@@ -1679,18 +2014,19 @@ function drawUnitsFast(c) {
   const selSet = tool === 'units' ? new Set(selUnits.length ? selUnits : selUnit ? [selUnit] : []) : null;
   for (const u of units) {
     if (!isVisible(u)) continue;
-    const S = unitSize * (u.scale || 1);
-    let q = Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3);       // zoom snapped to 1/3-octave steps
-    q = Math.min(q, 700 / S, 12);
-    const sp = unitSprite(u, S, q, !!(selSet && selSet.has(u)));
-    c.drawImage(sp.c, u.x - sp.left, u.y - sp.top, sp.c.width / sp.q, sp.c.height / sp.q);
+    const S = unitSize * ZS() * (u.scale || 1);
+    // on the Earth markers keep their screen size, so the exact zoom is used; otherwise 1/3-octave steps
+    let q = geoStore ? zoom : Math.min(Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3), 12);
+    q = Math.min(q, 700 / S);
+    const sp = unitSprite(u, S * q, !!(selSet && selSet.has(u)));
+    c.drawImage(sp.c, u.x - sp.left / q, u.y - sp.top / q, sp.c.width / q, sp.c.height / q);
   }
 }
-function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * (u.scale || 1), marks && targets().includes(u) && tool === 'units'); }
+function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * ZS() * (u.scale || 1), marks && targets().includes(u) && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
   for (let k = units.length - 1; k >= 0; k--) {
-    const u = units[k], S = unitSize * (u.scale || 1), h = S / 2, w = S * .75;
+    const u = units[k], S = unitSize * ZS() * (u.scale || 1), h = S / 2, w = S * .75;
     if (!isVisible(u)) continue;
     if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u;
   }
@@ -1856,7 +2192,7 @@ function showGenUnits(g) {
   if (!us.length) { toast('У генерала ' + g.name + ' пока нет войск.'); return; }
   let b = [W, H, 0, 0];
   us.forEach(u => { b = [Math.min(b[0], u.x), Math.min(b[1], u.y), Math.max(b[2], u.x), Math.max(b[3], u.y)]; });
-  const pad = unitSize * 3; showBox([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]);
+  const pad = unitSize * ZS() * 3; showBox([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]);
 }
 function renderGenEditor() {
   const g = genById(selGen), ed = $('#genEditor');
@@ -1917,7 +2253,7 @@ const TYPE_POWER = {
   dragoon: 1.15, cav: 1.2, partisan: .8
 };
 const ECH_POWER = { '': 1, '•': .3, '•••': .45, 'I': .6, 'II': .8, 'III': 1, 'X': 1.2, 'XX': 1.5, 'XXX': 1.9, 'XXXX': 2.4, 'XXXXX': 3 };
-const unitS = u => unitSize * (u.scale || 1);
+const unitS = u => unitSize * ZS() * (u.scale || 1);
 const hpOf = u => u.hp === undefined ? 100 : u.hp;
 const immobile = u => unitDef(u).def[2] === 'tower';
 function unitPower(u) { const g = u.gen && genById(u.gen); return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1) * (u.oos && game.supply ? .6 : 1); }
@@ -2008,7 +2344,7 @@ function battleTick() {
   requestDraw();
   const perSec = Math.max(1, Math.round(battleSpeed));
   ++battleTicks;
-  if (battleTicks % perSec === 0 || dead.length) { renderCountries(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
+  if (battleTicks % perSec === 0 || dead.length) { if (geoStore) commitWindow(); renderCountries(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
   else updateGameInfo();
   if (battleTicks % (perSec * 3) === 0) { computePockets(); renderPockets(); logPockets(); }
 }
@@ -2097,8 +2433,12 @@ function renderLog() {
 }
 
 // --- cities & victory points ---
-const cityR = c => unitSize * .2 * (1 + Math.min(c.vp, 25) / 12);
-function cityOwner(c) { return own ? cellOwner(c.x, c.y) : 0; }
+const cityR = c => unitSize * ZS() * .2 * (1 + Math.min(c.vp, 25) / 12);
+function cityOwner(c) {
+  if (!own) return 0;
+  if (geoStore && (c.x < 0 || c.y < 0 || c.x >= W || c.y >= H)) return storeOwnerAtGrid(c.x, c.y);
+  return cellOwner(c.x, c.y);
+}
 function checkCities(silent) {
   if (!game.cities) return;
   for (const c of cities) {
@@ -2134,7 +2474,7 @@ function drawCities(c, marks) {
       c.lineWidth = r * .32; c.strokeStyle = dark; c.stroke();
       c.beginPath(); c.arc(ct.x, ct.y, r * .45, 0, Math.PI * 2); c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
     }
-    const fs = Math.max(r * 1.25, unitSize * .3);
+    const fs = Math.max(r * 1.25, unitSize * ZS() * .3);
     c.font = `600 ${fs}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top';
     const label = ct.name + (ct.vp > 1 ? '  ' + ct.vp : '');
     const y = ct.y + r * (ct.capital ? 1.6 : 1.3);
@@ -2201,7 +2541,7 @@ function simplify(pts, tol) {
   return out;
 }
 function drawArrow(c, a, selected) {
-  const pts = a.pts, w = a.w, col = rgb[a.owner] || [120, 120, 120];
+  const pts = a.pts, w = a.w * ZS(), col = rgb[a.owner] || [120, 120, 120];
   if (pts.length < 2) return;
   const head = w * 3.2;
   // cut the body short so it ends under the head
@@ -2230,7 +2570,7 @@ function drawArrows(c, marks) { if (game.arrows) for (const a of arrows) drawArr
 function hitArrow(g) {
   if (!game.arrows) return null;
   for (let k = arrows.length - 1; k >= 0; k--) {
-    const a = arrows[k], tol = a.w + 4 / view.s;
+    const a = arrows[k], tol = a.w * ZS() + 4 / view.s;
     for (let i = 0; i + 1 < a.pts.length; i++) {
       const p = a.pts[i], q = a.pts[i + 1], dx = q.x - p.x, dy = q.y - p.y, L = dx * dx + dy * dy || 1;
       const t = clamp(((g.x - p.x) * dx + (g.y - p.y) * dy) / L, 0, 1);
@@ -2273,7 +2613,7 @@ function marchFrame(t) {
     moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp);
   }
   requestDraw();
-  if (t - marchBeat > 1000) { marchBeat = t; renderCountries(); checkCities(); renderScore(); }
+  if (t - marchBeat > 1000) { marchBeat = t; if (geoStore) commitWindow(); renderCountries(); checkCities(); renderScore(); }
   if (any) marchRaf = requestAnimationFrame(marchFrame);
   else { edited(); checkCities(); renderScore(); }
 }
@@ -2294,7 +2634,7 @@ function inSupply(u) {
   if (gx < 0 || gy < 0 || gx >= W || gy >= H) return true;
   const i = gy * W + gx;
   if (own[i] === u.owner) return !(pocket[i] && pocket[i] !== u.owner);
-  const R = unitSize * 5;
+  const R = unitSize * ZS() * 5;
   for (let r = R / 3; r <= R + 1; r += R / 3) for (let k = 0; k < 16; k++) {
     const a = k * Math.PI / 8, x = Math.floor(u.x + Math.cos(a) * r), y = Math.floor(u.y + Math.sin(a) * r);
     if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -2393,6 +2733,7 @@ function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabl
 
 // ---------- countries panel ----------
 function areas() {
+  if (geoStore) return storeAreas();
   const n = new Float64Array(countries.length + 1);
   for (let i = 0; i < own.length; i++) n[own[i]]++;
   let tot = 0; for (let k = 1; k < n.length; k++) tot += n[k];
@@ -2441,8 +2782,14 @@ function addCountry(name, color) {
 function removeCountry(idx) {
   pushHist();
   const name = countries[idx - 1].name;
+  if (geoStore) commitWindow();
   countries.splice(idx - 1, 1);
   for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
+  if (geoStore) {   // the same renumbering on every stored tile
+    const remap = o => o === idx ? 0 : o > idx ? o - 1 : o;
+    for (const [k, t] of store) { if (typeof t === 'number') store.set(k, remap(t)); else for (let i = 0; i < t.length; i++) t[i] = remap(t[i]); storeDirty.add(k); }
+    winOwn0 = own.slice(); backdrop = null; storeAreaStamp = 0; scheduleTileSave();
+  }
   if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
   units = units.filter(u => u.owner !== idx); units.forEach(u => { if (u.owner > idx) u.owner--; }); selUnit = null; selUnits = [];
   arrows = arrows.filter(a => a.owner !== idx); arrows.forEach(a => { if (a.owner > idx) a.owner--; }); selArrow = null;
@@ -2599,7 +2946,7 @@ cv.addEventListener('pointermove', e => {
     if (pointers.size < 2) return;
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y), c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const ns = clamp(drag.v0.s * d / drag.d0, 0.05, maxZoom());
+    const ns = clamp(drag.v0.s * d / drag.d0, geoStore ? 1 / 64 : 0.05, maxZoom());
     view.x = c.x - (drag.c0.x - drag.v0.x) * ns / drag.v0.s;
     view.y = c.y - (drag.c0.y - drag.v0.y) * ns / drag.v0.s;
     view.s = ns; userView = true; requestDraw();
@@ -2633,7 +2980,8 @@ cv.addEventListener('pointermove', e => {
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
-  if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
+  if (drag.mode === 'pinch') { if (pointers.size === 0) { drag = null; viewChanged(); } return; }
+  if (drag.mode === 'pan') viewChanged();
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
   if (drag.mode === 'box') {
     const x0 = Math.min(drag.a.x, drag.b.x), x1 = Math.max(drag.a.x, drag.b.x), y0 = Math.min(drag.a.y, drag.b.y), y1 = Math.max(drag.a.y, drag.b.y);
@@ -2653,7 +3001,7 @@ function endPointer(e) {
     let len = 0; for (let k = 1; k < pts.length; k++) len += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
     if (len * view.s < 20) return;
     pushHist();
-    const a = { pts: smoothLine(simplify(pts, arrowWidth * .8), 2).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), owner, w: arrowWidth };
+    const a = { pts: smoothLine(simplify(pts, arrowWidth * ZS() * .8), 2).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), owner, w: arrowWidth };
     arrows.push(a); selArrow = a; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw();
     return;
   }
@@ -2916,7 +3264,8 @@ $('#btnPng').addEventListener('click', async () => {
 });
 $('#btnProj').addEventListener('click', () => {
   if (!W) return;
-  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
+  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoStore, win,
+    tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -2937,6 +3286,12 @@ function loadProjectFile(file) {
         loadGenerals(d.generals); player = d.player || 1;
         loadGame(d);
         own.set(unrle(d.own, W * H));
+        if (d.geoStore && d.tiles && d.win) {
+          adoptTiles(new Map(d.tiles.map(([k, v]) => [k, typeof v === 'number' ? v : unrle(v, TS * TS)])));
+          geoStore = true; win = d.win;
+          readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
+          clearTileDB().then(() => { store.forEach((t, k) => storeDirty.add(k)); scheduleTileSave(); });
+        }
         afterChange(); saveImage(); setTool('warp');
         toast('Проект открыт.');
       };
@@ -2949,7 +3304,11 @@ function loadProjectFile(file) {
 // ---------- autosave (IndexedDB, this browser only) ----------
 function idb() {
   return new Promise((res, rej) => {
-    try { const r = indexedDB.open('mezha', 1); r.onupgradeneeded = () => r.result.createObjectStore('p'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    try {
+      const r = indexedDB.open('mezha', 2);
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('p')) db.createObjectStore('p'); if (!db.objectStoreNames.contains('tiles')) db.createObjectStore('tiles'); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }
     catch (e) { rej(e); }
   });
 }
@@ -2966,7 +3325,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoStack, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoStack, geoStore, win, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -2982,6 +3341,11 @@ async function restoreSaved() {
     URL.revokeObjectURL(url);
     if (st.own.length !== W * H) return false;
     own.set(st.own); countries = st.countries || []; active = st.active || 1;
+    if (st.geoStore && st.win) {
+      adoptTiles(await loadTileDB());
+      geoStore = true; win = st.win;
+      readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
+    }
     if (typeof st.alpha === 'number') { alpha = st.alpha; $('#alpha').value = Math.round(alpha * 100); $('#alphaOut').textContent = Math.round(alpha * 100) + '%'; }
     if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
     if (st.sizes) Object.assign(sizes, st.sizes);
@@ -3175,7 +3539,7 @@ $('#bw').addEventListener('input', e => { borderW = +e.target.value; $('#bwOut')
 $('#btnAdd').addEventListener('click', () => addCountry());
 $('#btnUndo').addEventListener('click', undo);
 $('#btnRedo').addEventListener('click', redo);
-$('#btnFit').addEventListener('click', fit);
+$('#btnFit').addEventListener('click', () => geoStore ? fitWorld() : fit());
 $('#btnZoomIn').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 1.25); });
 $('#btnZoomOut').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 0.8); });
 if (inFrame) {
@@ -3186,7 +3550,7 @@ if (inFrame) {
   });
 }
 
-new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
+new ResizeObserver(() => { resize(); if (!userView) fit(); viewChanged(); }).observe(stage);
 resize();
 setTool('warp');
 setUnitSize(unitSize);
