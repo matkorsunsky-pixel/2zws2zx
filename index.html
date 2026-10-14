@@ -133,6 +133,23 @@ select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); bor
 .unitsel b { font-weight: 600; font-size: 13px; }
 .unitsel input { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 7px; padding: 8px; width: 100%; }
 .getapp { justify-content: center; }
+.gsys { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; cursor: pointer; padding: 4px 0; }
+.gsys input { accent-color: var(--accent); margin-top: 3px; }
+.gsys b { font-weight: 600; font-size: 13px; display: block; }
+.gsys small { color: var(--muted); font-size: 11.5px; line-height: 1.35; display: block; }
+.ldot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; margin-top: 4px; }
+#gameLog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+#gameLog li { display: grid; grid-template-columns: 9px 1fr; gap: 0 8px; font-size: 12.5px; line-height: 1.35; }
+#gameLog li small { color: var(--muted); font: 11px var(--f-mono); grid-column: 2; }
+#gameLog li span:last-child { grid-column: 2; }
+#gameLog li .ldot { grid-row: span 2; }
+#vpList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#vpList li { display: grid; grid-template-columns: 9px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+#vpList li .ldot { margin-top: 0; }
+#vpList b { font: 500 12px var(--f-mono); font-variant-numeric: tabular-nums; }
+.ginfo { font: 500 12px var(--f-mono); color: var(--ink); padding: 0 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.subpanel { display: flex; flex-direction: column; gap: 8px; }
+.subpanel input:not([type]) { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 7px; padding: 8px; width: 100%; }
 .help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .help b { color: var(--ink); font-weight: 500; }
 
@@ -146,6 +163,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
   display: flex; gap: 6px; background: var(--panel); padding: 5px; border-radius: 10px; box-shadow: var(--shadow); align-items: center;
 }
 .bar2 { right: auto; left: max(12px, env(safe-area-inset-left, 0px)); }
+.bar2 { max-width: calc(100% - 24px); flex-wrap: wrap; justify-content: flex-end; }
 .bar .tgl { gap: 6px; font-size: 12.5px; border: 1px solid var(--line); }
 .bar .tgl .sh { display: none; }
 .bar .tgl b { font: 500 11px var(--f-mono); padding: 2px 6px; border-radius: 5px; background: var(--bg); color: var(--muted); }
@@ -248,6 +266,12 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <button data-tool="units" class="wide">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 6l18 12M21 6L3 18"/></svg>
         Войска<kbd>7</kbd></button>
+      <button data-tool="arrows">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c4-1 7-4 9-9"/><path d="M9 6l6-1 1 6"/></svg>
+        Стрелки<kbd>8</kbd></button>
+      <button data-tool="cities">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z"/></svg>
+        Города<kbd>9</kbd></button>
       <button data-tool="brush">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l10-10a2.1 2.1 0 0 1 3 3L12 18"/><path d="M8 15c-2.5 0-4 1.5-4 4 0 1-1 2-2 2 4 1 9 0 9-3a3 3 0 0 0-3-3z"/></svg>
         Кисть<kbd>2</kbd></button>
@@ -316,7 +340,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
           </div>
           <div class="presets"><button id="uscaleReset">Как у всех</button></div>
         </div>
-        <div class="row"><button id="unitOwnerBtn"></button><button id="unitDel">Удалить</button></div>
+        <div class="row"><button id="unitOwnerBtn"></button><button id="unitStop" hidden>Остановить марш</button><button id="unitDel">Удалить</button></div>
       </div>
       <p class="hint" id="unitCount"></p>
       <div class="unitsel">
@@ -333,6 +357,27 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <p class="hint">Отряды, стоящие вплотную к врагу, сражаются каждый ход. Исход решают род войск, размер соединения, состояние отряда, поддержка соседних своих отрядов, бонус обороны на своей земле и бросок случайности. Проигравший отступает, победитель занимает его место. Отряд, у которого состояние упало до нуля, разгромлен.</p>
       </div>
     </div>
+    <div class="subpanel" id="fArrows" hidden>
+      <div class="field">
+        <label for="arrowW">Толщина стрелок</label><output id="arrowWOut">9</output>
+        <input type="range" id="arrowW" min="2" max="40" value="9">
+      </div>
+      <div class="row"><button id="arrowDel" hidden>Удалить стрелку</button><button id="arrowClear">Стереть все стрелки</button></div>
+      <p class="hint">Зажмите ЛКМ и ведите линию удара. Стрелка рисуется цветом выбранной страны. Щелчок по стрелке выделяет её, Delete удаляет.</p>
+    </div>
+    <div class="subpanel" id="fCities" hidden>
+      <div class="unitsel" id="cityEdit" hidden>
+        <input id="cityName" aria-label="Название города" maxlength="40">
+        <div class="field">
+          <label for="cityVp">Победные очки</label><output id="cityVpOut">1</output>
+          <input type="range" id="cityVp" min="1" max="25" value="1">
+        </div>
+        <label class="check"><input type="checkbox" id="cityCap"><span>Столица</span></label>
+        <span class="hint" id="cityOwnerTxt"></span>
+        <div class="row"><button id="cityDel">Удалить город</button></div>
+      </div>
+      <p class="hint">Щелчок по карте ставит город, город можно перетащить. Хозяин города — тот, чья территория под ним. Очки городов складываются в счёт войны.</p>
+    </div>
     <label class="check" id="fProtect"><input type="checkbox" id="protect" checked><span>Не заходить на нейтральные земли и море</span></label>
   </section>
 
@@ -341,6 +386,31 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <ul id="countries"></ul>
     <div class="row"><button id="btnAdd">+ Добавить страну</button></div>
     <p class="hint">Щелчок по строке выбирает страну для кисти и заливки. Alt + щелчок по карте выбирает страну под курсором.</p>
+  </section>
+
+  <section>
+    <h2>Игра</h2>
+    <div id="gameSystems"></div>
+    <div class="subpanel" id="calRow">
+      <div class="row">
+        <label for="gameStart" class="sub">Дата</label>
+        <input type="date" id="gameStart" style="font:13px var(--f-ui);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:7px;padding:6px 8px">
+        <select id="gameStep" aria-label="Время за ход" style="width:auto">
+          <option value="1">1 час за ход</option><option value="4" selected>4 часа за ход</option><option value="12">12 часов за ход</option><option value="24">1 день за ход</option><option value="168">1 неделя за ход</option>
+        </select>
+      </div>
+    </div>
+    <div class="subpanel" id="vpBlock" hidden>
+      <b style="font-size:13px">Победные очки</b>
+      <ul id="vpList"></ul>
+    </div>
+  </section>
+
+  <section id="logSec">
+    <h2>Хроника</h2>
+    <ul id="gameLog"></ul>
+    <p class="hint" id="gameLogEmpty">Здесь появятся события войны: разгромы, взятые города, котлы.</p>
+    <div class="row"><button id="logClear">Очистить хронику</button></div>
   </section>
 
   <section>
@@ -382,6 +452,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
       <li><b>Shift + щелчок</b> по отрядам или <b>Shift + рамка</b> выбирают несколько отрядов, <b>Ctrl+A</b> — все отряды выбранной страны</li>
       <li><b>Генералы</b> — полоса внизу карты: выберите, за кого играете, добавьте генерала, дайте имя и фото, назначьте его командиром отрядов</li>
+      <li><b>ПКМ</b> по карте с выбранными отрядами — приказ на марш (если включено в «Игре»)</li>
       <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
       <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
@@ -407,6 +478,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <button class="tgl" id="tglBattle" aria-pressed="false" title="Запустить или остановить бои (клавиша P)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5L13 3h3v3l-3.5 3.5"/><path d="M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg>
       Бои <b>выкл</b></button>
+    <span class="ginfo" id="gameInfo" hidden></span>
   </div>
   <div class="status">
     <div id="hint"></div>
@@ -472,7 +544,9 @@ const HINTS = {
   fill: 'Щёлкните по области карты — она зальётся цветом выбранной страны.',
   lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
   pan: 'Перетаскивайте карту. Колёсико — масштаб.',
-  units: 'Щелчок по карте ставит отряд. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
+  arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
+  cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
+  units: 'Щелчок по карте ставит отряд. ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -499,7 +573,7 @@ let alpha = 0.5, borderW = 2;
 const view = { s: 1, x: 0, y: 0 };
 let dpr = 1;
 let hist = [], redoStack = [];
-let dirty = null, raf = 0;
+let dirty = [], raf = 0;              // changed map regions, kept apart so distant edits stay cheap
 let hover = null;                     // grid point under cursor
 let drag = null;
 const pointers = new Map();
@@ -514,8 +588,17 @@ let toastT = 0;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 function addDirty(x0, y0, x1, y1) {
   vecVersion++;
-  if (!dirty) dirty = [x0, y0, x1, y1];
-  else { dirty[0] = Math.min(dirty[0], x0); dirty[1] = Math.min(dirty[1], y0); dirty[2] = Math.max(dirty[2], x1); dirty[3] = Math.max(dirty[3], y1); }
+  // merge with a region it overlaps (or nearly touches); otherwise keep it separate
+  for (const d of dirty) {
+    if (x0 <= d[2] + 8 && x1 >= d[0] - 8 && y0 <= d[3] + 8 && y1 >= d[1] - 8) {
+      d[0] = Math.min(d[0], x0); d[1] = Math.min(d[1], y0); d[2] = Math.max(d[2], x1); d[3] = Math.max(d[3], y1);
+      requestDraw(); return;
+    }
+  }
+  if (dirty.length >= 48) {
+    const d = dirty[dirty.length - 1];
+    d[0] = Math.min(d[0], x0); d[1] = Math.min(d[1], y0); d[2] = Math.max(d[2], x1); d[3] = Math.max(d[3], y1);
+  } else dirty.push([x0, y0, x1, y1]);
   requestDraw();
 }
 // The map layer (picture + troops) redraws only when something on it changes;
@@ -540,6 +623,7 @@ function setMap(src, w, h) {
   pocket = new Uint8Array(W * H);
   pockets = [];
   units = []; selUnit = null; selUnits = [];
+  if (typeof arrows !== 'undefined') { arrows = []; cities = []; selArrow = selCity = null; }
   hist = []; redoStack = []; updUndo();
   fit();
 }
@@ -555,13 +639,14 @@ function renderRect(x0, y0, x1, y1) {
   // `over` holds the finished picture: the map with territory colours blended in,
   // so each frame needs a single image blit.
   const d = oimg.data, bp = basePix, a = Math.round(alpha * 255);
+  const n = rgb.length, CR = new Uint8Array(256).fill(128), CG = new Uint8Array(256).fill(128), CB = new Uint8Array(256).fill(128);
+  for (let k = 1; k < n; k++) { CR[k] = rgb[k][0]; CG[k] = rgb[k][1]; CB[k] = rgb[k][2]; }
   let r, g, b, aa;
   for (let y = y0; y < y1; y++) {
     let i = y * W + x0;
     for (let x = x0; x < x1; x++, i++) {
       const o = own[i], p = i * 4;
       if (!o) { d[p] = bp[p]; d[p + 1] = bp[p + 1]; d[p + 2] = bp[p + 2]; d[p + 3] = 255; continue; }
-      const c = rgb[o] || [128, 128, 128];
       let vsOther = false, vsNeutral = false;
       for (let k = 1; k <= t && !vsOther; k++) {
         let n;
@@ -571,11 +656,11 @@ function renderRect(x0, y0, x1, y1) {
         if (y + k < H) { n = own[i + k * W]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
       }
       if (vsOther) { r = 24; g = 28; b = 36; aa = 235; }
-      else if (vsNeutral) { r = c[0] * .55; g = c[1] * .55; b = c[2] * .55; aa = 220; }
+      else if (vsNeutral) { r = CR[o] * .55; g = CG[o] * .55; b = CB[o] * .55; aa = 220; }
       else if (showPockets && pocket[i] && pocket[i] !== o && ((x + y) % 10) < 4) {
-        const e = rgb[pocket[i]] || c; r = e[0]; g = e[1]; b = e[2]; aa = Math.max(a, 200);
+        const e = pocket[i]; r = CR[e]; g = CG[e]; b = CB[e]; aa = a > 200 ? a : 200;
       }
-      else { r = c[0]; g = c[1]; b = c[2]; aa = a; }
+      else { r = CR[o]; g = CG[o]; b = CB[o]; aa = a; }
       const k = aa / 255;
       d[p] = bp[p] + (r - bp[p]) * k; d[p + 1] = bp[p + 1] + (g - bp[p + 1]) * k; d[p + 2] = bp[p + 2] + (b - bp[p + 2]) * k; d[p + 3] = 255;
     }
@@ -763,8 +848,8 @@ function resize() {
 }
 function draw() {
   raf = 0;
-  if (dirty && own) { renderRect(dirty[0], dirty[1], dirty[2], dirty[3]); needMap = true; }
-  dirty = null;
+  if (dirty.length && own) { for (const d of dirty) renderRect(d[0], d[1], d[2], d[3]); needMap = true; }
+  dirty = [];
   if (needMap) { needMap = false; drawMap(); }
   if (needUi) { needUi = false; drawUi(); }
 }
@@ -777,8 +862,13 @@ function drawMap() {
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H);   // cheap drop shadow
   if (view.s >= VEC_ZOOM) drawVectorMap(ctx);
   else { ctx.imageSmoothingEnabled = true; ctx.drawImage(over, 0, 0); }
+  visCache = new Map();
+  drawCities(ctx, true);
+  drawArrows(ctx, true);
+  drawOrders(ctx);
   drawUnitsFast(ctx);
   drawBattles(ctx);
+  visCache = null;
 }
 function drawUi() {
   uctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -798,6 +888,13 @@ function drawUi() {
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
     if (tool === 'warp') { ctx.fillStyle = 'rgba(20,25,32,.9)'; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  if (drag && drag.mode === 'arrow' && drag.pts.length > 1) {
+    const c = rgb[drag.owner] || [20, 25, 32];
+    ctx.beginPath();
+    drag.pts.forEach((q, k) => { const sx = q.x * view.s + view.x, sy = q.y * view.s + view.y; k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+    ctx.lineWidth = Math.max(2, arrowWidth * view.s); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},.55)`; ctx.stroke();
   }
   if (drag && drag.mode === 'lasso' && drag.pts.length > 1) {
     const c = rgb[drag.capt] || [20, 25, 32];
@@ -1071,7 +1168,7 @@ function renderPockets() {
   $('#btnTakeAll').hidden = pockets.length < 2;
 }
 // called after every finished edit
-function edited() { computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); }
+function edited() { computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); if (typeof game !== 'undefined') { logPockets(); if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); } }
 
 // ---------- troops ----------
 // Glyphs are drawn in a frame centred on 0,0; w and h are the frame's half-width and half-height.
@@ -1211,6 +1308,11 @@ function drawUnit(c, u, S, selected) {
     c.lineWidth = S * .14; c.strokeStyle = 'rgba(255,255,255,.92)'; c.strokeText(u.label, 0, y);
     c.fillStyle = ink; c.fillText(u.label, 0, y);
   }
+  if (u.oos) {
+    const r = S * .2;
+    c.beginPath(); c.arc(w, -h, r, 0, Math.PI * 2); c.fillStyle = '#d0473f'; c.fill(); c.lineWidth = S * .05; c.strokeStyle = '#fff'; c.stroke();
+    c.fillStyle = '#fff'; c.font = `800 ${r * 1.5}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('!', w, -h + r * .08);
+  }
   if (selected) {
     c.setLineDash([S * .15, S * .1]); c.lineWidth = S * .05; c.strokeStyle = ink;
     c.strokeRect(-w - S * .18, -h - S * .18 - (u.ech ? S * .4 : 0), (w + S * .18) * 2, h * 2 + S * .36 + (u.ech ? S * .4 : 0) + (frame === 'shield' ? h * .18 : 0));
@@ -1227,7 +1329,7 @@ function unitKey(u, S, q, sel) {
   const showHp = battlesOn || (u.hp !== undefined && u.hp < 100);
   return [u.era, u.type, rgb[u.owner] ? rgb[u.owner].join(',') : '-', u.ech || '', u.label || '', S.toFixed(2), q, sel ? 1 : 0,
     g ? g.id + ':' + g.name + ':' + g.photo.length + ':' + (portrait(g) ? 1 : 0) + ':' + (g.id === selGen ? 1 : 0) + ':' + g.owner : '',
-    showHp ? Math.round(hpOf(u) / 5) * 5 : ''].join('|');
+    showHp ? Math.round(hpOf(u) / 5) * 5 : '', u.oos ? 1 : 0].join('|');
 }
 function unitSprite(u, S, q, sel) {
   const key = unitKey(u, S, q, sel);
@@ -1252,6 +1354,7 @@ function drawUnitsFast(c) {
   const zoom = view.s * dpr;
   const selSet = tool === 'units' ? new Set(selUnits.length ? selUnits : selUnit ? [selUnit] : []) : null;
   for (const u of units) {
+    if (!isVisible(u)) continue;
     const S = unitSize * (u.scale || 1);
     let q = Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3);       // zoom snapped to 1/3-octave steps
     q = Math.min(q, 700 / S, 12);
@@ -1264,6 +1367,7 @@ function hitUnit(g) {
   if (!showUnits) return null;
   for (let k = units.length - 1; k >= 0; k--) {
     const u = units[k], S = unitSize * (u.scale || 1), h = S / 2, w = S * .75;
+    if (!isVisible(u)) continue;
     if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u;
   }
   return null;
@@ -1318,13 +1422,14 @@ function renderUnitPanel() {
       $('#unitSelName').textContent = 'Выбрано отрядов: ' + list.length + (oneOwner && c ? ' · ' + c.name : '');
       $('#unitStats').textContent = 'Общая сила ' + list.reduce((t, u) => t + unitPower(u), 0).toFixed(2) + ' · Shift + щелчок убирает отряд из выбора, Esc снимает выбор';
     } else
-    $('#unitStats').textContent = 'Сила ' + unitPower(selUnit).toFixed(2) + ' · состояние ' + Math.round(hpOf(selUnit)) + '%';
+    $('#unitStats').textContent = 'Сила ' + unitPower(selUnit).toFixed(2) + ' · состояние ' + Math.round(hpOf(selUnit)) + '%' + (selUnit.oos && game.supply ? ' · без снабжения' : '') + (selUnit.order ? ' · на марше' : '');
     $('#unitLabel').value = selUnit.label || '';
     $('#unitEch').value = selUnit.ech || '';
     const sc = Math.round((selUnit.scale || 1) * 100);
     $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%';
     $('#unitOwnerBtn').hidden = !active || list.every(u => u.owner === active);
     $('#unitDel').textContent = many ? 'Удалить выбранные' : 'Удалить';
+    $('#unitStop').hidden = !list.some(u => u.order);
     if (active && countries[active - 1]) $('#unitOwnerBtn').textContent = 'Передать: ' + countries[active - 1].name;
   } else $('#unitEch').value = unitEch;
   const counts = countries.map(() => 0);
@@ -1491,7 +1596,7 @@ const ECH_POWER = { '': 1, '•': .3, '•••': .45, 'I': .6, 'II': .8, 'III'
 const unitS = u => unitSize * (u.scale || 1);
 const hpOf = u => u.hp === undefined ? 100 : u.hp;
 const immobile = u => unitDef(u).def[2] === 'tower';
-function unitPower(u) { const g = u.gen && genById(u.gen); return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1); }
+function unitPower(u) { const g = u.gen && genById(u.gen); return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1) * (u.oos && game.supply ? .6 : 1); }
 function cellOwner(x, y) { const gx = Math.floor(x), gy = Math.floor(y); return gx < 0 || gy < 0 || gx >= W || gy >= H ? 0 : own[gy * W + gx]; }
 const pushRadius = u => Math.max(3, unitS(u) * .9 * pushK);
 
@@ -1510,9 +1615,9 @@ function captureAlong(a, b, R, val) {
         const dx = x + .5 - cx, o = own[i];
         if (o === val || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
         own[i] = val; changed++;
+        if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
       }
     }
-    if (x1 > x0 && y1 > y0) { bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1); }
   }
   if (changed) addDirty(bx0, by0, bx1, by1);
   return changed;
@@ -1557,24 +1662,31 @@ function battleTick() {
     for (const v of units) if (v.owner !== u.owner && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
     if (!best) continue;
     if (bd <= (unitS(u) + unitS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
-    else if (autoAdvance && !immobile(u) && bd <= unitS(u) * 8) {
+    else if (autoAdvance && !immobile(u) && !u.order && bd <= unitS(u) * 8) {
       const k = unitS(u) * .06 / bd;
       moveUnit(u, u.x + (best.x - u.x) * k, u.y + (best.y - u.y) * k);
     }
   }
-  for (const u of units) if (!fought.has(u) && hpOf(u) < 100) u.hp = Math.min(100, hpOf(u) + .4);
+  aiStep(fought);
+  for (const u of units) {
+    if (u.oos && game.supply) u.hp = hpOf(u) - .25;                 // cut off: no supplies, slow attrition
+    else if (!fought.has(u) && hpOf(u) < 100) u.hp = Math.min(100, hpOf(u) + .4);
+  }
+  if (game.calendar) gameDate += hoursPerTick * 3600e3;
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
     units = units.filter(u => hpOf(u) > 0);
     selUnits = selUnits.filter(u => !dead.includes(u));
     if (dead.includes(selUnit)) selUnit = selUnits[selUnits.length - 1] || null;
     toast('Разгромлены: ' + dead.map(u => (u.label || unitDef(u).def[1]) + ' (' + (countries[u.owner - 1] || {}).name + ')').join(', '));
+    dead.forEach(u => logEvent('Разгромлен отряд ' + (u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ')' + (u.oos ? ' в окружении' : ''), u.owner));
   }
   requestDraw();
   const perSec = Math.max(1, Math.round(battleSpeed));
   ++battleTicks;
-  if (battleTicks % perSec === 0 || dead.length) { renderCountries(); renderUnitPanel(); scheduleSave(); }
-  if (battleTicks % (perSec * 3) === 0) { computePockets(); renderPockets(); }
+  if (battleTicks % perSec === 0 || dead.length) { renderCountries(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
+  else updateGameInfo();
+  if (battleTicks % (perSec * 3) === 0) { computePockets(); renderPockets(); logPockets(); }
 }
 function setBattles(on) {
   if (on === battlesOn) return;
@@ -1585,9 +1697,11 @@ function setBattles(on) {
     pushHist();
     battleTimer = setInterval(battleTick, 1000 / battleSpeed);
     toast('Бои начались. Ctrl+Z вернёт карту к моменту начала боёв.');
+    logEvent('Начались боевые действия');
   } else {
     engaged = [];
     edited(); renderUnitPanel();
+    logEvent('Бои остановлены');
     toast('Бои остановлены.');
   }
   syncToggles(); requestDraw();
@@ -1601,6 +1715,7 @@ function syncToggles() {
 function drawBattles(c) {
   if (!battlesOn || !showUnits) return;
   for (const [a, b, win] of engaged) {
+    if (!isVisible(a) && !isVisible(b)) continue;
     const S = Math.min(unitS(a), unitS(b)), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const col = rgb[win.owner] || [200, 60, 50];
     c.save();
@@ -1615,12 +1730,339 @@ function drawBattles(c) {
   }
 }
 
+// ---------- game systems (each can be switched off) ----------
+const GAME_SYSTEMS = [
+  ['calendar', 'Календарь', 'Дата идёт, пока идут бои. Видна над картой.'],
+  ['orders', 'Приказы на марш', 'Выберите отряды и нажмите ПКМ по карте: они сами пойдут к точке.'],
+  ['arrows', 'Стрелки наступления', 'Инструмент «Стрелки» (8): рисуйте планы ударов.'],
+  ['cities', 'Города и победные очки', 'Инструмент «Города» (9): ключевые точки, за которые идёт борьба.'],
+  ['supply', 'Снабжение', 'Окружённые и оторвавшиеся от своих отряды слабеют и теряют силы.'],
+  ['fog', 'Туман войны', 'Войска противника видны только рядом с вашими отрядами и землями.'],
+  ['ai', 'ИИ противника', 'Во время боёв чужие отряды сами наступают на ваши войска и города.'],
+  ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.']
+];
+let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: false, log: true };
+let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
+let arrows = [], cities = [], gameLog = [];
+let selArrow = null, selCity = null, arrowWidth = 9;
+const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+function fmtDate(t) {
+  const d = new Date(t), hh = String(d.getUTCHours()).padStart(2, '0');
+  return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + (hoursPerTick < 24 ? ', ' + hh + ':00' : '');
+}
+const ownerName = o => (countries[o - 1] || {}).name || 'нейтральные';
+
+// --- chronicle ---
+let logTimer = 0;
+function logEvent(text, owner) {
+  if (!game.log) return;
+  gameLog.unshift({ t: game.calendar ? fmtDate(gameDate) : new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }), text, owner: owner || 0 });
+  if (gameLog.length > 300) gameLog.length = 300;
+  if (!logTimer) logTimer = setTimeout(() => { logTimer = 0; renderLog(); }, 250);
+}
+function renderLog() {
+  const ul = $('#gameLog'); ul.textContent = '';
+  gameLog.slice(0, 120).forEach(e => {
+    const li = document.createElement('li');
+    const dot = document.createElement('span'); dot.className = 'ldot'; dot.style.background = countries[e.owner - 1] ? countries[e.owner - 1].color : 'var(--muted)';
+    const tm = document.createElement('small'); tm.textContent = e.t;
+    const tx = document.createElement('span'); tx.textContent = e.text;
+    li.append(dot, tm, tx); ul.append(li);
+  });
+  $('#gameLogEmpty').hidden = gameLog.length > 0;
+}
+
+// --- cities & victory points ---
+const cityR = c => unitSize * .2 * (1 + Math.min(c.vp, 25) / 12);
+function cityOwner(c) { return own ? cellOwner(c.x, c.y) : 0; }
+function checkCities(silent) {
+  if (!game.cities) return;
+  for (const c of cities) {
+    const o = cityOwner(c);
+    if (c.lastOwner !== undefined && o !== c.lastOwner && o && !silent) {
+      logEvent(ownerName(o) + ' берёт ' + (c.capital ? 'столицу ' : 'город ') + c.name + (c.lastOwner ? ' у страны ' + ownerName(c.lastOwner) : ''), o);
+      if (c.capital || c.vp >= 5) toast(ownerName(o) + ' берёт ' + c.name + '!');
+    }
+    c.lastOwner = o;
+  }
+}
+function vpTotals() {
+  const t = countries.map(() => 0);
+  if (game.cities) for (const c of cities) { const o = cityOwner(c); if (o && t[o - 1] !== undefined) t[o - 1] += c.vp; }
+  return t;
+}
+function drawStar(c, x, y, r) {
+  c.beginPath();
+  for (let k = 0; k < 10; k++) { const rr = k % 2 ? r * .45 : r, a = -Math.PI / 2 + k * Math.PI / 5; k ? c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : c.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  c.closePath();
+}
+function drawCities(c, marks) {
+  if (!game.cities) return;
+  for (const ct of cities) {
+    const r = cityR(ct), o = cityOwner(ct), col = rgb[o] || [150, 150, 150];
+    const dark = `rgb(${col[0] * .5 | 0},${col[1] * .5 | 0},${col[2] * .5 | 0})`;
+    c.lineJoin = 'round';
+    if (ct.capital) {
+      drawStar(c, ct.x, ct.y, r * 1.5); c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
+      c.lineWidth = r * .28; c.strokeStyle = '#fff'; c.stroke(); c.lineWidth = r * .14; c.strokeStyle = dark; c.stroke();
+    } else {
+      c.beginPath(); c.arc(ct.x, ct.y, r, 0, Math.PI * 2); c.fillStyle = '#fff'; c.fill();
+      c.lineWidth = r * .32; c.strokeStyle = dark; c.stroke();
+      c.beginPath(); c.arc(ct.x, ct.y, r * .45, 0, Math.PI * 2); c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
+    }
+    const fs = Math.max(r * 1.25, unitSize * .3);
+    c.font = `600 ${fs}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top';
+    const label = ct.name + (ct.vp > 1 ? '  ' + ct.vp : '');
+    const y = ct.y + r * (ct.capital ? 1.6 : 1.3);
+    c.lineWidth = fs * .3; c.strokeStyle = 'rgba(255,255,255,.92)'; c.strokeText(label, ct.x, y);
+    c.fillStyle = '#1b2028'; c.fillText(label, ct.x, y);
+    if (marks && ct === selCity && tool === 'cities') { c.setLineDash([r * .4, r * .3]); c.lineWidth = r * .15; c.strokeStyle = '#1b2028'; c.beginPath(); c.arc(ct.x, ct.y, r * 2, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); }
+  }
+}
+function hitCity(g) {
+  if (!game.cities) return null;
+  for (let k = cities.length - 1; k >= 0; k--) { const c = cities[k]; if (Math.hypot(g.x - c.x, g.y - c.y) <= cityR(c) * 1.8) return c; }
+  return null;
+}
+function renderCityPanel() {
+  const p = $('#cityEdit'); p.hidden = !selCity;
+  if (selCity) {
+    if (document.activeElement !== $('#cityName')) $('#cityName').value = selCity.name;
+    $('#cityVp').value = selCity.vp; $('#cityVpOut').textContent = selCity.vp;
+    $('#cityCap').checked = !!selCity.capital;
+    $('#cityOwnerTxt').textContent = 'Сейчас принадлежит: ' + ownerName(cityOwner(selCity));
+  }
+  renderScore();
+}
+function renderScore() {
+  const box = $('#vpList'); box.textContent = '';
+  const vp = vpTotals(), tot = vp.reduce((a, b) => a + b, 0);
+  $('#vpBlock').hidden = !game.cities || !cities.length;
+  countries.forEach((c, k) => {
+    const li = document.createElement('li');
+    const sw = document.createElement('span'); sw.className = 'ldot'; sw.style.background = c.color;
+    const nm = document.createElement('span'); nm.textContent = c.name;
+    const v = document.createElement('b'); v.textContent = vp[k] + (tot ? ' · ' + Math.round(vp[k] / tot * 100) + '%' : '');
+    li.append(sw, nm, v); box.append(li);
+  });
+  updateGameInfo();
+}
+function updateGameInfo() {
+  const parts = [];
+  if (game.calendar) parts.push(fmtDate(gameDate));
+  if (game.cities && cities.length && countries[player - 1]) parts.push('ПО ' + countries[player - 1].name + ': ' + (vpTotals()[player - 1] || 0));
+  const el = $('#gameInfo');
+  el.hidden = !parts.length;
+  const t = parts.join(' · ');
+  if (el.textContent !== t) el.textContent = t;
+}
+
+// --- arrows ---
+function smoothLine(pts, iters) {
+  let p = pts;
+  for (let it = 0; it < iters; it++) {
+    const q = [p[0]];
+    for (let k = 0; k + 1 < p.length; k++) {
+      const a = p[k], b = p[k + 1];
+      q.push({ x: a.x * .75 + b.x * .25, y: a.y * .75 + b.y * .25 }, { x: a.x * .25 + b.x * .75, y: a.y * .25 + b.y * .75 });
+    }
+    q.push(p[p.length - 1]); p = q;
+  }
+  return p;
+}
+function simplify(pts, tol) {
+  const out = [pts[0]];
+  for (let k = 1; k < pts.length - 1; k++) { const l = out[out.length - 1]; if (Math.hypot(pts[k].x - l.x, pts[k].y - l.y) >= tol) out.push(pts[k]); }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+function drawArrow(c, a, selected) {
+  const pts = a.pts, w = a.w, col = rgb[a.owner] || [120, 120, 120];
+  if (pts.length < 2) return;
+  const head = w * 3.2;
+  // cut the body short so it ends under the head
+  let body = pts.slice(), rest = head * .8;
+  while (body.length > 2) {
+    const p = body[body.length - 1], q = body[body.length - 2], d = Math.hypot(p.x - q.x, p.y - q.y);
+    if (d > rest) { body[body.length - 1] = { x: p.x + (q.x - p.x) * rest / d, y: p.y + (q.y - p.y) * rest / d }; break; }
+    rest -= d; body.pop();
+  }
+  const end = pts[pts.length - 1];
+  let k = pts.length - 2; while (k > 0 && Math.hypot(end.x - pts[k].x, end.y - pts[k].y) < head) k--;
+  const dir = Math.atan2(end.y - pts[k].y, end.x - pts[k].x);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const path = new Path2D(); path.moveTo(body[0].x, body[0].y); for (let i = 1; i < body.length; i++) path.lineTo(body[i].x, body[i].y);
+  const fill = `rgba(${col[0]},${col[1]},${col[2]},.92)`, dark = `rgb(${col[0] * .45 | 0},${col[1] * .45 | 0},${col[2] * .45 | 0})`;
+  c.lineWidth = w + w * .45; c.strokeStyle = dark; c.stroke(path);
+  c.lineWidth = w; c.strokeStyle = fill; c.stroke(path);
+  c.beginPath();
+  c.moveTo(end.x, end.y);
+  c.lineTo(end.x - Math.cos(dir) * head + Math.cos(dir + Math.PI / 2) * w * 1.7, end.y - Math.sin(dir) * head + Math.sin(dir + Math.PI / 2) * w * 1.7);
+  c.lineTo(end.x - Math.cos(dir) * head - Math.cos(dir + Math.PI / 2) * w * 1.7, end.y - Math.sin(dir) * head - Math.sin(dir + Math.PI / 2) * w * 1.7);
+  c.closePath(); c.fillStyle = fill; c.fill(); c.lineWidth = w * .22; c.strokeStyle = dark; c.stroke();
+  if (selected) { c.setLineDash([w * .6, w * .5]); c.lineWidth = w * .2; c.strokeStyle = '#e2b84a'; c.stroke(path); c.setLineDash([]); }
+}
+function drawArrows(c, marks) { if (game.arrows) for (const a of arrows) drawArrow(c, a, marks && a === selArrow && tool === 'arrows'); }
+function hitArrow(g) {
+  if (!game.arrows) return null;
+  for (let k = arrows.length - 1; k >= 0; k--) {
+    const a = arrows[k], tol = a.w + 4 / view.s;
+    for (let i = 0; i + 1 < a.pts.length; i++) {
+      const p = a.pts[i], q = a.pts[i + 1], dx = q.x - p.x, dy = q.y - p.y, L = dx * dx + dy * dy || 1;
+      const t = clamp(((g.x - p.x) * dx + (g.y - p.y) * dy) / L, 0, 1);
+      if (Math.hypot(g.x - p.x - dx * t, g.y - p.y - dy * t) <= tol) return a;
+    }
+  }
+  return null;
+}
+
+// --- orders: units march to a point ---
+const SPEED = { armor: 1.6, mech: 1.4, motor: 1.4, tankmk: .9, cav: 1.3, horseshoe: 1.3, sabre: 1.3, dragoon: 1.2, helmet: 1.1, wheel: 1.3,
+  heli: 2.2, plane: 3, biplane: 2.5, drone: 2.5, ship: 1.2, galley: 1, sub: 1, train: 1.5, art: .8, heavyart: .6, cannon: .7, catapult: .5, elephant: .9, hq: 1 };
+let marchRaf = 0, marchLast = 0, marchBeat = 0;
+function issueOrder(target) {
+  const list = targets().filter(u => !immobile(u));
+  if (!list.length) return;
+  pushHist();
+  const cx = list.reduce((s, u) => s + u.x, 0) / list.length, cy = list.reduce((s, u) => s + u.y, 0) / list.length;
+  for (const u of list) u.order = { x: clamp(target.x + (u.x - cx) * .8, 0, W), y: clamp(target.y + (u.y - cy) * .8, 0, H) };
+  toast(list.length > 1 ? 'Отряды выступили: ' + list.length : 'Отряд выступил');
+  startMarch();
+}
+function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } }
+function enemyContact(u) {
+  for (const v of units) if (v.owner !== u.owner && Math.hypot(v.x - u.x, v.y - u.y) <= (unitS(u) + unitS(v)) / 2 * 1.9) return true;
+  return false;
+}
+function marchFrame(t) {
+  marchRaf = 0;
+  const dt = Math.min(.1, (t - marchLast) / 1000); marchLast = t;
+  let any = false;
+  for (const u of units) {
+    if (!u.order) continue;
+    if (!game.orders || immobile(u)) { delete u.order; continue; }
+    any = true;
+    const sp = unitS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
+    const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
+    if (enemyContact(u)) { delete u.order; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') вступил в бой', u.owner); continue; }
+    if (d <= sp) { moveUnit(u, u.order.x, u.order.y); delete u.order; continue; }
+    moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp);
+  }
+  requestDraw();
+  if (t - marchBeat > 1000) { marchBeat = t; renderCountries(); checkCities(); renderScore(); }
+  if (any) marchRaf = requestAnimationFrame(marchFrame);
+  else { edited(); checkCities(); renderScore(); }
+}
+function drawOrders(c) {
+  if (!game.orders) return;
+  for (const u of units) {
+    if (!u.order || !isVisible(u)) continue;
+    const col = rgb[u.owner] || [80, 80, 80], S = unitS(u);
+    c.strokeStyle = `rgba(${col[0] * .5 | 0},${col[1] * .5 | 0},${col[2] * .5 | 0},.85)`; c.lineWidth = S * .06;
+    c.setLineDash([S * .2, S * .14]); c.beginPath(); c.moveTo(u.x, u.y); c.lineTo(u.order.x, u.order.y); c.stroke(); c.setLineDash([]);
+    c.beginPath(); c.arc(u.order.x, u.order.y, S * .14, 0, Math.PI * 2); c.fillStyle = c.strokeStyle; c.fill();
+  }
+}
+
+// --- supply ---
+function inSupply(u) {
+  const gx = Math.floor(u.x), gy = Math.floor(u.y);
+  if (gx < 0 || gy < 0 || gx >= W || gy >= H) return true;
+  const i = gy * W + gx;
+  if (own[i] === u.owner) return !(pocket[i] && pocket[i] !== u.owner);
+  const R = unitSize * 5;
+  for (let r = R / 3; r <= R + 1; r += R / 3) for (let k = 0; k < 16; k++) {
+    const a = k * Math.PI / 8, x = Math.floor(u.x + Math.cos(a) * r), y = Math.floor(u.y + Math.sin(a) * r);
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const j = y * W + x;
+    if (own[j] === u.owner && !(pocket[j] && pocket[j] !== u.owner)) return true;
+  }
+  return false;
+}
+function updateSupply() {
+  for (const u of units) {
+    const was = !!u.oos, now = game.supply ? !inSupply(u) : false;
+    if (now) u.oos = true; else delete u.oos;
+    if (now && !was) logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') остался без снабжения', u.owner);
+  }
+}
+
+// --- fog of war ---
+let visCache = null;
+function isVisible(u) {
+  if (!game.fog || !player || u.owner === player) return true;
+  if (visCache && visCache.has(u)) return visCache.get(u);
+  let v = cellOwner(u.x, u.y) === player;
+  if (!v) for (const m of units) if (m.owner === player && Math.hypot(m.x - u.x, m.y - u.y) <= unitS(m) * 6) { v = true; break; }
+  if (visCache) visCache.set(u, v);
+  return v;
+}
+
+// --- AI ---
+function aiStep(fought) {
+  if (!game.ai) return;
+  for (const u of units) {
+    if (u.owner === player || fought.has(u) || u.order || immobile(u)) continue;
+    let best = null, bd = unitS(u) * 12;
+    for (const v of units) if (v.owner !== u.owner) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    if (!best && game.cities) {
+      bd = Infinity;
+      for (const c of cities) if (cityOwner(c) !== u.owner) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
+    }
+    if (!best) continue;
+    const d = Math.hypot(best.x - u.x, best.y - u.y);
+    if (d < unitS(u) * .5) continue;
+    const step = unitS(u) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
+    if (protect && cellOwner(nx, ny) === 0) continue;
+    moveUnit(u, nx, ny);
+  }
+}
+
+// --- pockets in the chronicle ---
+let pocketSig = new Map();
+function logPockets() {
+  const now = new Map();
+  for (const p of pockets) if (p.size >= 60) { const k = p.owner + '>' + p.enc; now.set(k, (now.get(k) || 0) + 1); }
+  for (const [k, n] of now) if (n > (pocketSig.get(k) || 0)) { const [o, e] = k.split('>').map(Number); logEvent(ownerName(e) + ' окружила войска и земли страны ' + ownerName(o) + ': образовался котёл', e); }
+  pocketSig = now;
+}
+
+// --- toggles panel ---
+function renderGameToggles() {
+  const box = $('#gameSystems'); box.textContent = '';
+  for (const [key, name, hint] of GAME_SYSTEMS) {
+    const lab = document.createElement('label'); lab.className = 'gsys';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'gs-' + key; cb.checked = !!game[key];
+    cb.addEventListener('change', () => setSystem(key, cb.checked));
+    const t = document.createElement('span'); t.innerHTML = '<b></b><small></small>';
+    t.firstChild.textContent = name; t.lastChild.textContent = hint;
+    lab.append(cb, t); box.append(lab);
+  }
+}
+function setSystem(key, on) {
+  game[key] = on;
+  const name = GAME_SYSTEMS.find(s => s[0] === key)[1];
+  applySystems();
+  toast(name + (on ? ': включено' : ': выключено'));
+  if (key === 'supply') { updateSupply(); spriteCache.clear(); }
+  scheduleSave(); requestDraw();
+}
+function applySystems() {
+  document.querySelector('#tools [data-tool="arrows"]').hidden = !game.arrows;
+  document.querySelector('#tools [data-tool="cities"]').hidden = !game.cities;
+  if ((tool === 'arrows' && !game.arrows) || (tool === 'cities' && !game.cities)) setTool('warp');
+  $('#logSec').hidden = !game.log;
+  $('#calRow').hidden = !game.calendar;
+  if (!game.supply) units.forEach(u => delete u.oos);
+  renderScore(); renderLog();
+}
+
 // ---------- history ----------
-function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals) }; }
+function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
-function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); }
+function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); selArrow = selCity = null; }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
-function afterChange() { recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); }
+function afterChange() { recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
 function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
 function redo() { if (!redoStack.length || drag) return; hist.push(snap()); restore(redoStack.pop()); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
@@ -1679,6 +2121,8 @@ function removeCountry(idx) {
   for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
   if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
   units = units.filter(u => u.owner !== idx); units.forEach(u => { if (u.owner > idx) u.owner--; }); selUnit = null; selUnits = [];
+  arrows = arrows.filter(a => a.owner !== idx); arrows.forEach(a => { if (a.owner > idx) a.owner--; }); selArrow = null;
+  cities.forEach(c => { if (c.lastOwner === idx) c.lastOwner = 0; else if (c.lastOwner > idx) c.lastOwner--; });
   generals = generals.filter(g => g.owner !== idx); generals.forEach(g => { if (g.owner > idx) g.owner--; });
   units.forEach(u => { if (u.gen && !genById(u.gen)) delete u.gen; });
   if (player === idx) player = 1; else if (player > idx) player--;
@@ -1696,9 +2140,13 @@ function setTool(t) {
   $('#fMode').hidden = t !== 'fill';
   $('#fProtect').hidden = !(t === 'warp' || t === 'lasso');
   $('#fUnits').hidden = t !== 'units';
+  $('#fArrows').hidden = t !== 'arrows';
+  $('#fCities').hidden = t !== 'cities';
+  if (t === 'cities') renderCityPanel();
+  if (t === 'arrows') renderArrowPanel();
   if (t === 'units') renderUnitPanel();
   $('#hint').textContent = HINTS[t];
-  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : t === 'units' ? 'copy' : 'crosshair';
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : t === 'units' ? 'copy' : t === 'cities' ? 'copy' : 'crosshair';
   requestDraw();
 }
 // slider is logarithmic so small radii stay precise and big ones are still reachable
@@ -1728,6 +2176,10 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   if (pointers.size > 2) return;
+  if (e.button === 2 && tool === 'units' && game.orders && W && targets().length && !spaceDown) {
+    issueOrder(toGrid(p));
+    return;
+  }
   if (e.button === 1 || e.button === 2 || tool === 'pan' || spaceDown || !W) {
     drag = { mode: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y };
     cv.style.cursor = 'grabbing';
@@ -1778,6 +2230,26 @@ cv.addEventListener('pointerdown', e => {
       const nu = { x: g.x, y: g.y, era, type: unitType, owner: active, ech: unitEch, label: '' };
       units.push(nu); selectUnit(nu); unitsChanged();
     }
+  } else if (tool === 'arrows') {
+    const a = hitArrow(g);
+    if (a) { selArrow = a; renderArrowPanel(); requestDraw(); return; }
+    if (!active) { toast('Сначала добавьте страну'); return; }
+    selArrow = null;
+    drag = { mode: 'arrow', pts: [g], owner: active };
+  } else if (tool === 'cities') {
+    const c = hitCity(g);
+    if (c) {
+      selCity = c; renderCityPanel(); requestDraw();
+      pushHist();
+      drag = { mode: 'city', c, ox: g.x - c.x, oy: g.y - c.y, moved: false };
+    } else {
+      if (!inside) return;
+      pushHist();
+      const nc = { x: g.x, y: g.y, name: 'Город ' + (cities.length + 1), vp: 1, capital: false };
+      nc.lastOwner = cityOwner(nc);
+      cities.push(nc); selCity = nc; renderCityPanel(); updUndo(); scheduleSave(); requestDraw();
+      const ni = $('#cityName'); ni.focus(); ni.select();
+    }
   } else if (tool === 'lasso') {
     const o = inside ? own[gy * W + gx] : 0;
     const capt = o || active;
@@ -1817,6 +2289,12 @@ cv.addEventListener('pointermove', e => {
     drag.moved = true; requestDraw();
   } else if (drag.mode === 'box') {
     drag.b = toGrid(p); requestUi();
+  } else if (drag.mode === 'arrow') {
+    const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
+    if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 4) { drag.pts.push(g); requestUi(); }
+  } else if (drag.mode === 'city') {
+    const g = toGrid(p);
+    drag.c.x = clamp(g.x - drag.ox, 0, W); drag.c.y = clamp(g.y - drag.oy, 0, H); drag.moved = true; requestDraw();
   } else if (drag.mode === 'lasso') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
@@ -1832,6 +2310,20 @@ function endPointer(e) {
     const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
     drag = null; requestUi();
     if (inBox.length) { const cur = targets(); setSel(cur.concat(inBox.filter(u => !cur.includes(u)))); toast('Выбрано отрядов: ' + targets().length); }
+    return;
+  }
+  if (drag.mode === 'arrow') {
+    const pts = drag.pts, owner = drag.owner; drag = null; requestUi();
+    let len = 0; for (let k = 1; k < pts.length; k++) len += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
+    if (len * view.s < 20) return;
+    pushHist();
+    const a = { pts: smoothLine(simplify(pts, arrowWidth * .8), 2).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), owner, w: arrowWidth };
+    arrows.push(a); selArrow = a; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw();
+    return;
+  }
+  if (drag.mode === 'city') {
+    const c = drag.c, moved = drag.moved; drag = null;
+    if (moved) { c.lastOwner = cityOwner(c); renderCityPanel(); updUndo(); scheduleSave(); } else { hist.pop(); updUndo(); }
     return;
   }
   if (drag.mode === 'unit') {
@@ -1883,8 +2375,10 @@ window.addEventListener('keydown', e => {
   if (tool === 'units' && e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const mine = units.filter(u => u.owner === active); setSel(mine); toast('Выбраны все отряды: ' + (countries[active - 1] || {}).name + ' (' + mine.length + ')'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
-  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units' };
-  if (tools[e.code]) { setTool(tools[e.code]); return; }
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities' };
+  if (tools[e.code]) { if ((tools[e.code] === 'arrows' && !game.arrows) || (tools[e.code] === 'cities' && !game.cities)) return; setTool(tools[e.code]); return; }
+  if (tool === 'arrows' && selArrow && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); return; }
+  if (tool === 'cities' && selCity && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteCity(); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && selGen) { closeGen(); return; }
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
@@ -2015,6 +2509,16 @@ function loadSample() {
     { id: 3, name: 'Ирма Вальден', owner: 2, photo: '', rank: 'Маршал', skill: 3 }
   ];
   genSeq = 4; player = 1; selGen = null;
+  cities = [
+    { x: 400, y: 400, name: 'Арген', vp: 10, capital: true },
+    { x: 905, y: 425, name: 'Борград', vp: 10, capital: true },
+    { x: 610, y: 330, name: 'Перевал', vp: 3, capital: false },
+    { x: 640, y: 560, name: 'Устье', vp: 3, capital: false },
+    { x: 760, y: 250, name: 'Северск', vp: 2, capital: false }
+  ];
+  arrows = [{ owner: 1, w: 9, pts: smoothLine([{ x: 470, y: 340 }, { x: 560, y: 300 }, { x: 650, y: 315 }], 3) }];
+  gameLog = []; gameDate = Date.UTC(1941, 5, 22, 4); selArrow = selCity = null;
+  cities.forEach(c => { c.lastOwner = undefined; });
   afterChange();
   saveImage();
   setTool('warp');
@@ -2057,12 +2561,12 @@ $('#btnGetApp').addEventListener('click', () => {
 $('#btnPng').addEventListener('click', () => {
   if (!W) return;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d'); x.drawImage(over, 0, 0); drawUnits(x, false);
+  const x = c.getContext('2d'); x.drawImage(over, 0, 0); drawCities(x, false); drawArrows(x, false); drawUnits(x, false);
   c.toBlob(b => download(b, 'karta.png'), 'image/png');
 });
 $('#btnProj').addEventListener('click', () => {
   if (!W) return;
-  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player };
+  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -2078,6 +2582,7 @@ function loadProjectFile(file) {
         countries = d.countries; active = d.active || 1;
         units = d.units || []; if (d.unitSize) setUnitSize(d.unitSize);
         loadGenerals(d.generals); player = d.player || 1;
+        loadGame(d);
         own.set(unrle(d.own, W * H));
         afterChange(); saveImage(); setTool('warp');
         toast('Проект открыт.');
@@ -2108,7 +2613,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -2128,6 +2633,7 @@ async function restoreSaved() {
     if (st.sizes) Object.assign(sizes, st.sizes);
     units = st.units || [];
     loadGenerals(st.generals); player = st.player || 1;
+    loadGame(st);
     if (typeof st.unitsPushBorder === 'boolean') unitsPushBorder = st.unitsPushBorder;
     if (st.pushK) { pushK = st.pushK; $('#pushk').value = Math.round(pushK * 100); $('#pushkOut').textContent = Math.round(pushK * 100) + '%'; }
     if (st.battleSpeed) { battleSpeed = st.battleSpeed; $('#bspeed').value = battleSpeed; $('#bspeedOut').textContent = battleSpeed + ' ходов/с'; }
@@ -2246,6 +2752,45 @@ $('#genShow').addEventListener('click', () => { const g = curGen(); if (g) showG
 $('#genDel').addEventListener('click', () => { const g = curGen(); if (g) removeGeneral(g); });
 $('#genClose').addEventListener('click', closeGen);
 new ResizeObserver(() => { stage.style.setProperty('--strip-h', $('#genStrip').offsetHeight + 'px'); if (!userView) fit(); }).observe($('#genStrip'));
+function loadGame(d) {
+  if (d.game) game = Object.assign({}, game, d.game);
+  if (d.gameDate) gameDate = d.gameDate;
+  if (d.hoursPerTick) hoursPerTick = d.hoursPerTick;
+  arrows = d.arrows || []; cities = d.cities || []; gameLog = d.gameLog || [];
+  if (d.arrowWidth) arrowWidth = d.arrowWidth;
+  selArrow = selCity = null;
+  syncGameControls();
+}
+function syncGameControls() {
+  renderGameToggles();
+  $('#gameStep').value = String(hoursPerTick);
+  $('#gameStart').value = new Date(gameDate).toISOString().slice(0, 10);
+  $('#arrowW').value = arrowWidth; $('#arrowWOut').textContent = arrowWidth;
+  applySystems();
+}
+function renderArrowPanel() { $('#arrowDel').hidden = !selArrow; }
+function deleteCity() { if (!selCity) return; pushHist(); cities = cities.filter(c => c !== selCity); selCity = null; renderCityPanel(); updUndo(); scheduleSave(); requestDraw(); }
+$('#gameStart').addEventListener('change', e => {
+  const v = e.target.value; if (!v) return;
+  const d = new Date(gameDate), [y, m, dd] = v.split('-').map(Number);
+  gameDate = Date.UTC(y, m - 1, dd, d.getUTCHours()); updateGameInfo(); scheduleSave();
+});
+$('#gameStep').addEventListener('change', e => { hoursPerTick = +e.target.value; updateGameInfo(); scheduleSave(); });
+$('#logClear').addEventListener('click', () => { gameLog = []; renderLog(); scheduleSave(); });
+$('#arrowW').addEventListener('input', e => {
+  arrowWidth = +e.target.value; $('#arrowWOut').textContent = arrowWidth;
+  if (selArrow) { selArrow.w = arrowWidth; requestDraw(); }
+  scheduleSave();
+});
+$('#arrowDel').addEventListener('click', () => { if (!selArrow) return; pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); });
+$('#arrowClear').addEventListener('click', () => { if (!arrows.length) return; pushHist(); arrows = []; selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); toast('Стрелки стёрты. Ctrl+Z вернёт их.'); });
+let cityNameHist = false;
+$('#cityName').addEventListener('focus', () => { cityNameHist = false; });
+$('#cityName').addEventListener('input', e => { if (!selCity) return; if (!cityNameHist) { pushHist(); cityNameHist = true; } selCity.name = e.target.value || 'Город'; requestDraw(); scheduleSave(); });
+$('#cityVp').addEventListener('input', e => { if (!selCity) return; selCity.vp = +e.target.value; $('#cityVpOut').textContent = selCity.vp; renderScore(); requestDraw(); scheduleSave(); });
+$('#cityCap').addEventListener('change', e => { if (!selCity) return; pushHist(); selCity.capital = e.target.checked; requestDraw(); scheduleSave(); });
+$('#cityDel').addEventListener('click', deleteCity);
+$('#unitStop').addEventListener('click', () => { targets().forEach(u => delete u.order); renderUnitPanel(); requestDraw(); });
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
 $('#bspeed').addEventListener('input', e => {
@@ -2283,6 +2828,8 @@ new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
 resize();
 setTool('warp');
 setUnitSize(unitSize);
+syncGameControls();
+renderLog();
 restoreSaved().then(ok => { if (!ok) loadSample(); fit(); });
 })();
 </script>
