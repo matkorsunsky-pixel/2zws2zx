@@ -109,6 +109,18 @@ select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); bor
 .country .del { padding: 0; width: 26px; height: 26px; justify-content: center; background: transparent; border-color: transparent; color: var(--muted); font-size: 16px; }
 .country .del:hover { color: var(--danger); border-color: var(--line); }
 
+.sizer { grid-column: span 2; display: flex; gap: 8px; align-items: center; }
+.sizer input[type=range] { flex: 1; min-width: 0; }
+.sizer button { width: 32px; height: 32px; padding: 0; justify-content: center; font-size: 17px; flex: none; }
+.presets { grid-column: span 2; display: flex; gap: 4px; flex-wrap: wrap; }
+.presets button { padding: 5px 8px; font: 12px var(--f-mono); }
+.presets button.on { background: var(--accent-soft); border-color: var(--accent); }
+#pockets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pocket { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; background: var(--bg); }
+.pocket .sw2 { width: 22px; height: 22px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
+.pocket .pt { min-width: 0; font-size: 13px; line-height: 1.25; }
+.pocket .pt small { display: block; color: var(--muted); font-size: 11px; }
+.pocket button { padding: 6px 8px; font-size: 12px; }
 .help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .help b { color: var(--ink); font-weight: 500; }
 
@@ -167,6 +179,9 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <button data-tool="warp" class="wide">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c5 0 5-12 10-12"/><path d="M13 12h8"/><path d="M18 9l3 3-3 3"/></svg>
         Тянуть границу<kbd>1</kbd></button>
+      <button data-tool="lasso" class="wide">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="13" cy="9.5" rx="8.5" ry="6" stroke-dasharray="3 2.5"/><path d="M6.5 13.5c-1.5 1-2 2.5-1 4s.5 3-1.5 4"/></svg>
+        Окружение (обвести область)<kbd>5</kbd></button>
       <button data-tool="brush">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l10-10a2.1 2.1 0 0 1 3 3L12 18"/><path d="M8 15c-2.5 0-4 1.5-4 4 0 1-1 2-2 2 4 1 9 0 9-3a3 3 0 0 0-3-3z"/></svg>
         Кисть<kbd>2</kbd></button>
@@ -178,12 +193,19 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         Заливка<kbd>4</kbd></button>
       <button data-tool="pan">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
-        Двигать карту<kbd>5</kbd></button>
+        Двигать карту<kbd>6</kbd></button>
     </div>
 
     <div class="field" id="fSize">
-      <label for="size">Размер захвата</label><output id="sizeOut">90 px</output>
-      <input type="range" id="size" min="4" max="400" value="90">
+      <label for="size" id="sizeLabel">Радиус захвата</label><output id="sizeOut">90 px</output>
+      <div class="sizer">
+        <button id="sizeDown" title="Уменьшить ( [ )" aria-label="Уменьшить радиус">−</button>
+        <input type="range" id="size" min="0" max="1000" value="600">
+        <button id="sizeUp" title="Увеличить ( ] )" aria-label="Увеличить радиус">+</button>
+      </div>
+      <div class="presets" id="presets">
+        <button data-size="5">5</button><button data-size="15">15</button><button data-size="40">40</button><button data-size="90">90</button><button data-size="200">200</button><button data-size="450">450</button>
+      </div>
     </div>
     <div class="field" id="fTol" hidden>
       <label for="tol">Допуск по цвету</label><output id="tolOut">40</output>
@@ -203,6 +225,14 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <ul id="countries"></ul>
     <div class="row"><button id="btnAdd">+ Добавить страну</button></div>
     <p class="hint">Щелчок по строке выбирает страну для кисти и заливки. Alt + щелчок по карте выбирает страну под курсором.</p>
+  </section>
+
+  <section>
+    <h2>Окружения</h2>
+    <label class="check"><input type="checkbox" id="showPockets" checked><span>Подсвечивать котлы штриховкой</span></label>
+    <ul id="pockets"></ul>
+    <p class="hint" id="pocketsEmpty">Котлов нет. Котёл — кусок страны, отрезанный от основной территории и со всех сторон окружённый одной другой страной. Создайте его инструментом «Окружение» или протяните границу вокруг области.</p>
+    <div class="row"><button id="btnTakeAll" hidden>Отдать все котлы окружившим</button></div>
   </section>
 
   <section>
@@ -231,7 +261,8 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <h2>Управление</h2>
     <ul class="help">
       <li><b>Колёсико</b> — масштаб, <b>правая кнопка</b> или <b>пробел</b> — двигать карту</li>
-      <li><b>[ ]</b> — размер захвата, <b>F</b> — показать всю карту</li>
+      <li><b>[ ]</b> или <b>Shift + колёсико</b> — радиус кисти, ластика и захвата</li>
+      <li><b>F</b> — показать всю карту</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
     </ul>
   </section>
@@ -266,6 +297,7 @@ const HINTS = {
   brush: 'Рисуйте цветом выбранной страны.',
   eraser: 'Стирает принадлежность: область станет нейтральной.',
   fill: 'Щёлкните по области карты — она зальётся цветом выбранной страны.',
+  lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
   pan: 'Перетаскивайте карту. Колёсико — масштаб.'
 };
 
@@ -277,11 +309,17 @@ let basePix = null;
 const over = document.createElement('canvas');
 const octx = over.getContext('2d');
 let oimg = null;
-let own = null, own0 = null;          // ownership per cell: 0 = neutral, k = countries[k-1]
+let own = null, own0 = null;
+let pocket = null, label = null;      // pocket[i] = id of the encircling country, label[i] = component id
+let pockets = [];
+let showPockets = true;          // ownership per cell: 0 = neutral, k = countries[k-1]
 let countries = [];
 let rgb = [null];
 let active = 1;
 let tool = 'warp';
+const sizes = { warp: 90, brush: 25, eraser: 25 };   // each tool keeps its own radius
+const SIZE_LABEL = { warp: 'Радиус захвата границы', brush: 'Размер кисти', eraser: 'Размер ластика' };
+const SMIN = 2, SMAX = 600;
 let brush = 90, tol = 40, fillMode = 'image', protect = true;
 let alpha = 0.5, borderW = 2;
 const view = { s: 1, x: 0, y: 0 };
@@ -320,6 +358,9 @@ function setMap(src, w, h) {
   oimg = octx.createImageData(W, H);
   own = new Uint8Array(W * H);
   own0 = new Uint8Array(W * H);
+  pocket = new Uint8Array(W * H);
+  label = new Int32Array(W * H);
+  pockets = [];
   hist = []; redoStack = []; updUndo();
   fit();
 }
@@ -349,6 +390,9 @@ function renderRect(x0, y0, x1, y1) {
       }
       if (vsOther) { d[p] = 24; d[p + 1] = 28; d[p + 2] = 36; d[p + 3] = 235; }
       else if (vsNeutral) { d[p] = c[0] * .55; d[p + 1] = c[1] * .55; d[p + 2] = c[2] * .55; d[p + 3] = 220; }
+      else if (showPockets && pocket[i] && pocket[i] !== o && ((x + y) % 10) < 4) {
+        const e = rgb[pocket[i]] || c; d[p] = e[0]; d[p + 1] = e[1]; d[p + 2] = e[2]; d[p + 3] = Math.max(a, 200);
+      }
       else { d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = a; }
     }
   }
@@ -385,6 +429,14 @@ function draw() {
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
     if (tool === 'warp') { ctx.fillStyle = 'rgba(20,25,32,.9)'; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  if (drag && drag.mode === 'lasso' && drag.pts.length > 1) {
+    const c = rgb[drag.capt] || [20, 25, 32];
+    ctx.beginPath();
+    drag.pts.forEach((q, k) => { const sx = q.x * view.s + view.x, sy = q.y * view.s + view.y; k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+    ctx.closePath();
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},.25)`; ctx.fill();
+    ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = `rgb(${c[0] * .6 | 0},${c[1] * .6 | 0},${c[2] * .6 | 0})`; ctx.stroke(); ctx.setLineDash([]);
   }
   $('#zoom').textContent = Math.round(view.s * 100) + '%';
 }
@@ -505,11 +557,119 @@ function fillAt(g) {
   return count > 0;
 }
 
+// Even-odd scanline fill of a closed polygon (grid coords) with one owner.
+function fillPolygon(pts, val) {
+  let y0 = H, y1 = 0, x0 = W, x1 = 0;
+  for (const q of pts) { y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
+  const ya = Math.max(0, Math.floor(y0)), yb = Math.min(H - 1, Math.ceil(y1));
+  const n = pts.length, xs = [];
+  let changed = 0;
+  for (let y = ya; y <= yb; y++) {
+    const cy = y + .5; xs.length = 0;
+    for (let k = 0, j = n - 1; k < n; j = k++) {
+      const a = pts[k], b = pts[j];
+      if ((a.y > cy) !== (b.y > cy)) xs.push(a.x + (cy - a.y) / (b.y - a.y) * (b.x - a.x));
+    }
+    xs.sort((u, v) => u - v);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const xa = Math.max(0, Math.ceil(xs[k] - .5)), xb = Math.min(W - 1, Math.floor(xs[k + 1] - .5));
+      for (let x = xa, i = y * W + xa; x <= xb; x++, i++) {
+        const o = own[i];
+        if (o === val || (o === 0 && protect)) continue;
+        own[i] = val; changed++;
+      }
+    }
+  }
+  addDirty(Math.max(0, Math.floor(x0)), ya, Math.min(W, Math.ceil(x1) + 1), yb + 1);
+  return changed;
+}
+
+// Finds pockets: pieces of a country cut off from its largest piece and bordered
+// by exactly one other country (sea and neutral land around them do not break the ring).
+function computePockets() {
+  if (!own) return;
+  const prev = pockets.map(p => p.size + ':' + p.owner + ':' + p.enc).join();
+  label.fill(-1);
+  const comps = [];
+  const stack = new Int32Array(W * H);
+  for (let s0 = 0; s0 < own.length; s0++) {
+    const o = own[s0];
+    if (!o || label[s0] !== -1) continue;
+    const id = comps.length;
+    let sp = 0, size = 0, enc = 0, multi = false, edge = false;
+    let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
+    stack[sp++] = s0; label[s0] = id;
+    while (sp) {
+      const i = stack[--sp]; size++;
+      const x = i % W, y = (i - x) / W;
+      if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true;
+      for (let k = 0; k < 4; k++) {
+        let j;
+        if (k === 0) { if (x === 0) continue; j = i - 1; }
+        else if (k === 1) { if (x === W - 1) continue; j = i + 1; }
+        else if (k === 2) { if (y === 0) continue; j = i - W; }
+        else { if (y === H - 1) continue; j = i + W; }
+        const n = own[j];
+        if (n === o) { if (label[j] === -1) { label[j] = id; stack[sp++] = j; } }
+        else if (n) { if (!enc) enc = n; else if (enc !== n) multi = true; }
+      }
+    }
+    comps.push({ id, owner: o, size, enc: multi ? 0 : enc, edge, box: [bx0, by0, bx1 + 1, by1 + 1] });
+  }
+  const main = {};
+  for (const c of comps) if (!main[c.owner] || c.size > main[c.owner].size) main[c.owner] = c;
+  pockets = comps.filter(c => c !== main[c.owner] && c.enc && !c.edge);
+  // a ring drawn deep inside enemy land is itself cut off, but it is the encircler, not the pocket
+  const inside = (a, b) => a.box[0] >= b.box[0] && a.box[1] >= b.box[1] && a.box[2] <= b.box[2] && a.box[3] <= b.box[3];
+  pockets = pockets.filter(pk => !pockets.some(q => q !== pk && q.owner === pk.enc && q.enc === pk.owner && inside(q, pk)));
+  const encOf = new Uint8Array(comps.length);
+  for (const c of pockets) encOf[c.id] = c.enc;
+  for (let i = 0; i < own.length; i++) pocket[i] = own[i] ? encOf[label[i]] : 0;
+  pockets.sort((a, b) => b.size - a.size);
+  const now = pockets.map(p => p.size + ':' + p.owner + ':' + p.enc).join();
+  if (now !== prev || pockets.length) addDirty(0, 0, W, H);
+}
+function takePocket(pk) {
+  for (let i = 0; i < own.length; i++) if (label[i] === pk.id && own[i] === pk.owner) own[i] = pk.enc;
+}
+function showBox(b) {
+  const r = stage.getBoundingClientRect();
+  const bw = Math.max(40, b[2] - b[0]), bh = Math.max(40, b[3] - b[1]);
+  view.s = clamp(Math.min(r.width / bw, r.height / bh) * 0.45, 0.05, 40);
+  view.x = r.width / 2 - (b[0] + b[2]) / 2 * view.s; view.y = r.height / 2 - (b[1] + b[3]) / 2 * view.s;
+  userView = true; requestDraw();
+}
+function renderPockets() {
+  const ul = $('#pockets'); ul.textContent = '';
+  let tot = 0; for (let i = 0; i < own.length; i++) if (own[i]) tot++;
+  pockets.slice(0, 30).forEach(pk => {
+    const c = countries[pk.owner - 1], e = countries[pk.enc - 1];
+    if (!c || !e) return;
+    const li = document.createElement('li'); li.className = 'pocket';
+    const sw = document.createElement('span'); sw.className = 'sw2';
+    sw.style.background = `repeating-linear-gradient(45deg, ${e.color} 0 4px, ${c.color} 4px 9px)`;
+    const t = document.createElement('span'); t.className = 'pt';
+    t.textContent = c.name;
+    const sm = document.createElement('small'); sm.textContent = 'окружена: ' + e.name + ' · ' + (tot ? (pk.size / tot * 100).toFixed(2) : 0) + '%'; t.append(sm);
+    const bShow = document.createElement('button'); bShow.textContent = 'Показать'; bShow.addEventListener('click', () => showBox(pk.box));
+    const bTake = document.createElement('button'); bTake.textContent = 'Отдать';
+    bTake.title = 'Передать котёл стране ' + e.name;
+    bTake.addEventListener('click', () => { pushHist(); takePocket(pk); edited(); toast('Котёл отошёл стране ' + e.name + '.'); });
+    li.append(sw, t, bShow, bTake);
+    ul.append(li);
+  });
+  $('#pocketsEmpty').hidden = pockets.length > 0;
+  $('#btnTakeAll').hidden = pockets.length < 2;
+}
+// called after every finished edit
+function edited() { computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); }
+
 // ---------- history ----------
 function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active }; }
 function pushHist() { hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
 function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); }
-function afterChange() { recolor(); renderCountries(); updUndo(); scheduleSave(); }
+function afterChange() { recolor(); edited(); }
 function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
 function redo() { if (!redoStack.length || drag) return; hist.push(snap()); restore(redoStack.pop()); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
@@ -574,15 +734,26 @@ function removeCountry(idx) {
 function setTool(t) {
   tool = t;
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  $('#fSize').hidden = !(t === 'warp' || t === 'brush' || t === 'eraser');
+  $('#fSize').hidden = !(t in sizes);
+  if (t in sizes) { $('#sizeLabel').textContent = SIZE_LABEL[t]; setBrush(sizes[t]); }
   $('#fTol').hidden = !(t === 'fill' && fillMode === 'image');
   $('#fMode').hidden = t !== 'fill';
-  $('#fProtect').hidden = t !== 'warp';
+  $('#fProtect').hidden = !(t === 'warp' || t === 'lasso');
   $('#hint').textContent = HINTS[t];
-  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : 'crosshair';
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : 'crosshair';
   requestDraw();
 }
-function setBrush(v) { brush = clamp(Math.round(v), 4, 400); $('#size').value = brush; $('#sizeOut').textContent = brush + ' px'; requestDraw(); }
+// slider is logarithmic so small radii stay precise and big ones are still reachable
+const size2slider = v => Math.round(1000 * Math.log(v / SMIN) / Math.log(SMAX / SMIN));
+const slider2size = v => SMIN * Math.pow(SMAX / SMIN, v / 1000);
+function setBrush(v) {
+  brush = clamp(Math.round(v), SMIN, SMAX);
+  if (tool in sizes) sizes[tool] = brush;
+  $('#size').value = size2slider(brush); $('#sizeOut').textContent = brush + ' px';
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.size === brush));
+  requestDraw();
+}
+function bumpBrush(dir) { setBrush(dir > 0 ? Math.max(brush + 1, brush * 1.2) : Math.min(brush - 1, brush / 1.2)); }
 
 // ---------- pointer input ----------
 cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -593,6 +764,7 @@ cv.addEventListener('pointerdown', e => {
   if (pointers.size === 2) {
     // second finger: abandon the stroke and switch to pinch-zoom
     if (drag && (drag.mode === 'warp' || drag.mode === 'paint') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); }
+    else if (drag && drag.mode === 'lasso') requestDraw();
     const [a, b] = [...pointers.values()];
     drag = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, c0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
     return;
@@ -626,7 +798,13 @@ cv.addEventListener('pointerdown', e => {
     if (!active) { toast('Сначала добавьте страну'); return; }
     if (!inside) return;
     pushHist();
-    if (fillAt(g)) { renderCountries(); scheduleSave(); } else { hist.pop(); updUndo(); }
+    if (fillAt(g)) edited(); else { hist.pop(); updUndo(); }
+  } else if (tool === 'lasso') {
+    const o = inside ? own[gy * W + gx] : 0;
+    const capt = o || active;
+    if (!capt) { toast('Сначала добавьте страну'); return; }
+    drag = { mode: 'lasso', pts: [g], capt };
+    $('#hint').textContent = 'Окружает: ' + countries[capt - 1].name + '. Отпустите кнопку, чтобы замкнуть кольцо.';
   }
 });
 cv.addEventListener('pointermove', e => {
@@ -651,6 +829,9 @@ cv.addEventListener('pointermove', e => {
     if (!drag.pending) { drag.pending = true; requestAnimationFrame(() => { if (drag && drag.mode === 'warp') { drag.pending = false; warpStep(); } }); }
   } else if (drag.mode === 'paint') {
     const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
+  } else if (drag.mode === 'lasso') {
+    const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
+    if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestDraw(); }
   }
 });
 function endPointer(e) {
@@ -658,15 +839,29 @@ function endPointer(e) {
   if (!drag) return;
   if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
-  const wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
+  let wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
+  if (drag.mode === 'lasso') {
+    const { pts, capt } = drag;
+    if (pts.length >= 3) {
+      pushHist();
+      const n = fillPolygon(pts, capt);
+      if (n) { wasEdit = true; toast(countries[capt - 1].name + ' окружила и заняла область.'); }
+      else { hist.pop(); updUndo(); toast('Внутри кольца нечего занимать.'); }
+    }
+  }
   drag = null;
   setTool(tool);
-  if (wasEdit) { renderCountries(); scheduleSave(); }
+  if (wasEdit) edited();
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestDraw(); } });
-cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(pos(e), Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015))); }, { passive: false });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const dy = e.deltaY || e.deltaX;
+  if (e.shiftKey && tool in sizes) { setBrush(brush * Math.exp(-dy * (e.deltaMode ? 0.06 : 0.002))); return; }
+  zoomAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.05 : 0.0015)));
+}, { passive: false });
 
 function updWhere() {
   if (!hover || !W) { $('#where').textContent = '—'; return; }
@@ -685,10 +880,10 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { e.preventDefault(); redo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
-  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'pan' };
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan' };
   if (tools[e.code]) { setTool(tools[e.code]); return; }
-  if (e.code === 'BracketLeft') setBrush(brush / 1.2);
-  else if (e.code === 'BracketRight') setBrush(brush * 1.2 + 1);
+  if (e.code === 'BracketLeft') bumpBrush(-1);
+  else if (e.code === 'BracketRight') bumpBrush(1);
   else if (e.code === 'KeyF') fit();
 });
 window.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; setTool(tool); } });
@@ -843,7 +1038,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -860,6 +1055,8 @@ async function restoreSaved() {
     own.set(st.own); countries = st.countries || []; active = st.active || 1;
     if (typeof st.alpha === 'number') { alpha = st.alpha; $('#alpha').value = Math.round(alpha * 100); $('#alphaOut').textContent = Math.round(alpha * 100) + '%'; }
     if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
+    if (st.sizes) Object.assign(sizes, st.sizes);
+    setTool(tool);
     afterChange();
     return true;
   } catch (e) { return false; }
@@ -867,7 +1064,15 @@ async function restoreSaved() {
 
 // ---------- controls ----------
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
-$('#size').addEventListener('input', e => setBrush(+e.target.value));
+$('#size').addEventListener('input', e => setBrush(slider2size(+e.target.value)));
+$('#sizeDown').addEventListener('click', () => bumpBrush(-1));
+$('#sizeUp').addEventListener('click', () => bumpBrush(1));
+document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => setBrush(+b.dataset.size)));
+$('#showPockets').addEventListener('change', e => { showPockets = e.target.checked; addDirty(0, 0, W, H); });
+$('#btnTakeAll').addEventListener('click', () => {
+  pushHist(); const n = pockets.length; pockets.forEach(takePocket); edited();
+  toast('Котлы отошли окружившим странам: ' + n + '.');
+});
 $('#tol').addEventListener('input', e => { tol = +e.target.value; $('#tolOut').textContent = tol; });
 $('#fillMode').addEventListener('change', e => { fillMode = e.target.value; setTool(tool); });
 $('#protect').addEventListener('change', e => { protect = e.target.checked; });
@@ -886,7 +1091,6 @@ if (inFrame) {
 
 new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
 resize();
-setBrush(90);
 setTool('warp');
 restoreSaved().then(ok => { if (!ok) loadSample(); fit(); });
 })();
