@@ -132,12 +132,14 @@ select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); bor
 .unitsel { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: var(--bg); }
 .unitsel b { font-weight: 600; font-size: 13px; }
 .unitsel input { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 7px; padding: 8px; width: 100%; }
+.getapp { justify-content: center; }
 .help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .help b { color: var(--ink); font-weight: 500; }
 
 main { position: relative; min-width: 0; min-height: 0; background-color: var(--stage);
   background-image: radial-gradient(var(--stage-dot) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
-#view { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#view, #ui { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#ui { pointer-events: none; }
 main.drop::after { content: "Отпустите, чтобы открыть карту"; position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-items: center; font: 600 16px var(--f-ui); color: var(--accent); background: rgb(0 0 0 / .04); pointer-events: none; }
 .bar {
   position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
@@ -219,6 +221,9 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
 <body>
 <aside>
   <div class="brand"><h1>Межа</h1><span>редактор границ</span></div>
+  <button id="btnGetApp" class="primary getapp">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+    Скачать программу на ПК</button>
 
   <section>
     <h2>Карта</h2>
@@ -375,6 +380,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>[ ]</b> или <b>Shift + колёсико</b> — радиус кисти, ластика и захвата</li>
       <li><b>F</b> — показать всю карту</li>
       <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
+      <li><b>Shift + щелчок</b> по отрядам или <b>Shift + рамка</b> выбирают несколько отрядов, <b>Ctrl+A</b> — все отряды выбранной страны</li>
       <li><b>Генералы</b> — полоса внизу карты: выберите, за кого играете, добавьте генерала, дайте имя и фото, назначьте его командиром отрядов</li>
       <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
       <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
@@ -385,6 +391,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
 
 <main id="stage">
   <canvas id="view"></canvas>
+  <canvas id="ui"></canvas>
   <div class="bar">
     <button id="btnUndo" title="Отменить (Ctrl+Z)" aria-label="Отменить"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
     <button id="btnRedo" title="Вернуть (Ctrl+Shift+Z)" aria-label="Вернуть"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
@@ -448,11 +455,14 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
   <div id="toast" role="status" aria-live="polite"></div>
 </main>
 
-<script>
+<script id="app">
 (() => {
 'use strict';
+// snapshot of the untouched page, taken before the script changes anything: this is the program file
+const PRISTINE = document.documentElement.outerHTML;
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), cv = $('#view'), ctx = cv.getContext('2d');
+const uiCv = $('#ui'), uctx = uiCv.getContext('2d');
 const MAXDIM = 1800;
 const PALETTE = ['#d0473f', '#3766c9', '#2f9e5b', '#e0a526', '#8a4fc7', '#d4689f', '#1f9aa8', '#8c6d46', '#5a6b2f', '#c4652a'];
 const HINTS = {
@@ -462,7 +472,7 @@ const HINTS = {
   fill: 'Щёлкните по области карты — она зальётся цветом выбранной страны.',
   lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
   pan: 'Перетаскивайте карту. Колёсико — масштаб.',
-  units: 'Щёлкните по карте, чтобы поставить отряд выбранной страны. Отряд можно перетащить, щелчок по нему открывает настройки.'
+  units: 'Щелчок по карте ставит отряд. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -474,7 +484,7 @@ const over = document.createElement('canvas');
 const octx = over.getContext('2d');
 let oimg = null;
 let own = null, own0 = null;
-let pocket = null, label = null;      // pocket[i] = id of the encircling country, label[i] = component id
+let pocket = null;                    // pocket[i] = id of the country encircling this cell's piece
 let pockets = [];
 let showPockets = true;          // ownership per cell: 0 = neutral, k = countries[k-1]
 let countries = [];
@@ -507,7 +517,11 @@ function addDirty(x0, y0, x1, y1) {
   else { dirty[0] = Math.min(dirty[0], x0); dirty[1] = Math.min(dirty[1], y0); dirty[2] = Math.max(dirty[2], x1); dirty[3] = Math.max(dirty[3], y1); }
   requestDraw();
 }
-function requestDraw() { if (!raf) raf = requestAnimationFrame(draw); }
+// The map layer (picture + troops) redraws only when something on it changes;
+// the cursor ring, lasso and selection box live on a light layer above it.
+let needMap = true, needUi = true;
+function requestDraw() { needMap = needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
+function requestUi() { needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
 function toGrid(p) { return { x: (p.x - view.x) / view.s, y: (p.y - view.y) / view.s }; }
 function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
@@ -515,7 +529,7 @@ function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - 
 function setMap(src, w, h) {
   W = w; H = h;
   base.width = W; base.height = H;
-  bctx.clearRect(0, 0, W, H);
+  bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, W, H);   // flatten transparent maps onto white once
   bctx.drawImage(src, 0, 0, W, H);
   basePix = bctx.getImageData(0, 0, W, H).data;
   over.width = W; over.height = H;
@@ -523,9 +537,8 @@ function setMap(src, w, h) {
   own = new Uint8Array(W * H);
   own0 = new Uint8Array(W * H);
   pocket = new Uint8Array(W * H);
-  label = new Int32Array(W * H);
   pockets = [];
-  units = []; selUnit = null;
+  units = []; selUnit = null; selUnits = [];
   hist = []; redoStack = []; updUndo();
   fit();
 }
@@ -538,12 +551,15 @@ function renderRect(x0, y0, x1, y1) {
   x0 = Math.max(0, x0 - t - 1); y0 = Math.max(0, y0 - t - 1);
   x1 = Math.min(W, x1 + t + 1); y1 = Math.min(H, y1 + t + 1);
   if (x1 <= x0 || y1 <= y0) return;
-  const d = oimg.data, a = Math.round(alpha * 255);
+  // `over` holds the finished picture: the map with territory colours blended in,
+  // so each frame needs a single image blit.
+  const d = oimg.data, bp = basePix, a = Math.round(alpha * 255);
+  let r, g, b, aa;
   for (let y = y0; y < y1; y++) {
     let i = y * W + x0;
     for (let x = x0; x < x1; x++, i++) {
       const o = own[i], p = i * 4;
-      if (!o) { d[p + 3] = 0; continue; }
+      if (!o) { d[p] = bp[p]; d[p + 1] = bp[p + 1]; d[p + 2] = bp[p + 2]; d[p + 3] = 255; continue; }
       const c = rgb[o] || [128, 128, 128];
       let vsOther = false, vsNeutral = false;
       for (let k = 1; k <= t && !vsOther; k++) {
@@ -553,12 +569,14 @@ function renderRect(x0, y0, x1, y1) {
         if (y - k >= 0) { n = own[i - k * W]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
         if (y + k < H) { n = own[i + k * W]; if (n !== o) { if (n) vsOther = true; else vsNeutral = true; } }
       }
-      if (vsOther) { d[p] = 24; d[p + 1] = 28; d[p + 2] = 36; d[p + 3] = 235; }
-      else if (vsNeutral) { d[p] = c[0] * .55; d[p + 1] = c[1] * .55; d[p + 2] = c[2] * .55; d[p + 3] = 220; }
+      if (vsOther) { r = 24; g = 28; b = 36; aa = 235; }
+      else if (vsNeutral) { r = c[0] * .55; g = c[1] * .55; b = c[2] * .55; aa = 220; }
       else if (showPockets && pocket[i] && pocket[i] !== o && ((x + y) % 10) < 4) {
-        const e = rgb[pocket[i]] || c; d[p] = e[0]; d[p + 1] = e[1]; d[p + 2] = e[2]; d[p + 3] = Math.max(a, 200);
+        const e = rgb[pocket[i]] || c; r = e[0]; g = e[1]; b = e[2]; aa = Math.max(a, 200);
       }
-      else { d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = a; }
+      else { r = c[0]; g = c[1]; b = c[2]; aa = a; }
+      const k = aa / 255;
+      d[p] = bp[p] + (r - bp[p]) * k; d[p + 1] = bp[p + 1] + (g - bp[p + 1]) * k; d[p + 2] = bp[p + 2] + (b - bp[p + 2]) * k; d[p + 3] = 255;
     }
   }
   octx.putImageData(oimg, 0, 0, x0, y0, x1 - x0, y1 - y0);
@@ -568,27 +586,40 @@ function renderRect(x0, y0, x1, y1) {
 function resize() {
   dpr = window.devicePixelRatio || 1;
   const r = stage.getBoundingClientRect();
-  cv.width = Math.max(1, Math.round(r.width * dpr));
-  cv.height = Math.max(1, Math.round(r.height * dpr));
+  uiCv.width = cv.width = Math.max(1, Math.round(r.width * dpr));
+  uiCv.height = cv.height = Math.max(1, Math.round(r.height * dpr));
   requestDraw();
 }
 function draw() {
   raf = 0;
-  if (dirty && own) { renderRect(dirty[0], dirty[1], dirty[2], dirty[3]); }
+  if (dirty && own) { renderRect(dirty[0], dirty[1], dirty[2], dirty[3]); needMap = true; }
   dirty = null;
+  if (needMap) { needMap = false; drawMap(); }
+  if (needUi) { needUi = false; drawUi(); }
+}
+function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
+  $('#zoom').textContent = Math.round(view.s * 100) + '%';
   if (!W) return;
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
   ctx.imageSmoothingEnabled = view.s < 2;
-  ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 12 * dpr;
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-  ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-  ctx.drawImage(base, 0, 0);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H);   // cheap drop shadow
   ctx.drawImage(over, 0, 0);
-  drawUnits(ctx, true);
+  drawUnitsFast(ctx);
   drawBattles(ctx);
+}
+function drawUi() {
+  uctx.setTransform(1, 0, 0, 1, 0, 0);
+  uctx.clearRect(0, 0, uiCv.width, uiCv.height);
+  if (!W) return;
+  const ctx = uctx;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (drag && drag.mode === 'box') {
+    const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
+    ctx.fillStyle = 'rgba(226,184,74,.15)'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#a87b12'; ctx.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); ctx.setLineDash([]);
+  }
   if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
     const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = brush * view.s;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.8)';
@@ -605,8 +636,8 @@ function draw() {
     ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},.25)`; ctx.fill();
     ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = `rgb(${c[0] * .6 | 0},${c[1] * .6 | 0},${c[2] * .6 | 0})`; ctx.stroke(); ctx.setLineDash([]);
   }
-  $('#zoom').textContent = Math.round(view.s * 100) + '%';
 }
+
 function fit() {
   if (!W) return;
   userView = false;
@@ -756,50 +787,88 @@ function fillPolygon(pts, val) {
 // by exactly one other country (sea and neutral land around them do not break the ring).
 function computePockets() {
   if (!own) return;
-  const prev = pockets.map(p => p.size + ':' + p.owner + ':' + p.enc).join();
-  label.fill(-1);
-  const comps = [];
-  const stack = new Int32Array(W * H);
-  for (let s0 = 0; s0 < own.length; s0++) {
-    const o = own[s0];
-    if (!o || label[s0] !== -1) continue;
-    const id = comps.length;
-    let sp = 0, size = 0, enc = 0, multi = false, edge = false;
-    let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
-    stack[sp++] = s0; label[s0] = id;
-    while (sp) {
-      const i = stack[--sp]; size++;
-      const x = i % W, y = (i - x) / W;
-      if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
-      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true;
-      for (let k = 0; k < 4; k++) {
-        let j;
-        if (k === 0) { if (x === 0) continue; j = i - 1; }
-        else if (k === 1) { if (x === W - 1) continue; j = i + 1; }
-        else if (k === 2) { if (y === 0) continue; j = i - W; }
-        else { if (y === H - 1) continue; j = i + W; }
-        const n = own[j];
-        if (n === o) { if (label[j] === -1) { label[j] = id; stack[sp++] = j; } }
-        else if (n) { if (!enc) enc = n; else if (enc !== n) multi = true; }
+  // 1. cut every row into runs of one owner (neutral cells are not runs)
+  let cap = Math.max(1024, H * 8), n = 0;
+  let rs = new Int32Array(cap), re = new Int32Array(cap), ro = new Uint8Array(cap);
+  const rowStart = new Int32Array(H + 1);
+  let dx0 = W, dy0 = H, dx1 = -1, dy1 = -1;
+  for (let y = 0; y < H; y++) {
+    rowStart[y] = n;
+    const base = y * W;
+    let x = 0;
+    while (x < W) {
+      const o = own[base + x];
+      if (!o) {
+        if (pocket[base + x]) { pocket[base + x] = 0; if (x < dx0) dx0 = x; if (x > dx1) dx1 = x; if (y < dy0) dy0 = y; if (y > dy1) dy1 = y; }
+        x++; continue;
       }
+      const s0 = x;
+      while (x < W && own[base + x] === o) x++;
+      if (n === cap) {
+        cap *= 2;
+        const a = new Int32Array(cap); a.set(rs); rs = a;
+        const b = new Int32Array(cap); b.set(re); re = b;
+        const c = new Uint8Array(cap); c.set(ro); ro = c;
+      }
+      rs[n] = s0; re[n] = x; ro[n] = o; n++;
     }
-    comps.push({ id, owner: o, size, enc: multi ? 0 : enc, edge, box: [bx0, by0, bx1 + 1, by1 + 1] });
   }
+  rowStart[H] = n;
+  // 2. join runs of the same owner that touch the row above
+  const parent = new Int32Array(n);
+  for (let k = 0; k < n; k++) parent[k] = k;
+  const find = k => { while (parent[k] !== k) { parent[k] = parent[parent[k]]; k = parent[k]; } return k; };
+  const overlaps = (y, fn) => {
+    let i = rowStart[y - 1], j = rowStart[y];
+    const ie = rowStart[y], je = rowStart[y + 1];
+    while (i < ie && j < je) {
+      if (re[i] > rs[j] && re[j] > rs[i]) fn(i, j);
+      if (re[i] < re[j]) i++; else j++;
+    }
+  };
+  for (let y = 1; y < H; y++) overlaps(y, (i, j) => { if (ro[i] === ro[j]) { const a = find(i), b = find(j); if (a !== b) parent[a] = b; } });
+  // 3. per component: size, bounding box, map edge, and which other countries it touches
+  const root = new Int32Array(n), size = new Float64Array(n), enc = new Int32Array(n), edge = new Uint8Array(n);
+  const bx0 = new Int32Array(n).fill(W), by0 = new Int32Array(n).fill(H), bx1 = new Int32Array(n), by1 = new Int32Array(n);
+  for (let y = 0; y < H; y++) for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
+    const r = root[k] = find(k);
+    size[r] += re[k] - rs[k];
+    if (rs[k] < bx0[r]) bx0[r] = rs[k]; if (re[k] > bx1[r]) bx1[r] = re[k]; if (y < by0[r]) by0[r] = y; if (y + 1 > by1[r]) by1[r] = y + 1;
+    if (rs[k] === 0 || re[k] === W || y === 0 || y === H - 1) edge[r] = 1;
+  }
+  const touch = (r, o) => { if (!enc[r]) enc[r] = o; else if (enc[r] !== o) enc[r] = -1; };
+  for (let y = 0; y < H; y++) {
+    for (let k = rowStart[y]; k + 1 < rowStart[y + 1]; k++) if (re[k] === rs[k + 1] && ro[k] !== ro[k + 1]) { touch(root[k], ro[k + 1]); touch(root[k + 1], ro[k]); }
+    if (y > 0) overlaps(y, (i, j) => { if (ro[i] !== ro[j]) { touch(root[i], ro[j]); touch(root[j], ro[i]); } });
+  }
+  const comps = [];
+  for (let k = 0; k < n; k++) if (root[k] === k) comps.push({ id: k, owner: ro[k], size: size[k], enc: enc[k] > 0 ? enc[k] : 0, edge: !!edge[k], box: [bx0[k], by0[k], bx1[k], by1[k]] });
   const main = {};
   for (const c of comps) if (!main[c.owner] || c.size > main[c.owner].size) main[c.owner] = c;
   pockets = comps.filter(c => c !== main[c.owner] && c.enc && !c.edge);
   // a ring drawn deep inside enemy land is itself cut off, but it is the encircler, not the pocket
   const inside = (a, b) => a.box[0] >= b.box[0] && a.box[1] >= b.box[1] && a.box[2] <= b.box[2] && a.box[3] <= b.box[3];
   pockets = pockets.filter(pk => !pockets.some(q => q !== pk && q.owner === pk.enc && q.enc === pk.owner && inside(q, pk)));
-  const encOf = new Uint8Array(comps.length);
-  for (const c of pockets) encOf[c.id] = c.enc;
-  for (let i = 0; i < own.length; i++) pocket[i] = own[i] ? encOf[label[i]] : 0;
+  const encOf = new Map(pockets.map(c => [c.id, c.enc]));
+  // 4. refresh the hatching only where it changed
+  for (let y = 0; y < H; y++) for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
+    const v = encOf.get(root[k]) || 0, base = y * W;
+    for (let x = rs[k]; x < re[k]; x++) if (pocket[base + x] !== v) {
+      pocket[base + x] = v;
+      if (x < dx0) dx0 = x; if (x > dx1) dx1 = x; if (y < dy0) dy0 = y; if (y > dy1) dy1 = y;
+    }
+  }
+  runData = { rs, re, root, rowStart };
   pockets.sort((a, b) => b.size - a.size);
-  const now = pockets.map(p => p.size + ':' + p.owner + ':' + p.enc).join();
-  if (now !== prev || pockets.length) addDirty(0, 0, W, H);
+  if (dx1 >= 0) addDirty(dx0, dy0, dx1 + 1, dy1 + 1);
 }
+let runData = null;
 function takePocket(pk) {
-  for (let i = 0; i < own.length; i++) if (label[i] === pk.id && own[i] === pk.owner) own[i] = pk.enc;
+  const { rs, re, root, rowStart } = runData;
+  for (let y = 0; y < H; y++) for (let k = rowStart[y]; k < rowStart[y + 1]; k++) if (root[k] === pk.id) {
+    const base = y * W;
+    for (let x = rs[k]; x < re[k]; x++) if (own[base + x] === pk.owner) own[base + x] = pk.enc;
+  }
 }
 function showBox(b) {
   const r = stage.getBoundingClientRect();
@@ -915,7 +984,9 @@ const ERAS = {
 const ECHELONS = [['', 'Без обозначения'], ['•', 'Отделение'], ['•••', 'Взвод'], ['I', 'Рота'], ['II', 'Батальон'], ['III', 'Полк'],
   ['X', 'Бригада'], ['XX', 'Дивизия'], ['XXX', 'Корпус'], ['XXXX', 'Армия'], ['XXXXX', 'Фронт, группа армий']];
 let units = [];             // { x, y, era, type, owner, ech, label }
-let selUnit = null;
+let selUnit = null;          // the unit whose details the panel shows
+let selUnits = [];           // every selected unit (Shift + click / Shift + drag adds more)
+const targets = () => selUnits.length ? selUnits : selUnit ? [selUnit] : []; selUnits = [];
 let era = 'ww2', unitType = 'inf', unitEch = '';
 let unitSize = 36, showUnits = true;
 
@@ -976,7 +1047,48 @@ function drawUnit(c, u, S, selected) {
   }
   c.restore();
 }
-function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * (u.scale || 1), marks && u === selUnit && tool === 'units'); }
+// Each troop marker is rendered once into a small bitmap at the current zoom and reused
+// every frame until something about it changes.
+const spriteCache = new Map();
+const measureCtx = document.createElement('canvas').getContext('2d');
+function unitKey(u, S, q, sel) {
+  const g = u.gen && genById(u.gen);
+  const showHp = battlesOn || (u.hp !== undefined && u.hp < 100);
+  return [u.era, u.type, rgb[u.owner] ? rgb[u.owner].join(',') : '-', u.ech || '', u.label || '', S.toFixed(2), q, sel ? 1 : 0,
+    g ? g.id + ':' + g.name + ':' + g.photo.length + ':' + (portrait(g) ? 1 : 0) + ':' + (g.id === selGen ? 1 : 0) + ':' + g.owner : '',
+    showHp ? Math.round(hpOf(u) / 5) * 5 : ''].join('|');
+}
+function unitSprite(u, S, q, sel) {
+  const key = unitKey(u, S, q, sel);
+  let sp = spriteCache.get(key);
+  if (sp) return sp;
+  const h = S / 2, w = S * .75;
+  let lw = 0;
+  if (u.label) { measureCtx.font = `600 ${S * .38}px ${FONT_UI}`; lw = measureCtx.measureText(u.label).width + S * .3; }
+  const left = Math.max(w + S * .5, lw / 2), top = h + S * .8, bottom = h * 1.2 + S * 1.05;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(left * 2 * q)); c.height = Math.max(1, Math.ceil((top + bottom) * q));
+  const x = c.getContext('2d');
+  x.scale(q, q); x.translate(left, top);
+  drawUnit(x, Object.assign({}, u, { x: 0, y: 0 }), S, sel);
+  sp = { c, left, top, q };
+  if (spriteCache.size > 800) { let k = 0; for (const key of spriteCache.keys()) { spriteCache.delete(key); if (++k >= 200) break; } }
+  spriteCache.set(key, sp);
+  return sp;
+}
+function drawUnitsFast(c) {
+  if (!showUnits || !units.length) return;
+  const zoom = view.s * dpr;
+  const selSet = tool === 'units' ? new Set(selUnits.length ? selUnits : selUnit ? [selUnit] : []) : null;
+  for (const u of units) {
+    const S = unitSize * (u.scale || 1);
+    let q = Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3);       // zoom snapped to 1/3-octave steps
+    q = Math.min(q, 700 / S, 12);
+    const sp = unitSprite(u, S, q, !!(selSet && selSet.has(u)));
+    c.drawImage(sp.c, u.x - sp.left, u.y - sp.top, sp.c.width / sp.q, sp.c.height / sp.q);
+  }
+}
+function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * (u.scale || 1), marks && targets().includes(u) && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
   for (let k = units.length - 1; k >= 0; k--) {
@@ -986,12 +1098,18 @@ function hitUnit(g) {
   return null;
 }
 function unitsChanged() { renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
-function selectUnit(u) {
-  selUnit = u;
+function selectUnit(u) { setSel(u ? [u] : [], u); }
+function setSel(list, primary) {
+  selUnits = list;
+  const u = selUnit = primary !== undefined ? primary : (list[list.length - 1] || null);
   if (u) { era = u.era; unitType = u.type; unitEch = u.ech || ''; $('#era').value = era; }
   renderUnitPanel(); renderGenEditor(); requestDraw();
 }
+let paletteKey = '';
 function renderUnitPalette() {
+  const key = [era, unitType, active, rgb[active] ? rgb[active].join(',') : ''].join('|');
+  if (key === paletteKey) return;
+  paletteKey = key;
   const box = $('#unitTypes'); box.textContent = '';
   const e = ERAS[era], col = rgb[active] || [150, 150, 150];
   const pd = window.devicePixelRatio || 1;
@@ -1005,7 +1123,7 @@ function renderUnitPalette() {
     b.append(cnv, sp);
     b.addEventListener('click', () => {
       unitType = id;
-      if (selUnit) { pushHist(); selUnit.era = era; selUnit.type = id; unitsChanged(); }
+      if (selUnit) { pushHist(); targets().forEach(u => { u.era = era; u.type = id; }); unitsChanged(); }
       renderUnitPalette();
     });
     box.append(b);
@@ -1014,18 +1132,28 @@ function renderUnitPalette() {
 function renderUnitPanel() {
   const sel = $('#unitSel');
   sel.hidden = !selUnit;
+  const many = targets().length > 1;
+  $('#unitLabel').hidden = many;
   if (selUnit) {
     const { def } = unitDef(selUnit), c = countries[selUnit.owner - 1];
     $('#unitSelName').textContent = def[1] + (c ? ' · ' + c.name : '');
+    const list = targets(), owners = new Set(list.map(u => u.owner)), oneOwner = owners.size === 1;
     const ug = $('#unitGen'); ug.textContent = '';
-    [['', 'Без командира'], ...generals.filter(g => g.owner === selUnit.owner).map(g => [g.id, g.rank + ' ' + g.name])].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; ug.append(o); });
-    ug.value = selUnit.gen || '';
+    [['', 'Без командира'], ...(oneOwner ? generals.filter(g => g.owner === selUnit.owner).map(g => [g.id, g.rank + ' ' + g.name]) : [])].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; ug.append(o); });
+    const gens = new Set(list.map(u => u.gen || ''));
+    ug.value = gens.size === 1 ? [...gens][0] : '';
+    ug.disabled = !oneOwner;
+    if (many) {
+      $('#unitSelName').textContent = 'Выбрано отрядов: ' + list.length + (oneOwner && c ? ' · ' + c.name : '');
+      $('#unitStats').textContent = 'Общая сила ' + list.reduce((t, u) => t + unitPower(u), 0).toFixed(2) + ' · Shift + щелчок убирает отряд из выбора, Esc снимает выбор';
+    } else
     $('#unitStats').textContent = 'Сила ' + unitPower(selUnit).toFixed(2) + ' · состояние ' + Math.round(hpOf(selUnit)) + '%';
     $('#unitLabel').value = selUnit.label || '';
     $('#unitEch').value = selUnit.ech || '';
     const sc = Math.round((selUnit.scale || 1) * 100);
     $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%';
-    $('#unitOwnerBtn').hidden = !active || active === selUnit.owner;
+    $('#unitOwnerBtn').hidden = !active || list.every(u => u.owner === active);
+    $('#unitDel').textContent = many ? 'Удалить выбранные' : 'Удалить';
     if (active && countries[active - 1]) $('#unitOwnerBtn').textContent = 'Передать: ' + countries[active - 1].name;
   } else $('#unitEch').value = unitEch;
   const counts = countries.map(() => 0);
@@ -1142,9 +1270,11 @@ function renderGenEditor() {
   $('#genSkill').value = g.skill; $('#genSkillOut').textContent = '★'.repeat(g.skill) + '☆'.repeat(5 - g.skill);
   const n = genUnits(g).length;
   $('#genArmy').textContent = n ? 'Командует отрядами: ' + n + '. Бонус в бою: +' + g.skill * 6 + '%.' : 'Пока не командует войсками.';
-  const canAssign = selUnit && selUnit.owner === g.owner && selUnit.gen !== g.id;
-  $('#genAssign').hidden = !canAssign;
-  $('#genUnassign').hidden = !(selUnit && selUnit.gen === g.id);
+  const list = targets().filter(u => u.owner === g.owner), many = list.length > 1;
+  $('#genAssign').hidden = !list.some(u => u.gen !== g.id);
+  $('#genAssign').textContent = many ? 'Назначить командиром выбранных отрядов (' + list.length + ')' : 'Назначить командиром выбранного отряда';
+  $('#genUnassign').hidden = !list.some(u => u.gen === g.id);
+  $('#genUnassign').textContent = many ? 'Снять с выбранных отрядов' : 'Снять с выбранного отряда';
 }
 // Any picture becomes a 160×200 JPEG portrait stored inside the project.
 function setGenPhotoFromImage(g, im) {
@@ -1265,11 +1395,15 @@ function battleTick() {
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
     units = units.filter(u => hpOf(u) > 0);
-    if (dead.includes(selUnit)) selUnit = null;
+    selUnits = selUnits.filter(u => !dead.includes(u));
+    if (dead.includes(selUnit)) selUnit = selUnits[selUnits.length - 1] || null;
     toast('Разгромлены: ' + dead.map(u => (u.label || unitDef(u).def[1]) + ' (' + (countries[u.owner - 1] || {}).name + ')').join(', '));
   }
   requestDraw();
-  if (++battleTicks % Math.max(1, Math.round(battleSpeed)) === 0 || dead.length) { computePockets(); renderCountries(); renderPockets(); renderUnitPanel(); scheduleSave(); }
+  const perSec = Math.max(1, Math.round(battleSpeed));
+  ++battleTicks;
+  if (battleTicks % perSec === 0 || dead.length) { renderCountries(); renderUnitPanel(); scheduleSave(); }
+  if (battleTicks % (perSec * 3) === 0) { computePockets(); renderPockets(); }
 }
 function setBattles(on) {
   if (on === battlesOn) return;
@@ -1313,7 +1447,7 @@ function drawBattles(c) {
 // ---------- history ----------
 function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
-function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; loadGenerals(JSON.parse(e.g || '[]')); }
+function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
 function afterChange() { recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); }
 function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
@@ -1373,7 +1507,7 @@ function removeCountry(idx) {
   countries.splice(idx - 1, 1);
   for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
   if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
-  units = units.filter(u => u.owner !== idx); units.forEach(u => { if (u.owner > idx) u.owner--; }); selUnit = null;
+  units = units.filter(u => u.owner !== idx); units.forEach(u => { if (u.owner > idx) u.owner--; }); selUnit = null; selUnits = [];
   generals = generals.filter(g => g.owner !== idx); generals.forEach(g => { if (g.owner > idx) g.owner--; });
   units.forEach(u => { if (u.gen && !genById(u.gen)) delete u.gen; });
   if (player === idx) player = 1; else if (player > idx) player--;
@@ -1404,7 +1538,7 @@ function setBrush(v) {
   if (tool in sizes) sizes[tool] = brush;
   $('#size').value = size2slider(brush); $('#sizeOut').textContent = brush + ' px';
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.size === brush));
-  requestDraw();
+  requestUi();
 }
 function bumpBrush(dir) { setBrush(dir > 0 ? Math.max(brush + 1, brush * 1.2) : Math.min(brush - 1, brush / 1.2)); }
 
@@ -1454,11 +1588,18 @@ cv.addEventListener('pointerdown', e => {
     if (fillAt(g)) edited(); else { hist.pop(); updUndo(); }
   } else if (tool === 'units') {
     const u = hitUnit(g);
+    if (e.shiftKey) {
+      if (u) {
+        const cur = targets();
+        if (cur.includes(u)) setSel(cur.filter(v => v !== u)); else setSel(cur.concat([u]), u);
+      } else drag = { mode: 'box', a: g, b: g };
+      return;
+    }
     if (u) {
-      selectUnit(u);
+      if (!targets().includes(u)) selectUnit(u); else { selUnit = u; renderUnitPanel(); renderGenEditor(); }
       pushHist();
       units.splice(units.indexOf(u), 1); units.push(u);   // bring to front
-      drag = { mode: 'unit', u, ox: g.x - u.x, oy: g.y - u.y, moved: false };
+      drag = { mode: 'unit', u, group: targets().map(v => ({ v, ox: g.x - v.x, oy: g.y - v.y })), moved: false };
     } else {
       if (!active) { toast('Сначала добавьте страну'); return; }
       if (!inside) return;
@@ -1480,8 +1621,8 @@ cv.addEventListener('pointermove', e => {
   hover = W ? toGrid(p) : null;
   updWhere();
   if (!drag) {
-    if (tool === 'units' && hover && !spaceDown) cv.style.cursor = hitUnit(hover) ? 'move' : 'copy';
-    requestDraw(); return;
+    if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? 'move' : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
+    requestUi(); return;
   }
   if (drag.mode === 'pinch') {
     if (pointers.size < 2) return;
@@ -1501,10 +1642,13 @@ cv.addEventListener('pointermove', e => {
     const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
   } else if (drag.mode === 'unit') {
     const g = toGrid(p);
-    moveUnit(drag.u, g.x - drag.ox, g.y - drag.oy); drag.moved = true; requestDraw();
+    for (const m of drag.group) moveUnit(m.v, g.x - m.ox, g.y - m.oy);
+    drag.moved = true; requestDraw();
+  } else if (drag.mode === 'box') {
+    drag.b = toGrid(p); requestUi();
   } else if (drag.mode === 'lasso') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
-    if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestDraw(); }
+    if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
   }
 });
 function endPointer(e) {
@@ -1512,6 +1656,13 @@ function endPointer(e) {
   if (!drag) return;
   if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
+  if (drag.mode === 'box') {
+    const x0 = Math.min(drag.a.x, drag.b.x), x1 = Math.max(drag.a.x, drag.b.x), y0 = Math.min(drag.a.y, drag.b.y), y1 = Math.max(drag.a.y, drag.b.y);
+    const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
+    drag = null; requestUi();
+    if (inBox.length) { const cur = targets(); setSel(cur.concat(inBox.filter(u => !cur.includes(u)))); toast('Выбрано отрядов: ' + targets().length); }
+    return;
+  }
   if (drag.mode === 'unit') {
     if (drag.moved) { if (unitsPushBorder) edited(); unitsChanged(); } else { hist.pop(); updUndo(); }
     drag = null; return;
@@ -1532,7 +1683,7 @@ function endPointer(e) {
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
-cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestDraw(); } });
+cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestUi(); } });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   const dy = e.deltaY || e.deltaX;
@@ -1541,12 +1692,14 @@ cv.addEventListener('wheel', e => {
   zoomAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.05 : 0.0015)));
 }, { passive: false });
 
+let whereText = '';
 function updWhere() {
-  if (!hover || !W) { $('#where').textContent = '—'; return; }
-  const x = Math.floor(hover.x), y = Math.floor(hover.y);
-  if (x < 0 || y < 0 || x >= W || y >= H) { $('#where').textContent = '—'; return; }
-  const o = own[y * W + x];
-  $('#where').textContent = x + ', ' + y + ' · ' + (o ? countries[o - 1].name : 'нейтральная');
+  let t = '—';
+  if (hover && W) {
+    const x = Math.floor(hover.x), y = Math.floor(hover.y);
+    if (x >= 0 && y >= 0 && x < W && y < H) { const o = own[y * W + x]; t = x + ', ' + y + ' · ' + (o ? countries[o - 1].name : 'нейтральная'); }
+  }
+  if (t !== whereText) { whereText = t; $('#where').textContent = t; }
 }
 
 // ---------- keyboard ----------
@@ -1556,18 +1709,19 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'я')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { e.preventDefault(); redo(); return; }
+  if (tool === 'units' && e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const mine = units.filter(u => u.owner === active); setSel(mine); toast('Выбраны все отряды: ' + (countries[active - 1] || {}).name + ' (' + mine.length + ')'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
   const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units' };
   if (tools[e.code]) { setTool(tools[e.code]); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && selGen) { closeGen(); return; }
-  if (e.code === 'Escape' && selUnit) { selectUnit(null); return; }
+  if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
   if (e.code === 'KeyP') { setBattles(!battlesOn); return; }
   if (tool === 'units' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
     const k = e.code === 'BracketRight' ? 1.15 : 1 / 1.15;
-    if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) * k, true); else setUnitSize(unitSize * k, true);
+    if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) * k, true, selUnit); else setUnitSize(unitSize * k, true);
     return;
   }
   if (e.code === 'BracketLeft') bumpBrush(-1);
@@ -1699,14 +1853,40 @@ $('#btnSample').addEventListener('click', () => { loadSample(); toast('Откр�
 // ---------- project files ----------
 function rle(a) { const out = []; let v = a[0], n = 0; for (let i = 0; i < a.length; i++) { if (a[i] === v && n < 1e9) n++; else { out.push(v, n); v = a[i]; n = 1; } } out.push(v, n); return out; }
 function unrle(r, len) { const a = new Uint8Array(len); let p = 0; for (let k = 0; k < r.length; k += 2) { a.fill(r[k], p, p + r[k + 1]); p += r[k + 1]; } return a; }
-function download(blob, name) {
+// Saving files: inside claude.ai the viewer's download prompt is used; a local copy uses a plain link.
+let downloadsNs;
+function getDownloads() {
+  if (downloadsNs === undefined) downloadsNs = (window.claude && window.claude.use) ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+  return downloadsNs;
+}
+async function download(blob, name) {
+  const dl = await getDownloads();
+  if (dl) {
+    try { await dl.save({ filename: name, data: blob }); toast('Файл «' + name + '» сохранён.'); }
+    catch (e) { if (e && e.code !== 'declined') toast('Не удалось сохранить файл: ' + ((e && e.message) || 'ошибка')); }
+    return;
+  }
+  if (inFrame) { toast('Здесь браузер не даёт скачивать файлы.'); return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+// The program as a standalone file: the original page without anything the viewer injected.
+function programHtml() {
+  const doc = new DOMParser().parseFromString('<!doctype html>' + PRISTINE, 'text/html');
+  doc.querySelectorAll('script').forEach(sc => { if (sc.id !== 'app' && !(sc.src && /cdnjs|jsdelivr|unpkg/.test(sc.src))) sc.remove(); });
+  doc.querySelectorAll('meta[http-equiv]').forEach(m => m.remove());
+  doc.documentElement.setAttribute('lang', 'ru');
+  doc.documentElement.removeAttribute('data-theme');
+  return '<!doctype html>\n' + doc.documentElement.outerHTML;
+}
+$('#btnGetApp').addEventListener('click', () => {
+  download(new Blob([programHtml()], { type: 'text/html' }), 'Mezha.html');
+  setTimeout(() => toast('Откройте Mezha.html двойным щелчком — программа запустится в браузере и работает без интернета.'), 1800);
+});
 $('#btnPng').addEventListener('click', () => {
   if (!W) return;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d'); x.drawImage(base, 0, 0); x.drawImage(over, 0, 0); drawUnits(x, false);
+  const x = c.getContext('2d'); x.drawImage(over, 0, 0); drawUnits(x, false);
   c.toBlob(b => download(b, 'karta.png'), 'image/png');
 });
 $('#btnProj').addEventListener('click', () => {
@@ -1811,12 +1991,16 @@ function setUnitSize(v, save) {
   requestDraw();
   if (save) scheduleSave();
 }
-let scaleHistFor = null;   // one undo step per run of size changes on the same unit
-function setUnitScale(u, k, save) {
-  if (scaleHistFor !== u) { pushHist(); scaleHistFor = u; }
-  u.scale = clamp(Math.round(k * 100) / 100, .25, 4);
-  if (Math.abs(u.scale - 1) < .001) delete u.scale;
-  if (u === selUnit) { const sc = Math.round((u.scale || 1) * 100); $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%'; }
+let scaleHistFor = null;   // one undo step per run of size changes on the same units
+function setUnitScale(u, k, save) { setUnitsScale([u], () => k, save, u); }
+function setUnitsScale(list, f, save, u = list[list.length - 1]) {
+  const tok = list.map(v => units.indexOf(v)).join();
+  if (scaleHistFor !== tok) { pushHist(); scaleHistFor = tok; }
+  for (const v of list) {
+    v.scale = clamp(Math.round(f(v) * 100) / 100, .25, 4);
+    if (Math.abs(v.scale - 1) < .001) delete v.scale;
+  }
+  if (u && u === selUnit) { const sc = Math.round((u.scale || 1) * 100); $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%'; }
   requestDraw();
   if (save) scheduleSave();
 }
@@ -1827,25 +2011,25 @@ function resizeUnitAt(p, k) {
 }
 function deleteUnit() {
   if (!selUnit) return;
-  pushHist(); units.splice(units.indexOf(selUnit), 1); selUnit = null; unitsChanged();
+  pushHist(); const gone = new Set(targets()); units = units.filter(u => !gone.has(u)); selUnit = null; selUnits = []; unitsChanged();
 }
 $('#usize').addEventListener('input', e => setUnitSize(USMIN * Math.pow(USMAX / USMIN, e.target.value / 1000), true));
 $('#usizeDown').addEventListener('click', () => setUnitSize(Math.min(unitSize - 1, unitSize / 1.2), true));
 $('#usizeUp').addEventListener('click', () => setUnitSize(Math.max(unitSize + 1, unitSize * 1.2), true));
 document.querySelectorAll('#usizePresets button').forEach(b => b.addEventListener('click', () => setUnitSize(+b.dataset.size, true)));
-$('#uscale').addEventListener('input', e => { if (selUnit) setUnitScale(selUnit, e.target.value / 100, true); });
-$('#uscaleDown').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) / 1.2, true); });
-$('#uscaleUp').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) * 1.2, true); });
-$('#uscaleReset').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, 1, true); });
+$('#uscale').addEventListener('input', e => { if (selUnit) setUnitsScale(targets(), () => e.target.value / 100, true, selUnit); });
+$('#uscaleDown').addEventListener('click', () => { if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) / 1.2, true, selUnit); });
+$('#uscaleUp').addEventListener('click', () => { if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) * 1.2, true, selUnit); });
+$('#uscaleReset').addEventListener('click', () => { if (selUnit) setUnitsScale(targets(), () => 1, true, selUnit); });
 $('#showUnits').addEventListener('change', e => { showUnits = e.target.checked; requestDraw(); });
 $('#era').addEventListener('change', e => {
   era = e.target.value; unitType = ERAS[era].units[0][0];
-  if (selUnit) { selUnit = null; renderUnitPanel(); requestDraw(); } else renderUnitPalette();
+  if (selUnit) { selUnit = null; selUnits = []; renderUnitPanel(); requestDraw(); } else renderUnitPalette();
   scheduleSave();
 });
 $('#unitEch').addEventListener('change', e => {
   unitEch = e.target.value;
-  if (selUnit) { pushHist(); selUnit.ech = unitEch; unitsChanged(); }
+  if (selUnit) { pushHist(); targets().forEach(u => { u.ech = unitEch; }); unitsChanged(); }
 });
 let labelHist = false;
 $('#unitLabel').addEventListener('focus', () => { labelHist = false; });
@@ -1857,7 +2041,7 @@ $('#unitLabel').addEventListener('input', e => {
 $('#unitDel').addEventListener('click', deleteUnit);
 $('#unitGen').addEventListener('change', e => {
   if (!selUnit) return; pushHist();
-  if (e.target.value) selUnit.gen = +e.target.value; else delete selUnit.gen;
+  targets().forEach(u => { if (e.target.value) u.gen = +e.target.value; else delete u.gen; });
   unitsChanged();
 });
 $('#playerSel').addEventListener('change', e => { player = +e.target.value; closeGen(); setActive(player); renderGenerals(); scheduleSave(); });
@@ -1881,8 +2065,12 @@ $('#genFile').addEventListener('change', e => { const g = curGen(); if (g) setGe
 $('#genUrlBtn').addEventListener('click', () => { const g = curGen(); if (g) setGenPhotoFromUrl(g, $('#genUrl').value); });
 $('#genUrl').addEventListener('keydown', e => { if (e.key === 'Enter') { const g = curGen(); if (g) setGenPhotoFromUrl(g, e.target.value); } });
 $('#genPhotoDel').addEventListener('click', () => { const g = curGen(); if (!g || !g.photo) return; pushHist(); g.photo = ''; unitsChanged(); });
-$('#genAssign').addEventListener('click', () => { const g = curGen(); if (!g || !selUnit) return; pushHist(); selUnit.gen = g.id; unitsChanged(); toast(g.name + ' командует отрядом.'); });
-$('#genUnassign').addEventListener('click', () => { if (!selUnit) return; pushHist(); delete selUnit.gen; unitsChanged(); });
+$('#genAssign').addEventListener('click', () => {
+  const g = curGen(), list = targets().filter(u => g && u.owner === g.owner); if (!list.length) return;
+  pushHist(); list.forEach(u => { u.gen = g.id; }); unitsChanged();
+  toast(g.name + (list.length > 1 ? ' командует отрядами: ' + list.length : ' командует отрядом.'));
+});
+$('#genUnassign').addEventListener('click', () => { const g = curGen(); if (!g) return; pushHist(); targets().forEach(u => { if (u.gen === g.id) delete u.gen; }); unitsChanged(); });
 $('#genShow').addEventListener('click', () => { const g = curGen(); if (g) showGenUnits(g); });
 $('#genDel').addEventListener('click', () => { const g = curGen(); if (g) removeGeneral(g); });
 $('#genClose').addEventListener('click', closeGen);
@@ -1896,7 +2084,11 @@ $('#bspeed').addEventListener('input', e => {
 });
 $('#pushk').addEventListener('input', e => { pushK = e.target.value / 100; $('#pushkOut').textContent = e.target.value + '%'; scheduleSave(); });
 $('#autoAdv').addEventListener('change', e => { autoAdvance = e.target.checked; scheduleSave(); });
-$('#unitOwnerBtn').addEventListener('click', () => { if (!selUnit || !active) return; pushHist(); selUnit.owner = active; unitsChanged(); });
+$('#unitOwnerBtn').addEventListener('click', () => {
+  if (!selUnit || !active) return; pushHist();
+  targets().forEach(u => { if (u.owner !== active) { u.owner = active; delete u.gen; } });
+  unitsChanged();
+});
 $('#tol').addEventListener('input', e => { tol = +e.target.value; $('#tolOut').textContent = tol; });
 $('#fillMode').addEventListener('change', e => { fillMode = e.target.value; setTool(tool); });
 $('#protect').addEventListener('change', e => { protect = e.target.checked; });
@@ -1909,8 +2101,11 @@ $('#btnFit').addEventListener('click', fit);
 $('#btnZoomIn').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 1.25); });
 $('#btnZoomOut').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt({ x: r.width / 2, y: r.height / 2 }, 0.8); });
 if (inFrame) {
-  document.querySelectorAll('.dl').forEach(b => b.hidden = true);
-  $('#autosave').textContent = 'Работа сохраняется в этом браузере автоматически. Чтобы сохранять картинку и проект в файл, откройте index.html из репозитория у себя на компьютере.';
+  document.querySelectorAll('.dl, #btnGetApp').forEach(b => b.hidden = true);
+  getDownloads().then(dl => {
+    if (dl) document.querySelectorAll('.dl, #btnGetApp').forEach(b => b.hidden = false);
+    else $('#autosave').textContent = 'Работа сохраняется в этом браузере автоматически. Сохранять файлы здесь нельзя: скачайте программу и откройте её на компьютере.';
+  });
 }
 
 new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
