@@ -121,6 +121,16 @@ select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); bor
 .pocket .pt { min-width: 0; font-size: 13px; line-height: 1.25; }
 .pocket .pt small { display: block; color: var(--muted); font-size: 11px; }
 .pocket button { padding: 6px 8px; font-size: 12px; }
+.units { display: flex; flex-direction: column; gap: 10px; }
+.sub { font-size: 13px; }
+.utypes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.utype { padding: 4px 5px 4px 3px; gap: 5px; font-size: 11.5px; line-height: 1.15; text-align: left; justify-content: flex-start; min-width: 0; }
+.utype canvas { width: 36px; height: 28px; flex: none; }
+.utype span { min-width: 0; overflow-wrap: break-word; }
+.utype.on { background: var(--accent-soft); border-color: var(--accent); }
+.unitsel { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: var(--bg); }
+.unitsel b { font-weight: 600; font-size: 13px; }
+.unitsel input { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 7px; padding: 8px; width: 100%; }
 .help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .help b { color: var(--ink); font-weight: 500; }
 
@@ -182,6 +192,9 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <button data-tool="lasso" class="wide">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="13" cy="9.5" rx="8.5" ry="6" stroke-dasharray="3 2.5"/><path d="M6.5 13.5c-1.5 1-2 2.5-1 4s.5 3-1.5 4"/></svg>
         Окружение (обвести область)<kbd>5</kbd></button>
+      <button data-tool="units" class="wide">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 6l18 12M21 6L3 18"/></svg>
+        Войска<kbd>7</kbd></button>
       <button data-tool="brush">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l10-10a2.1 2.1 0 0 1 3 3L12 18"/><path d="M8 15c-2.5 0-4 1.5-4 4 0 1-1 2-2 2 4 1 9 0 9-3a3 3 0 0 0-3-3z"/></svg>
         Кисть<kbd>2</kbd></button>
@@ -217,6 +230,19 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <option value="owner">Перекрасить целую территорию</option>
       </select>
     </div>
+    <div class="units" id="fUnits" hidden>
+      <label for="era" class="sub">Эпоха</label>
+      <select id="era"><option value="ancient">Древний мир</option><option value="medieval">Средневековье</option><option value="gunpowder">Эпоха пороха (XVII–XIX вв.)</option><option value="ww1">Первая мировая</option><option value="ww2">Вторая мировая</option><option value="modern">Современность</option></select>
+      <div class="utypes" id="unitTypes"></div>
+      <label for="unitEch" class="sub">Размер соединения</label>
+      <select id="unitEch"><option value="">Без обозначения</option><option value="•">Отделение (•)</option><option value="•••">Взвод (•••)</option><option value="I">Рота (I)</option><option value="II">Батальон (II)</option><option value="III">Полк (III)</option><option value="X">Бригада (X)</option><option value="XX">Дивизия (XX)</option><option value="XXX">Корпус (XXX)</option><option value="XXXX">Армия (XXXX)</option><option value="XXXXX">Фронт, группа армий (XXXXX)</option></select>
+      <div class="unitsel" id="unitSel" hidden>
+        <b id="unitSelName"></b>
+        <input id="unitLabel" placeholder="Подпись, например «6-я армия»" aria-label="Подпись отряда">
+        <div class="row"><button id="unitOwnerBtn"></button><button id="unitDel">Удалить</button></div>
+      </div>
+      <p class="hint" id="unitCount"></p>
+    </div>
     <label class="check" id="fProtect"><input type="checkbox" id="protect" checked><span>Не заходить на нейтральные земли и море</span></label>
   </section>
 
@@ -242,6 +268,11 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <input type="range" id="alpha" min="0" max="100" value="50">
     </div>
     <div class="field">
+      <label for="usize">Размер значков войск</label><output id="usizeOut">36 px</output>
+      <input type="range" id="usize" min="10" max="140" value="36">
+    </div>
+    <label class="check"><input type="checkbox" id="showUnits" checked><span>Показывать войска</span></label>
+    <div class="field">
       <label for="bw">Толщина границы</label><output id="bwOut">2 px</output>
       <input type="range" id="bw" min="0" max="5" value="2">
     </div>
@@ -263,6 +294,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>Колёсико</b> — масштаб, <b>правая кнопка</b> или <b>пробел</b> — двигать карту</li>
       <li><b>[ ]</b> или <b>Shift + колёсико</b> — радиус кисти, ластика и захвата</li>
       <li><b>F</b> — показать всю карту</li>
+      <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
     </ul>
   </section>
@@ -298,7 +330,8 @@ const HINTS = {
   eraser: 'Стирает принадлежность: область станет нейтральной.',
   fill: 'Щёлкните по области карты — она зальётся цветом выбранной страны.',
   lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
-  pan: 'Перетаскивайте карту. Колёсико — масштаб.'
+  pan: 'Перетаскивайте карту. Колёсико — масштаб.',
+  units: 'Щёлкните по карте, чтобы поставить отряд выбранной страны. Отряд можно перетащить, щелчок по нему открывает настройки.'
 };
 
 // ---------- state ----------
@@ -361,6 +394,7 @@ function setMap(src, w, h) {
   pocket = new Uint8Array(W * H);
   label = new Int32Array(W * H);
   pockets = [];
+  units = []; selUnit = null;
   hist = []; redoStack = []; updUndo();
   fit();
 }
@@ -421,6 +455,7 @@ function draw() {
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
   ctx.drawImage(base, 0, 0);
   ctx.drawImage(over, 0, 0);
+  drawUnits(ctx, true);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
     const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = brush * view.s;
@@ -665,11 +700,195 @@ function renderPockets() {
 // called after every finished edit
 function edited() { computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); }
 
+// ---------- troops ----------
+// Glyphs are drawn in a frame centred on 0,0; w and h are the frame's half-width and half-height.
+const line = (c, x1, y1, x2, y2) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+const poly = (c, pts, fill = true) => { c.beginPath(); pts.forEach(([x, y], k) => k ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); fill ? c.fill() : c.stroke(); };
+const dot = (c, x, y, r, fill = true) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); fill ? c.fill() : c.stroke(); };
+const GLYPH = {
+  x: (c, w, h) => { line(c, -w, -h, w, h); line(c, -w, h, w, -h); },
+  armor: (c, w, h) => { c.beginPath(); c.ellipse(0, 0, w * .62, h * .5, 0, 0, Math.PI * 2); c.stroke(); },
+  mech: (c, w, h, bg) => { GLYPH.x(c, w, h); GLYPH.armor(c, w, h, bg); },
+  motor: (c, w, h) => { GLYPH.x(c, w, h); line(c, 0, -h, 0, h); },
+  art: (c, w, h) => dot(c, 0, 0, h * .3),
+  heavyart: (c, w, h) => { dot(c, -w * .3, 0, h * .26); dot(c, w * .3, 0, h * .26); },
+  mlrs: (c, w, h) => { dot(c, -w * .42, 0, h * .2); dot(c, 0, 0, h * .2); dot(c, w * .42, 0, h * .2); line(c, -w * .6, h * .45, w * .6, h * .45); },
+  cav: (c, w, h) => line(c, -w, h, w, -h),
+  at: (c, w, h) => { line(c, -w, h, 0, -h); line(c, 0, -h, w, h); },
+  aa: (c, w, h) => { c.beginPath(); c.arc(0, h, w * .6, Math.PI, Math.PI * 2); c.stroke(); },
+  airborne: (c, w, h) => { GLYPH.x(c, w, h); c.beginPath(); c.arc(-w * .2, h * .62, w * .2, Math.PI, Math.PI * 2); c.arc(w * .2, h * .62, w * .2, Math.PI, Math.PI * 2); c.stroke(); },
+  eng: (c, w, h) => { line(c, -w * .55, -h * .3, w * .55, -h * .3); [-.55, 0, .55].forEach(k => line(c, w * k, -h * .3, w * k, h * .4)); },
+  heli: (c, w, h) => poly(c, [[-w * .6, -h * .45], [w * .6, h * .45], [w * .6, -h * .45], [-w * .6, h * .45]]),
+  plane: (c, w, h) => poly(c, [[0, -h * .85], [w * .07, -h * .45], [w * .72, 0], [w * .72, h * .14], [w * .07, h * .05], [w * .05, h * .55], [w * .25, h * .75], [w * .25, h * .86], [0, h * .78], [-w * .25, h * .86], [-w * .25, h * .75], [-w * .05, h * .55], [-w * .07, h * .05], [-w * .72, h * .14], [-w * .72, 0], [-w * .07, -h * .45]]),
+  biplane: (c, w, h, bg) => { GLYPH.plane(c, w, h, bg); line(c, -w * .65, -h * .35, w * .65, -h * .35); },
+  drone: (c, w, h) => poly(c, [[0, -h * .65], [w * .62, h * .55], [0, h * .25], [-w * .62, h * .55]]),
+  ship: (c, w, h) => { poly(c, [[-w * .78, h * .12], [w * .78, h * .12], [w * .55, h * .55], [-w * .55, h * .55]]); c.fillRect(-w * .3, -h * .25, w * .5, h * .38); line(c, w * .05, -h * .25, w * .05, -h * .7); },
+  sub: (c, w, h) => { c.beginPath(); c.ellipse(0, h * .25, w * .72, h * .26, 0, 0, Math.PI * 2); c.fill(); c.fillRect(-w * .12, -h * .25, w * .24, h * .3); line(c, 0, -h * .25, 0, -h * .55); },
+  missile: (c, w, h) => poly(c, [[0, -h * .88], [w * .1, -h * .5], [w * .1, h * .45], [w * .26, h * .82], [-w * .26, h * .82], [-w * .1, h * .45], [-w * .1, -h * .5]]),
+  sf: (c, w, h) => { c.font = `700 ${h * .78}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('СпН', 0, h * .05); },
+  hq: (c, w, h) => { line(c, -w * .32, h * .78, -w * .32, -h * .78); poly(c, [[-w * .32, -h * .78], [w * .48, -h * .48], [-w * .32, -h * .16]]); },
+  mg: (c, w, h) => { line(c, 0, h * .78, 0, -h * .45); poly(c, [[0, -h * .85], [w * .14, -h * .42], [-w * .14, -h * .42]]); line(c, -w * .22, h * .25, w * .22, h * .25); },
+  tankmk: (c, w, h) => { poly(c, [[-w * .72, h * .05], [-w * .42, -h * .5], [w * .42, -h * .5], [w * .72, h * .05], [w * .45, h * .52], [-w * .45, h * .52]], false); line(c, -w * .5, h * .05, w * .5, h * .05); },
+  train: (c, w, h) => { c.strokeRect(-w * .62, -h * .3, w * 1.24, h * .55); c.fillRect(-w * .16, -h * .62, w * .32, h * .32); [-.38, 0, .38].forEach(k => dot(c, w * k, h * .45, h * .15)); },
+  cannon: (c, w, h) => { const lw = c.lineWidth; c.lineWidth = lw * 2.3; line(c, -w * .55, h * .25, w * .6, -h * .45); c.lineWidth = lw; dot(c, -w * .12, h * .38, h * .33, false); dot(c, -w * .12, h * .38, h * .08); },
+  grenade: (c, w, h) => { dot(c, 0, h * .2, h * .44); line(c, 0, -h * .3, 0, -h * .82); line(c, -w * .14, -h * .3, -w * .28, -h * .7); line(c, w * .14, -h * .3, w * .28, -h * .7); },
+  horn: (c, w, h) => { c.beginPath(); c.arc(-w * .1, h * .05, h * .45, 0, Math.PI * 2); c.stroke(); poly(c, [[w * .3, -h * .1], [w * .68, -h * .45], [w * .68, h * .35]]); },
+  muskets: (c, w, h) => { line(c, -w * .6, h * .72, w * .6, -h * .72); line(c, w * .6, h * .72, -w * .6, -h * .72); dot(c, -w * .6, h * .72, h * .13); dot(c, w * .6, h * .72, h * .13); },
+  sabre: (c, w, h) => { c.beginPath(); c.moveTo(-w * .55, h * .62); c.quadraticCurveTo(w * .15, h * .35, w * .62, -h * .75); c.stroke(); line(c, -w * .7, h * .38, -w * .38, h * .82); },
+  dragoon: (c, w, h, bg) => { GLYPH.sabre(c, w, h, bg); line(c, -w * .7, -h * .05, w * .7, -h * .05); },
+  sword: (c, w, h) => { const lw = c.lineWidth; c.lineWidth = lw * 1.6; line(c, 0, -h * .85, 0, h * .4); c.lineWidth = lw; line(c, -w * .3, h * .4, w * .3, h * .4); line(c, 0, h * .4, 0, h * .78); dot(c, 0, h * .84, h * .09); },
+  swords: (c, w, h, bg) => { [-.62, .62].forEach(a => { c.save(); c.rotate(a); GLYPH.sword(c, w * .9, h * .95, bg); c.restore(); }); },
+  spear: (c, w, h) => { [-.38, 0, .38].forEach(k => { const x = w * k; line(c, x, h * .82, x, -h * .5); poly(c, [[x, -h * .9], [x + w * .08, -h * .48], [x - w * .08, -h * .48]]); }); },
+  bow: (c, w, h) => { const cx = -w * .5, r = h * .88, a = 1.05; c.beginPath(); c.arc(cx, 0, r, -a, a); c.stroke(); line(c, cx + r * Math.cos(a), -r * Math.sin(a), cx + r * Math.cos(a), r * Math.sin(a)); line(c, -w * .65, 0, w * .55, 0); poly(c, [[w * .7, 0], [w * .48, -h * .16], [w * .48, h * .16]]); },
+  crossbow: (c, w, h) => { const r = w * .62, cy = h * .45, a = .7; c.beginPath(); c.arc(0, cy, r, Math.PI + a, Math.PI * 2 - a); c.stroke(); line(c, -r * Math.cos(a), cy - r * Math.sin(a), r * Math.cos(a), cy - r * Math.sin(a)); line(c, 0, -h * .75, 0, h * .85); },
+  helmet: (c, w, h, bg) => { c.beginPath(); c.moveTo(-w * .42, h * .78); c.lineTo(-w * .42, -h * .2); c.arc(0, -h * .2, w * .42, Math.PI, Math.PI * 2); c.lineTo(w * .42, h * .78); c.closePath(); c.fill(); const s = c.strokeStyle; c.strokeStyle = bg; line(c, -w * .3, 0, w * .3, 0); line(c, 0, 0, 0, h * .55); c.strokeStyle = s; },
+  horseshoe: (c, w, h) => { const lw = c.lineWidth; c.lineWidth = lw * 2; c.beginPath(); c.arc(0, h * .05, h * .5, Math.PI * .78, Math.PI * 2.22); c.stroke(); c.lineWidth = lw; },
+  wheel: (c, w, h) => { dot(c, 0, 0, h * .62, false); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; line(c, 0, 0, Math.cos(a) * h * .62, Math.sin(a) * h * .62); } dot(c, 0, 0, h * .12); },
+  catapult: (c, w, h) => { line(c, -w * .62, h * .45, w * .62, h * .45); dot(c, -w * .4, h * .62, h * .14); dot(c, w * .4, h * .62, h * .14); line(c, -w * .22, h * .45, 0, -h * .05); line(c, w * .22, h * .45, 0, -h * .05); line(c, w * .5, h * .3, -w * .45, -h * .6); dot(c, -w * .45, -h * .62, h * .14); },
+  galley: (c, w, h) => { poly(c, [[-w * .78, -h * .02], [w * .78, -h * .02], [w * .52, h * .32], [-w * .56, h * .32]]); [-.4, -.14, .12, .38].forEach(k => line(c, w * k, h * .3, w * k - w * .12, h * .78)); line(c, 0, -h * .02, 0, -h * .82); poly(c, [[0, -h * .8], [w * .36, -h * .5], [0, -h * .2]]); },
+  tower: (c, w, h, bg) => { poly(c, [[-w * .4, h * .8], [-w * .4, -h * .78], [-w * .22, -h * .78], [-w * .22, -h * .52], [-w * .08, -h * .52], [-w * .08, -h * .78], [w * .08, -h * .78], [w * .08, -h * .52], [w * .22, -h * .52], [w * .22, -h * .78], [w * .4, -h * .78], [w * .4, h * .8]]); const f = c.fillStyle; c.fillStyle = bg; c.beginPath(); c.moveTo(-w * .13, h * .8); c.lineTo(-w * .13, h * .38); c.arc(0, h * .38, w * .13, Math.PI, Math.PI * 2); c.lineTo(w * .13, h * .8); c.fill(); c.fillStyle = f; },
+  elephant: (c, w, h) => { c.beginPath(); c.ellipse(-w * .05, -h * .05, w * .45, h * .4, 0, 0, Math.PI * 2); c.fill(); c.fillRect(-w * .42, h * .15, w * .14, h * .6); c.fillRect(w * .12, h * .15, w * .14, h * .6); const lw = c.lineWidth; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(w * .35, -h * .2); c.quadraticCurveTo(w * .7, h * .1, w * .55, h * .7); c.stroke(); c.lineWidth = lw; },
+  partisan: (c, w, h) => { GLYPH.x(c, w * .6, h * .6); line(c, -w, h * .82, w, h * .82); }
+};
+const FONT_UI = '"Golos Text", system-ui, sans-serif';
+const ERAS = {
+  ancient: { name: 'Древний мир', frame: 'shield', units: [
+    ['inf', 'Пехота', 'sword'], ['phalanx', 'Фаланга, копейщики', 'spear'], ['archers', 'Лучники', 'bow'], ['cav', 'Конница', 'horseshoe'],
+    ['chariot', 'Колесницы', 'wheel'], ['elephants', 'Боевые слоны', 'elephant'], ['siege', 'Осадные машины', 'catapult'],
+    ['galley', 'Галеры', 'galley'], ['fort', 'Крепость', 'tower'], ['hq', 'Ставка', 'hq']] },
+  medieval: { name: 'Средневековье', frame: 'shield', units: [
+    ['inf', 'Пехота', 'sword'], ['pike', 'Копейщики', 'spear'], ['archers', 'Лучники', 'bow'], ['xbow', 'Арбалетчики', 'crossbow'],
+    ['knights', 'Рыцари', 'helmet'], ['cav', 'Лёгкая конница', 'horseshoe'], ['militia', 'Ополчение', 'swords'], ['siege', 'Осадные орудия', 'catapult'],
+    ['fleet', 'Флот', 'galley'], ['castle', 'Замок', 'tower'], ['hq', 'Ставка', 'hq']] },
+  gunpowder: { name: 'Эпоха пороха (XVII–XIX вв.)', frame: 'round', units: [
+    ['line', 'Линейная пехота', 'muskets'], ['gren', 'Гренадеры', 'grenade'], ['jaeger', 'Егеря', 'horn'], ['cuir', 'Кирасиры, гусары', 'sabre'],
+    ['dragoon', 'Драгуны', 'dragoon'], ['cossack', 'Казаки', 'spear'], ['art', 'Артиллерия', 'cannon'], ['eng', 'Сапёры', 'eng'],
+    ['fleet', 'Линейный флот', 'ship'], ['fort', 'Крепость', 'tower'], ['hq', 'Штаб', 'hq']] },
+  ww1: { name: 'Первая мировая', frame: 'nato', units: [
+    ['inf', 'Пехота', 'x'], ['mg', 'Пулемётчики', 'mg'], ['cav', 'Кавалерия', 'cav'], ['art', 'Артиллерия', 'art'],
+    ['hart', 'Тяжёлая артиллерия', 'heavyart'], ['tank', 'Танки', 'tankmk'], ['eng', 'Сапёры', 'eng'], ['air', 'Авиация', 'biplane'],
+    ['train', 'Бронепоезд', 'train'], ['fleet', 'Флот', 'ship'], ['sub', 'Подлодки', 'sub'], ['hq', 'Штаб', 'hq']] },
+  ww2: { name: 'Вторая мировая', frame: 'nato', units: [
+    ['inf', 'Пехота', 'x'], ['motor', 'Мотопехота', 'motor'], ['tank', 'Танки', 'armor'], ['mech', 'Механизир. части', 'mech'],
+    ['art', 'Артиллерия', 'art'], ['rocket', 'Реактивная артиллерия', 'mlrs'], ['at', 'ПТ-артиллерия', 'at'], ['aa', 'ПВО', 'aa'],
+    ['para', 'Десантники', 'airborne'], ['cav', 'Кавалерия', 'cav'], ['eng', 'Инженеры', 'eng'], ['partisan', 'Партизаны', 'partisan'],
+    ['air', 'Авиация', 'plane'], ['fleet', 'Флот', 'ship'], ['sub', 'Подлодки', 'sub'], ['hq', 'Штаб', 'hq']] },
+  modern: { name: 'Современность', frame: 'nato', units: [
+    ['mech', 'Мотострелки', 'mech'], ['tank', 'Танки', 'armor'], ['inf', 'Пехота', 'x'], ['art', 'Артиллерия', 'art'],
+    ['mlrs', 'РСЗО', 'mlrs'], ['aa', 'ПВО', 'aa'], ['recon', 'Разведка', 'cav'], ['sf', 'Спецназ', 'sf'],
+    ['vdv', 'ВДВ', 'airborne'], ['eng', 'Инженеры', 'eng'], ['heli', 'Вертолёты', 'heli'], ['air', 'Авиация', 'plane'],
+    ['uav', 'Беспилотники', 'drone'], ['missile', 'Ракетные войска', 'missile'], ['fleet', 'Флот', 'ship'], ['sub', 'Подлодки', 'sub'], ['hq', 'Штаб', 'hq']] }
+};
+const ECHELONS = [['', 'Без обозначения'], ['•', 'Отделение'], ['•••', 'Взвод'], ['I', 'Рота'], ['II', 'Батальон'], ['III', 'Полк'],
+  ['X', 'Бригада'], ['XX', 'Дивизия'], ['XXX', 'Корпус'], ['XXXX', 'Армия'], ['XXXXX', 'Фронт, группа армий']];
+let units = [];             // { x, y, era, type, owner, ech, label }
+let selUnit = null;
+let era = 'ww2', unitType = 'inf', unitEch = '';
+let unitSize = 36, showUnits = true;
+
+const unitDef = u => { const e = ERAS[u.era] || ERAS.ww2; return { frame: e.frame, def: e.units.find(d => d[0] === u.type) || e.units[0] }; };
+function tint(rgbc, k) { return `rgb(${Math.round(rgbc[0] + (255 - rgbc[0]) * k)},${Math.round(rgbc[1] + (255 - rgbc[1]) * k)},${Math.round(rgbc[2] + (255 - rgbc[2]) * k)})`; }
+function framePath(c, frame, w, h) {
+  c.beginPath();
+  if (frame === 'shield') {
+    c.moveTo(-w * .82, -h); c.lineTo(w * .82, -h); c.lineTo(w * .82, 0);
+    c.quadraticCurveTo(w * .82, h * .8, 0, h * 1.18); c.quadraticCurveTo(-w * .82, h * .8, -w * .82, 0); c.closePath();
+  } else if (frame === 'round') {
+    const r = h * .4;
+    c.moveTo(-w + r, -h); c.arcTo(w, -h, w, h, r); c.arcTo(w, h, -w, h, r); c.arcTo(-w, h, -w, -h, r); c.arcTo(-w, -h, w, -h, r); c.closePath();
+  } else c.rect(-w, -h, w * 2, h * 2);
+}
+// Draws one troop marker at its map position; S is the frame height in map pixels.
+function drawUnit(c, u, S, selected) {
+  const { frame, def } = unitDef(u);
+  const col = rgb[u.owner] || [140, 140, 140];
+  const h = S / 2, w = S * .75, ink = '#1b2028', bg = tint(col, .35);
+  c.save(); c.translate(u.x, u.y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  framePath(c, frame, w, h);
+  c.fillStyle = bg; c.fill();
+  c.lineWidth = S * .075; c.strokeStyle = ink; c.stroke();
+  c.save(); framePath(c, frame, w, h); c.clip();
+  c.fillStyle = ink; c.strokeStyle = ink; c.lineWidth = S * .065;
+  const gw = frame === 'shield' ? w * .72 : w, gh = frame === 'shield' ? h * .9 : h;
+  GLYPH[def[2]](c, gw, gh, bg);
+  c.restore();
+  c.textAlign = 'center';
+  if (u.ech) {
+    c.font = `700 ${S * .36}px ${FONT_UI}`; c.textBaseline = 'alphabetic';
+    c.lineWidth = S * .12; c.strokeStyle = 'rgba(255,255,255,.9)'; c.strokeText(u.ech, 0, -h - S * .1);
+    c.fillStyle = ink; c.fillText(u.ech, 0, -h - S * .1);
+  }
+  if (u.label) {
+    c.font = `600 ${S * .38}px ${FONT_UI}`; c.textBaseline = 'top';
+    const y = (frame === 'shield' ? h * 1.18 : h) + S * .1;
+    c.lineWidth = S * .14; c.strokeStyle = 'rgba(255,255,255,.92)'; c.strokeText(u.label, 0, y);
+    c.fillStyle = ink; c.fillText(u.label, 0, y);
+  }
+  if (selected) {
+    c.setLineDash([S * .15, S * .1]); c.lineWidth = S * .05; c.strokeStyle = ink;
+    c.strokeRect(-w - S * .18, -h - S * .18 - (u.ech ? S * .4 : 0), (w + S * .18) * 2, h * 2 + S * .36 + (u.ech ? S * .4 : 0) + (frame === 'shield' ? h * .18 : 0));
+    c.setLineDash([]);
+  }
+  c.restore();
+}
+function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize, marks && u === selUnit && tool === 'units'); }
+function hitUnit(g) {
+  if (!showUnits) return null;
+  const h = unitSize / 2, w = unitSize * .75;
+  for (let k = units.length - 1; k >= 0; k--) { const u = units[k]; if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u; }
+  return null;
+}
+function unitsChanged() { renderUnitPanel(); updUndo(); scheduleSave(); requestDraw(); }
+function selectUnit(u) {
+  selUnit = u;
+  if (u) { era = u.era; unitType = u.type; unitEch = u.ech || ''; $('#era').value = era; }
+  renderUnitPanel(); requestDraw();
+}
+function renderUnitPalette() {
+  const box = $('#unitTypes'); box.textContent = '';
+  const e = ERAS[era], col = rgb[active] || [150, 150, 150];
+  const pd = window.devicePixelRatio || 1;
+  e.units.forEach(([id, name, glyph]) => {
+    const b = document.createElement('button');
+    b.className = 'utype' + (id === unitType ? ' on' : ''); b.title = name; b.dataset.type = id;
+    const cnv = document.createElement('canvas'); cnv.width = 44 * pd; cnv.height = 34 * pd;
+    const c = cnv.getContext('2d'); c.scale(pd, pd);
+    drawUnit(c, { x: 22, y: 17, era, type: id, owner: active, ech: '', label: '' }, 22, false);
+    const sp = document.createElement('span'); sp.textContent = name;
+    b.append(cnv, sp);
+    b.addEventListener('click', () => {
+      unitType = id;
+      if (selUnit) { pushHist(); selUnit.era = era; selUnit.type = id; unitsChanged(); }
+      renderUnitPalette();
+    });
+    box.append(b);
+  });
+}
+function renderUnitPanel() {
+  const sel = $('#unitSel');
+  sel.hidden = !selUnit;
+  if (selUnit) {
+    const { def } = unitDef(selUnit), c = countries[selUnit.owner - 1];
+    $('#unitSelName').textContent = def[1] + (c ? ' · ' + c.name : '');
+    $('#unitLabel').value = selUnit.label || '';
+    $('#unitEch').value = selUnit.ech || '';
+    $('#unitOwnerBtn').hidden = !active || active === selUnit.owner;
+    if (active && countries[active - 1]) $('#unitOwnerBtn').textContent = 'Передать: ' + countries[active - 1].name;
+  } else $('#unitEch').value = unitEch;
+  const counts = countries.map(() => 0);
+  units.forEach(u => { if (counts[u.owner - 1] !== undefined) counts[u.owner - 1]++; });
+  $('#unitCount').textContent = units.length
+    ? 'На карте: ' + countries.map((c, k) => c.name + ' — ' + counts[k]).filter((s, k) => counts[k]).join(', ')
+    : 'Войск на карте пока нет. Выберите род войск и щёлкните по карте.';
+  renderUnitPalette();
+}
+
 // ---------- history ----------
-function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active }; }
+function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units) }; }
 function pushHist() { hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
-function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); }
-function afterChange() { recolor(); edited(); }
+function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; }
+function afterChange() { recolor(); edited(); renderUnitPanel(); }
 function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
 function redo() { if (!redoStack.length || drag) return; hist.push(snap()); restore(redoStack.pop()); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
@@ -709,6 +928,7 @@ function renderCountries() {
 }
 function setActive(idx, rerender = true) {
   active = idx;
+  if (tool === 'units') renderUnitPanel();
   if (rerender) renderCountries();
   else document.querySelectorAll('.country').forEach(li => li.classList.toggle('on', +li.dataset.i === idx));
 }
@@ -726,6 +946,7 @@ function removeCountry(idx) {
   countries.splice(idx - 1, 1);
   for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
   if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
+  units = units.filter(u => u.owner !== idx); units.forEach(u => { if (u.owner > idx) u.owner--; }); selUnit = null;
   afterChange();
   toast('«' + name + '» удалена. Ctrl+Z вернёт её.');
 }
@@ -739,8 +960,10 @@ function setTool(t) {
   $('#fTol').hidden = !(t === 'fill' && fillMode === 'image');
   $('#fMode').hidden = t !== 'fill';
   $('#fProtect').hidden = !(t === 'warp' || t === 'lasso');
+  $('#fUnits').hidden = t !== 'units';
+  if (t === 'units') renderUnitPanel();
   $('#hint').textContent = HINTS[t];
-  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : 'crosshair';
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : t === 'units' ? 'copy' : 'crosshair';
   requestDraw();
 }
 // slider is logarithmic so small radii stay precise and big ones are still reachable
@@ -763,7 +986,7 @@ cv.addEventListener('pointerdown', e => {
   pointers.set(e.pointerId, p);
   if (pointers.size === 2) {
     // second finger: abandon the stroke and switch to pinch-zoom
-    if (drag && (drag.mode === 'warp' || drag.mode === 'paint') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); }
+    if (drag && (drag.mode === 'warp' || drag.mode === 'paint' || drag.mode === 'unit') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); }
     else if (drag && drag.mode === 'lasso') requestDraw();
     const [a, b] = [...pointers.values()];
     drag = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, c0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
@@ -799,6 +1022,20 @@ cv.addEventListener('pointerdown', e => {
     if (!inside) return;
     pushHist();
     if (fillAt(g)) edited(); else { hist.pop(); updUndo(); }
+  } else if (tool === 'units') {
+    const u = hitUnit(g);
+    if (u) {
+      selectUnit(u);
+      pushHist();
+      units.splice(units.indexOf(u), 1); units.push(u);   // bring to front
+      drag = { mode: 'unit', u, ox: g.x - u.x, oy: g.y - u.y, moved: false };
+    } else {
+      if (!active) { toast('Сначала добавьте страну'); return; }
+      if (!inside) return;
+      pushHist();
+      const nu = { x: g.x, y: g.y, era, type: unitType, owner: active, ech: unitEch, label: '' };
+      units.push(nu); selectUnit(nu); unitsChanged();
+    }
   } else if (tool === 'lasso') {
     const o = inside ? own[gy * W + gx] : 0;
     const capt = o || active;
@@ -812,7 +1049,10 @@ cv.addEventListener('pointermove', e => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
   hover = W ? toGrid(p) : null;
   updWhere();
-  if (!drag) { requestDraw(); return; }
+  if (!drag) {
+    if (tool === 'units' && hover && !spaceDown) cv.style.cursor = hitUnit(hover) ? 'move' : 'copy';
+    requestDraw(); return;
+  }
   if (drag.mode === 'pinch') {
     if (pointers.size < 2) return;
     const [a, b] = [...pointers.values()];
@@ -829,6 +1069,9 @@ cv.addEventListener('pointermove', e => {
     if (!drag.pending) { drag.pending = true; requestAnimationFrame(() => { if (drag && drag.mode === 'warp') { drag.pending = false; warpStep(); } }); }
   } else if (drag.mode === 'paint') {
     const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
+  } else if (drag.mode === 'unit') {
+    const g = toGrid(p);
+    drag.u.x = clamp(g.x - drag.ox, 0, W); drag.u.y = clamp(g.y - drag.oy, 0, H); drag.moved = true; requestDraw();
   } else if (drag.mode === 'lasso') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestDraw(); }
@@ -839,6 +1082,10 @@ function endPointer(e) {
   if (!drag) return;
   if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
+  if (drag.mode === 'unit') {
+    if (drag.moved) unitsChanged(); else { hist.pop(); updUndo(); }
+    drag = null; return;
+  }
   let wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
   if (drag.mode === 'lasso') {
     const { pts, capt } = drag;
@@ -880,8 +1127,10 @@ window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { e.preventDefault(); redo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
-  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan' };
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units' };
   if (tools[e.code]) { setTool(tools[e.code]); return; }
+  if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
+  if (e.code === 'Escape' && selUnit) { selectUnit(null); return; }
   if (e.code === 'BracketLeft') bumpBrush(-1);
   else if (e.code === 'BracketRight') bumpBrush(1);
   else if (e.code === 'KeyF') fit();
@@ -973,6 +1222,15 @@ function loadSample() {
   countries = [{ name: 'Аргония', color: '#d0473f' }, { name: 'Борея', color: '#3766c9' }];
   active = 1;
   own.set(s.own);
+  era = 'ww2'; $('#era').value = era;
+  units = [
+    { x: 500, y: 300, era, type: 'tank', owner: 1, ech: 'XX', label: '3-я танковая' },
+    { x: 470, y: 470, era, type: 'inf', owner: 1, ech: 'XX', label: '' },
+    { x: 380, y: 390, era, type: 'art', owner: 1, ech: 'III', label: '' },
+    { x: 740, y: 330, era, type: 'inf', owner: 2, ech: 'XX', label: '1-я пехотная' },
+    { x: 720, y: 480, era, type: 'at', owner: 2, ech: 'III', label: '' },
+    { x: 860, y: 400, era, type: 'hq', owner: 2, ech: 'XXXX', label: 'Штаб армии' }
+  ];
   afterChange();
   saveImage();
   setTool('warp');
@@ -989,12 +1247,12 @@ function download(blob, name) {
 $('#btnPng').addEventListener('click', () => {
   if (!W) return;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d'); x.drawImage(base, 0, 0); x.drawImage(over, 0, 0);
+  const x = c.getContext('2d'); x.drawImage(base, 0, 0); x.drawImage(over, 0, 0); drawUnits(x, false);
   c.toBlob(b => download(b, 'karta.png'), 'image/png');
 });
 $('#btnProj').addEventListener('click', () => {
   if (!W) return;
-  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own) };
+  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -1008,6 +1266,7 @@ function loadProjectFile(file) {
       img.onload = () => {
         setMap(img, d.w, d.h);
         countries = d.countries; active = d.active || 1;
+        units = d.units || []; if (d.unitSize) setUnitSize(d.unitSize);
         own.set(unrle(d.own, W * H));
         afterChange(); saveImage(); setTool('warp');
         toast('Проект открыт.');
@@ -1038,7 +1297,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, units, unitSize, era }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -1056,6 +1315,9 @@ async function restoreSaved() {
     if (typeof st.alpha === 'number') { alpha = st.alpha; $('#alpha').value = Math.round(alpha * 100); $('#alphaOut').textContent = Math.round(alpha * 100) + '%'; }
     if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
     if (st.sizes) Object.assign(sizes, st.sizes);
+    units = st.units || [];
+    if (st.unitSize) setUnitSize(st.unitSize);
+    if (st.era && ERAS[st.era]) { era = st.era; $('#era').value = era; unitType = ERAS[era].units[0][0]; }
     setTool(tool);
     afterChange();
     return true;
@@ -1073,6 +1335,31 @@ $('#btnTakeAll').addEventListener('click', () => {
   pushHist(); const n = pockets.length; pockets.forEach(takePocket); edited();
   toast('Котлы отошли окружившим странам: ' + n + '.');
 });
+function setUnitSize(v) { unitSize = clamp(+v, 10, 140); $('#usize').value = unitSize; $('#usizeOut').textContent = unitSize + ' px'; requestDraw(); }
+function deleteUnit() {
+  if (!selUnit) return;
+  pushHist(); units.splice(units.indexOf(selUnit), 1); selUnit = null; unitsChanged();
+}
+$('#usize').addEventListener('input', e => { setUnitSize(e.target.value); scheduleSave(); });
+$('#showUnits').addEventListener('change', e => { showUnits = e.target.checked; requestDraw(); });
+$('#era').addEventListener('change', e => {
+  era = e.target.value; unitType = ERAS[era].units[0][0];
+  if (selUnit) { selUnit = null; renderUnitPanel(); requestDraw(); } else renderUnitPalette();
+  scheduleSave();
+});
+$('#unitEch').addEventListener('change', e => {
+  unitEch = e.target.value;
+  if (selUnit) { pushHist(); selUnit.ech = unitEch; unitsChanged(); }
+});
+let labelHist = false;
+$('#unitLabel').addEventListener('focus', () => { labelHist = false; });
+$('#unitLabel').addEventListener('input', e => {
+  if (!selUnit) return;
+  if (!labelHist) { pushHist(); labelHist = true; }
+  selUnit.label = e.target.value; requestDraw(); scheduleSave();
+});
+$('#unitDel').addEventListener('click', deleteUnit);
+$('#unitOwnerBtn').addEventListener('click', () => { if (!selUnit || !active) return; pushHist(); selUnit.owner = active; unitsChanged(); });
 $('#tol').addEventListener('input', e => { tol = +e.target.value; $('#tolOut').textContent = tol; });
 $('#fillMode').addEventListener('change', e => { fillMode = e.target.value; setTool(tool); });
 $('#protect').addEventListener('change', e => { protect = e.target.checked; });
