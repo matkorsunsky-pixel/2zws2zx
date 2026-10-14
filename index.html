@@ -233,12 +233,33 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <div class="units" id="fUnits" hidden>
       <label for="era" class="sub">Эпоха</label>
       <select id="era"><option value="ancient">Древний мир</option><option value="medieval">Средневековье</option><option value="gunpowder">Эпоха пороха (XVII–XIX вв.)</option><option value="ww1">Первая мировая</option><option value="ww2">Вторая мировая</option><option value="modern">Современность</option></select>
+      <div class="field">
+        <label for="usize">Размер всех значков</label><output id="usizeOut">36 px</output>
+        <div class="sizer">
+          <button id="usizeDown" aria-label="Уменьшить все значки">−</button>
+          <input type="range" id="usize" min="0" max="1000" value="500">
+          <button id="usizeUp" aria-label="Увеличить все значки">+</button>
+        </div>
+        <div class="presets" id="usizePresets">
+          <button data-size="16">16</button><button data-size="24">24</button><button data-size="36">36</button><button data-size="56">56</button><button data-size="90">90</button><button data-size="150">150</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="showUnits" checked><span>Показывать войска</span></label>
       <div class="utypes" id="unitTypes"></div>
       <label for="unitEch" class="sub">Размер соединения</label>
       <select id="unitEch"><option value="">Без обозначения</option><option value="•">Отделение (•)</option><option value="•••">Взвод (•••)</option><option value="I">Рота (I)</option><option value="II">Батальон (II)</option><option value="III">Полк (III)</option><option value="X">Бригада (X)</option><option value="XX">Дивизия (XX)</option><option value="XXX">Корпус (XXX)</option><option value="XXXX">Армия (XXXX)</option><option value="XXXXX">Фронт, группа армий (XXXXX)</option></select>
       <div class="unitsel" id="unitSel" hidden>
         <b id="unitSelName"></b>
         <input id="unitLabel" placeholder="Подпись, например «6-я армия»" aria-label="Подпись отряда">
+        <div class="field">
+          <label for="uscale">Размер этого отряда</label><output id="uscaleOut">100%</output>
+          <div class="sizer">
+            <button id="uscaleDown" aria-label="Уменьшить отряд">−</button>
+            <input type="range" id="uscale" min="25" max="400" step="5" value="100">
+            <button id="uscaleUp" aria-label="Увеличить отряд">+</button>
+          </div>
+          <div class="presets"><button id="uscaleReset">Как у всех</button></div>
+        </div>
         <div class="row"><button id="unitOwnerBtn"></button><button id="unitDel">Удалить</button></div>
       </div>
       <p class="hint" id="unitCount"></p>
@@ -268,11 +289,6 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <input type="range" id="alpha" min="0" max="100" value="50">
     </div>
     <div class="field">
-      <label for="usize">Размер значков войск</label><output id="usizeOut">36 px</output>
-      <input type="range" id="usize" min="10" max="140" value="36">
-    </div>
-    <label class="check"><input type="checkbox" id="showUnits" checked><span>Показывать войска</span></label>
-    <div class="field">
       <label for="bw">Толщина границы</label><output id="bwOut">2 px</output>
       <input type="range" id="bw" min="0" max="5" value="2">
     </div>
@@ -295,6 +311,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>[ ]</b> или <b>Shift + колёсико</b> — радиус кисти, ластика и захвата</li>
       <li><b>F</b> — показать всю карту</li>
       <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
+      <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
     </ul>
   </section>
@@ -832,11 +849,13 @@ function drawUnit(c, u, S, selected) {
   }
   c.restore();
 }
-function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize, marks && u === selUnit && tool === 'units'); }
+function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * (u.scale || 1), marks && u === selUnit && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
-  const h = unitSize / 2, w = unitSize * .75;
-  for (let k = units.length - 1; k >= 0; k--) { const u = units[k]; if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u; }
+  for (let k = units.length - 1; k >= 0; k--) {
+    const u = units[k], S = unitSize * (u.scale || 1), h = S / 2, w = S * .75;
+    if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u;
+  }
   return null;
 }
 function unitsChanged() { renderUnitPanel(); updUndo(); scheduleSave(); requestDraw(); }
@@ -873,6 +892,8 @@ function renderUnitPanel() {
     $('#unitSelName').textContent = def[1] + (c ? ' · ' + c.name : '');
     $('#unitLabel').value = selUnit.label || '';
     $('#unitEch').value = selUnit.ech || '';
+    const sc = Math.round((selUnit.scale || 1) * 100);
+    $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%';
     $('#unitOwnerBtn').hidden = !active || active === selUnit.owner;
     if (active && countries[active - 1]) $('#unitOwnerBtn').textContent = 'Передать: ' + countries[active - 1].name;
   } else $('#unitEch').value = unitEch;
@@ -886,7 +907,7 @@ function renderUnitPanel() {
 
 // ---------- history ----------
 function snap() { return { own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units) }; }
-function pushHist() { hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
+function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
 function restore(e) { own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; }
 function afterChange() { recolor(); edited(); renderUnitPanel(); }
 function undo() { if (!hist.length || drag) return; redoStack.push(snap()); restore(hist.pop()); afterChange(); }
@@ -1106,6 +1127,7 @@ cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestDr
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   const dy = e.deltaY || e.deltaX;
+  if (e.shiftKey && tool === 'units') { resizeUnitAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.06 : 0.002))); return; }
   if (e.shiftKey && tool in sizes) { setBrush(brush * Math.exp(-dy * (e.deltaMode ? 0.06 : 0.002))); return; }
   zoomAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.05 : 0.0015)));
 }, { passive: false });
@@ -1131,6 +1153,11 @@ window.addEventListener('keydown', e => {
   if (tools[e.code]) { setTool(tools[e.code]); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && selUnit) { selectUnit(null); return; }
+  if (tool === 'units' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+    const k = e.code === 'BracketRight' ? 1.15 : 1 / 1.15;
+    if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) * k, true); else setUnitSize(unitSize * k, true);
+    return;
+  }
   if (e.code === 'BracketLeft') bumpBrush(-1);
   else if (e.code === 'BracketRight') bumpBrush(1);
   else if (e.code === 'KeyF') fit();
@@ -1335,12 +1362,42 @@ $('#btnTakeAll').addEventListener('click', () => {
   pushHist(); const n = pockets.length; pockets.forEach(takePocket); edited();
   toast('Котлы отошли окружившим странам: ' + n + '.');
 });
-function setUnitSize(v) { unitSize = clamp(+v, 10, 140); $('#usize').value = unitSize; $('#usizeOut').textContent = unitSize + ' px'; requestDraw(); }
+// global icon size uses a logarithmic slider (8…240 px); each unit can also carry its own scale
+const USMIN = 8, USMAX = 240;
+function setUnitSize(v, save) {
+  unitSize = clamp(Math.round(+v), USMIN, USMAX);
+  $('#usize').value = Math.round(1000 * Math.log(unitSize / USMIN) / Math.log(USMAX / USMIN));
+  $('#usizeOut').textContent = unitSize + ' px';
+  document.querySelectorAll('#usizePresets button').forEach(b => b.classList.toggle('on', +b.dataset.size === unitSize));
+  requestDraw();
+  if (save) scheduleSave();
+}
+let scaleHistFor = null;   // one undo step per run of size changes on the same unit
+function setUnitScale(u, k, save) {
+  if (scaleHistFor !== u) { pushHist(); scaleHistFor = u; }
+  u.scale = clamp(Math.round(k * 100) / 100, .25, 4);
+  if (Math.abs(u.scale - 1) < .001) delete u.scale;
+  if (u === selUnit) { const sc = Math.round((u.scale || 1) * 100); $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%'; }
+  requestDraw();
+  if (save) scheduleSave();
+}
+function resizeUnitAt(p, k) {
+  const u = hitUnit(toGrid(p));
+  if (u) { if (u !== selUnit) selectUnit(u); setUnitScale(u, (u.scale || 1) * k, true); toast('Размер отряда: ' + Math.round((u.scale || 1) * 100) + '%'); }
+  else { setUnitSize(unitSize * k, true); toast('Размер всех значков: ' + unitSize + ' px'); }
+}
 function deleteUnit() {
   if (!selUnit) return;
   pushHist(); units.splice(units.indexOf(selUnit), 1); selUnit = null; unitsChanged();
 }
-$('#usize').addEventListener('input', e => { setUnitSize(e.target.value); scheduleSave(); });
+$('#usize').addEventListener('input', e => setUnitSize(USMIN * Math.pow(USMAX / USMIN, e.target.value / 1000), true));
+$('#usizeDown').addEventListener('click', () => setUnitSize(Math.min(unitSize - 1, unitSize / 1.2), true));
+$('#usizeUp').addEventListener('click', () => setUnitSize(Math.max(unitSize + 1, unitSize * 1.2), true));
+document.querySelectorAll('#usizePresets button').forEach(b => b.addEventListener('click', () => setUnitSize(+b.dataset.size, true)));
+$('#uscale').addEventListener('input', e => { if (selUnit) setUnitScale(selUnit, e.target.value / 100, true); });
+$('#uscaleDown').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) / 1.2, true); });
+$('#uscaleUp').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) * 1.2, true); });
+$('#uscaleReset').addEventListener('click', () => { if (selUnit) setUnitScale(selUnit, 1, true); });
 $('#showUnits').addEventListener('change', e => { showUnits = e.target.checked; requestDraw(); });
 $('#era').addEventListener('change', e => {
   era = e.target.value; unitType = ERAS[era].units[0][0];
@@ -1379,6 +1436,7 @@ if (inFrame) {
 new ResizeObserver(() => { resize(); if (!userView) fit(); }).observe(stage);
 resize();
 setTool('warp');
+setUnitSize(unitSize);
 restoreSaved().then(ok => { if (!ok) loadSample(); fit(); });
 })();
 </script>
