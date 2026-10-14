@@ -264,10 +264,11 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <select id="geoLayer" aria-label="Подложка" style="width:auto"><option value="sat">Спутник</option><option value="street">Улицы</option><option value="topo">Рельеф</option></select>
         <label class="check"><input type="checkbox" id="geoLabels" checked><span>Подписи городов</span></label>
       </div>
-      <button id="geoRefine" class="primary">Детализировать: сделать картой то, что на экране</button>
+      <button id="geoRegionBtn" class="primary">Выделить область детализации</button>
+      <button id="geoRefine">Детализировать то, что на экране</button>
       <button id="geoBack">Вернуться к прежней области</button>
       <p class="hint" id="geoInfo"></p>
-      <p class="hint">Приблизьтесь к городу и нажмите «Детализировать»: клетки территории станут мелкими, и фронт можно вести по кварталам. Нарисованное переносится между уровнями.</p>
+      <p class="hint">Возьмите инструмент «Область» (0) и обведите рамкой город или район. Внутри рамки клетки территории станут по 2–10 м, а приближать можно до улиц и домов. Снаружи остаются снимки и общая карта. Нарисованное переносится между уровнями.</p>
     </div>
     <p class="hint">Любая картинка: PNG, JPG, WebP, SVG. Её можно перетащить на поле или вставить через Ctrl+V.</p>
   </section>
@@ -299,6 +300,9 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <button data-tool="fill">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l9 9-7 7a2 2 0 0 1-2.8 0L3.8 12.6a2 2 0 0 1 0-2.8z"/><path d="M4 12h14"/><path d="M21 16s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z"/></svg>
         Заливка<kbd>4</kbd></button>
+      <button data-tool="region" class="wide" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3"/></svg>
+        Область детализации<kbd>0</kbd></button>
       <button data-tool="pan">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
         Двигать карту<kbd>6</kbd></button>
@@ -563,6 +567,7 @@ const HINTS = {
   fill: 'Щёлкните внутри области, обведённой кистью, — она зальётся цветом выбранной страны. Заливка останавливается только на нарисованных границах.',
   lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
   pan: 'Перетаскивайте карту. Колёсико — масштаб.',
+  region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
   units: 'Щелчок по карте ставит отряд. ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
@@ -839,7 +844,7 @@ function drawVectorMap(c) {
     vec = buildVectors(Math.max(0, need[0] - mx), Math.max(0, need[1] - my), Math.min(W, need[2] + mx), Math.min(H, need[3] + my));
   }
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-  drawBaseLayer(c);
+  if (!geo) c.drawImage(base, 0, 0);
   c.save();
   const w = vec.win;
   c.beginPath(); c.rect(w[0], w[1], w[2] - w[0], w[3] - w[1]); c.clip();
@@ -898,43 +903,87 @@ function visibleGrid() {
   const r = stage.getBoundingClientRect();
   return [-view.x / view.s, -view.y / view.s, (r.width - view.x) / view.s, (r.height - view.y) / view.s];
 }
-// scale = device pixels per grid cell; the rectangle is in grid cells
-function drawGeoTiles(c, scale, gx0, gy0, gx1, gy1, cacheOnly) {
+// Imagery is placed in device pixels computed in double precision, so it stays exact at street zoom.
+// device = grid * k + (ox, oy); dw × dh is the device area to cover.
+function drawGeoTiles(c, k, ox, oy, dw, dh, cacheOnly) {
   const wx = geoWpcX(), wy = geoWpcY(), L = GEO_LAYERS[geoLayer] || GEO_LAYERS.sat;
-  const z = clamp(Math.round(Math.log2(scale / wx / 256)), 0, L.max), n = Math.pow(2, z);
-  gx0 = Math.max(0, gx0); gy0 = Math.max(0, gy0); gx1 = Math.min(W, gx1); gy1 = Math.min(H, gy1);
-  const tx0 = Math.floor((geo.x0 + gx0 * wx) * n), tx1 = Math.floor((geo.x0 + gx1 * wx) * n - 1e-9);
-  const ty0 = Math.max(0, Math.floor((geo.y0 + gy0 * wy) * n)), ty1 = Math.min(n - 1, Math.floor((geo.y0 + gy1 * wy) * n - 1e-9));
-  if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 500) return z;
-  const pad = .6 / scale;
+  const z = clamp(Math.round(Math.log2(k / wx / 256)), 0, L.max), n = Math.pow(2, z);
+  const gx0 = -ox / k, gy0 = -oy / k, gx1 = (dw - ox) / k, gy1 = (dh - oy) / k;
+  const tx0 = Math.floor((geo.x0 + gx0 * wx) * n), tx1 = Math.floor((geo.x0 + gx1 * wx) * n);
+  const ty0 = Math.max(0, Math.floor((geo.y0 + gy0 * wy) * n)), ty1 = Math.min(n - 1, Math.floor((geo.y0 + gy1 * wy) * n));
+  if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 600) return z;
   const layers = [L.url].concat(geoLabels ? [GEO_LABELS] : []);
   layers.forEach((tpl, li) => {
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
       const xx = ((tx % n) + n) % n;
-      const gxA = (tx / n - geo.x0) / wx, gxB = ((tx + 1) / n - geo.x0) / wx;
-      const gyA = (ty / n - geo.y0) / wy, gyB = ((ty + 1) / n - geo.y0) / wy;
+      const X0 = Math.floor((tx / n - geo.x0) / wx * k + ox), X1 = Math.ceil(((tx + 1) / n - geo.x0) / wx * k + ox);
+      const Y0 = Math.floor((ty / n - geo.y0) / wy * k + oy), Y1 = Math.ceil(((ty + 1) / n - geo.y0) / wy * k + oy);
       const url = tileUrl(tpl, z, xx, ty);
       const im = cacheOnly ? tileCache.get(url) : tileImg(url);
-      if (tileReady(im)) { c.drawImage(im, gxA - pad, gyA - pad, gxB - gxA + pad * 2, gyB - gyA + pad * 2); continue; }
+      if (tileReady(im)) { c.drawImage(im, X0, Y0, X1 - X0, Y1 - Y0); continue; }
       if (li) continue;                // labels: no stand-in while loading
       // while a tile loads, stretch the nearest coarser tile that is already here
-      for (let up = 1; up <= 6 && z - up >= 0; up++) {
+      for (let up = 1; up <= 8 && z - up >= 0; up++) {
         const px = xx >> up, py = ty >> up, p = tileCache.get(tileUrl(tpl, z - up, px, py));
         if (!tileReady(p)) continue;
         const sub = 256 / (1 << up), sx = (xx - (px << up)) * sub, sy = (ty - (py << up)) * sub;
-        c.drawImage(p, sx, sy, sub, sub, gxA - pad, gyA - pad, gxB - gxA + pad * 2, gyB - gyA + pad * 2);
+        c.drawImage(p, sx, sy, sub, sub, X0, Y0, X1 - X0, Y1 - Y0);
         break;
       }
     }
   });
   return z;
 }
-function drawBaseLayer(c) {
-  if (!geo) { c.drawImage(base, 0, 0); return; }
-  c.fillStyle = '#b9c6d2'; c.fillRect(0, 0, W, H);
-  const v = visibleGrid();
-  drawGeoTiles(c, view.s * dpr, Math.floor(v[0]) - 1, Math.floor(v[1]) - 1, Math.ceil(v[2]) + 1, Math.ceil(v[3]) + 1);
+// imagery over the whole screen plus the coarser territory around a detailed area
+function drawGeoBackdrop() {
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#b9c6d2'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = true;
+  const k = view.s * dpr, ox = view.x * dpr, oy = view.y * dpr;
+  drawGeoTiles(ctx, k, ox, oy, cv.width, cv.height);
+  drawParentTerritory(ctx, k, ox, oy);
+  ctx.restore();
 }
+let parentCv = null, parentKey = '';
+function drawParentTerritory(c, k, ox, oy) {
+  const prev = geoStack[geoStack.length - 1];
+  if (!prev) return;
+  const key = geoStack.length + '|' + rgb.map(x => x ? x.join(',') : '').join(';') + '|' + alpha + '|' + prev.W + 'x' + prev.H + '|' + geo.x0 + ',' + geo.y0;
+  if (key !== parentKey) {
+    parentKey = key;
+    parentCv = document.createElement('canvas'); parentCv.width = prev.W; parentCv.height = prev.H;
+    const x = parentCv.getContext('2d'), im = x.createImageData(prev.W, prev.H), d = im.data, a = Math.round(alpha * 255 * .85);
+    for (let i = 0; i < prev.own.length; i++) { const o = prev.own[i], col = rgb[o]; if (o && col) { const p = i * 4; d[p] = col[0]; d[p + 1] = col[1]; d[p + 2] = col[2]; d[p + 3] = a; } }
+    x.putImageData(im, 0, 0);
+    const pw = (prev.geo.x1 - prev.geo.x0) / prev.W, ph = (prev.geo.y1 - prev.geo.y0) / prev.H;
+    x.clearRect((geo.x0 - prev.geo.x0) / pw, (geo.y0 - prev.geo.y0) / ph, (geo.x1 - geo.x0) / pw, (geo.y1 - geo.y0) / ph);
+  }
+  // draw only the visible part of the coarse layer, mapped in double precision
+  const wx = geoWpcX(), wy = geoWpcY();
+  const PX = g => ((prev.geo.x0 + g * (prev.geo.x1 - prev.geo.x0) / prev.W - geo.x0) / wx) * k + ox;
+  const PY = g => ((prev.geo.y0 + g * (prev.geo.y1 - prev.geo.y0) / prev.H - geo.y0) / wy) * k + oy;
+  const per = PX(1) - PX(0), perY = PY(1) - PY(0);
+  const sx0 = clamp(Math.floor((0 - PX(0)) / per), 0, prev.W), sx1 = clamp(Math.ceil((cv.width - PX(0)) / per), 0, prev.W);
+  const sy0 = clamp(Math.floor((0 - PY(0)) / perY), 0, prev.H), sy1 = clamp(Math.ceil((cv.height - PY(0)) / perY), 0, prev.H);
+  if (sx1 <= sx0 || sy1 <= sy0) return;
+  c.drawImage(parentCv, sx0, sy0, sx1 - sx0, sy1 - sy0, PX(sx0), PY(sy0), PX(sx1) - PX(sx0), PY(sy1) - PY(sy0));
+}
+// shade everything outside the detailed area and outline it
+function drawRegionFrame() {
+  if (!geoStack.length) return;
+  const k = view.s * dpr, X0 = view.x * dpr, Y0 = view.y * dpr, X1 = W * k + X0, Y1 = H * k + Y0, cw = cv.width, ch = cv.height;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = 'rgba(15,20,28,.3)';
+  const ya = clamp(Y0, 0, ch), yb = clamp(Y1, 0, ch), xa = clamp(X0, 0, cw), xb = clamp(X1, 0, cw);
+  ctx.fillRect(0, 0, cw, ya); ctx.fillRect(0, yb, cw, ch - yb); ctx.fillRect(0, ya, xa, yb - ya); ctx.fillRect(xb, ya, cw - xb, yb - ya);
+  ctx.setLineDash([8 * dpr, 6 * dpr]); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#e2b84a';
+  ctx.strokeRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.setLineDash([]);
+  ctx.restore();
+}
+const latAtY = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
+function metersPerCell() { return geo ? (geo.x1 - geo.x0) * 40075016 * Math.cos(latAtY((geo.y0 + geo.y1) / 2) * Math.PI / 180) / W : 1; }
+// how far in you may zoom: down to about 0.3 m of ground per screen pixel
+function maxZoom() { return geo ? clamp(metersPerCell() / .3, 40, 2500) : 40; }
 function geoLatLon(gx, gy) {
   const wx = geo.x0 + gx * geoWpcX(), wy = geo.y0 + gy * geoWpcY();
   return [Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180 / Math.PI, wx * 360 - 180];
@@ -945,20 +994,29 @@ function fmtLatLon(lat, lon) {
 const lonToX = lon => (lon + 180) / 360;
 const latToY = lat => { const s = Math.sin(lat * Math.PI / 180); return .5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
 
-function geoDims(ext) {
-  const a = (ext.x1 - ext.x0) / (ext.y1 - ext.y0), M = 1800;
-  return a >= 1 ? [M, Math.max(60, Math.round(M / a))] : [Math.max(60, Math.round(M * a)), M];
+// Grid size for an area: about 2 m per cell when the area is small enough, at most 4096 cells
+// on the long side and 8 million in total (the whole Earth uses a light 1800-cell grid).
+function geoDims(ext, root) {
+  const a = (ext.x1 - ext.x0) / (ext.y1 - ext.y0);
+  let cells = 1800;
+  if (!root) {
+    const m = Math.max(ext.x1 - ext.x0, ext.y1 - ext.y0) * 40075016 * Math.cos(latAtY((ext.y0 + ext.y1) / 2) * Math.PI / 180);
+    cells = clamp(Math.round(m / 2), 400, 4096);
+  }
+  let w = a >= 1 ? cells : Math.round(cells * a), h = a >= 1 ? Math.round(cells / a) : cells;
+  if (w * h > 8e6) { const f = Math.sqrt(8e6 / (w * h)); w = Math.round(w * f); h = Math.round(h * f); }
+  return [Math.max(60, w), Math.max(60, h)];
 }
 function openEarth() {
   setBattles(false);
   const ext = { x0: 0, y0: .1, x1: 1, y1: .75 };
-  const [w, h] = geoDims(ext);
+  const [w, h] = geoDims(ext, true);
   geoStack = [];
   setMap(null, w, h, ext);
   if (!countries.length) { countries = [{ name: 'Страна 1', color: PALETTE[0] }, { name: 'Страна 2', color: PALETTE[1] }]; active = 1; }
   afterChange(); saveImage(); renderGeoPanel();
   setTool('pan');
-  toast('Найдите нужное место (поиск или колёсико), затем нажмите «Детализировать» и рисуйте страны.');
+  toast('Найдите место (поиск или колёсико), возьмите инструмент «Область» (0) и обведите город или район.');
 }
 // objects on the map, in grid cells, carried between two extents
 function moveObjects(fromExt, fromW, fromH, toExt, toW, toH) {
@@ -992,8 +1050,13 @@ function geoRefine() {
   if (!geo) return;
   const v = visibleGrid();
   const gx0 = clamp(v[0], 0, W), gy0 = clamp(v[1], 0, H), gx1 = clamp(v[2], 0, W), gy1 = clamp(v[3], 0, H);
-  if (gx1 - gx0 < 4 || gy1 - gy0 < 4) { toast('Приблизьте карту к нужному месту.'); return; }
-  if ((gx1 - gx0) > W * .92 && (gy1 - gy0) > H * .92) { toast('Сначала приблизьтесь к месту, которое хотите детализировать.'); return; }
+  if ((gx1 - gx0) > W * .92 && (gy1 - gy0) > H * .92) { toast('Сначала приблизьтесь к месту или обведите его инструментом «Область».'); return; }
+  geoRefineRect(gx0, gy0, gx1, gy1);
+}
+function geoRefineRect(gx0, gy0, gx1, gy1) {
+  if (!geo) return;
+  gx0 = clamp(gx0, 0, W); gy0 = clamp(gy0, 0, H); gx1 = clamp(gx1, 0, W); gy1 = clamp(gy1, 0, H);
+  if (gx1 - gx0 < .05 || gy1 - gy0 < .05) { toast('Область слишком маленькая.'); return; }
   setBattles(false);
   const wx = geoWpcX(), wy = geoWpcY();
   const ext = { x0: geo.x0 + gx0 * wx, y0: geo.y0 + gy0 * wy, x1: geo.x0 + gx1 * wx, y1: geo.y0 + gy1 * wy };
@@ -1008,7 +1071,7 @@ function geoRefine() {
   units = moved.units; cities = moved.cities; arrows = moved.arrows; generals = keepView.gens;
   afterChange(); saveImage(); renderGeoPanel(); fit();
   const km = (ext.x1 - ext.x0) * 40075 * Math.cos(geoLatLon(w2 / 2, h2 / 2)[0] * Math.PI / 180);
-  toast('Область детализирована: ' + (km >= 1 ? km.toFixed(km < 10 ? 1 : 0) + ' км' : Math.round(km * 1000) + ' м') + ' в ширину, клетка ≈ ' + fmtMeters(km * 1000 / w2) + '.');
+  toast('Детальная область ' + (km >= 1 ? km.toFixed(km < 10 ? 1 : 0) + ' км' : Math.round(km * 1000) + ' м') + ' в ширину, клетка ≈ ' + fmtMeters(km * 1000 / w2) + '. Приближайте хоть до улиц.');
 }
 const fmtMeters = m => m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1) + ' км' : Math.max(1, Math.round(m)) + ' м';
 function geoBack() {
@@ -1041,7 +1104,7 @@ async function geoSearch(q) {
   if (g[2] < 0 || g[3] < 0 || g[0] > W || g[1] > H) { toast('«' + res[0].display_name.split(',')[0] + '» вне текущей области. Вернитесь к прежней области кнопкой ниже.'); return; }
   const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight;
   const bw = Math.max(g[2] - g[0], 2), bh = Math.max(g[3] - g[1], 2);
-  view.s = clamp(Math.min(r.width / bw, (r.height - strip) / bh) * .8, .05, 400);
+  view.s = clamp(Math.min(r.width / bw, (r.height - strip) / bh) * .8, .05, maxZoom());
   view.x = r.width / 2 - (g[0] + g[2]) / 2 * view.s; view.y = (r.height - strip) / 2 - (g[1] + g[3]) / 2 * view.s;
   userView = true; requestDraw();
   toast('Найдено: ' + res[0].display_name.split(',').slice(0, 2).join(','));
@@ -1049,9 +1112,10 @@ async function geoSearch(q) {
 function renderGeoPanel() {
   $('#geoPanel').hidden = !geo;
   $('#attrib').hidden = !geo;
-  if (!geo) return;
+  if (!geo) { const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = true; if (tool === 'region') setTool('warp'); return; }
   $('#geoLayer').value = geoLayer; $('#geoLabels').checked = geoLabels;
   $('#geoBack').disabled = !geoStack.length;
+  const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = !geo;
   $('#attrib').textContent = (GEO_LAYERS[geoLayer] || GEO_LAYERS.sat).attr + (geoLabels ? ' · подписи Esri' : '');
   const km = (geo.x1 - geo.x0) * 40075 * Math.cos(geoLatLon(W / 2, H / 2)[0] * Math.PI / 180);
   $('#geoInfo').textContent = 'Область ' + fmtMeters(km * 1000) + ' в ширину, одна клетка ≈ ' + fmtMeters(km * 1000 / W) + '. Уровней детализации: ' + geoStack.length + '.';
@@ -1101,10 +1165,12 @@ function drawMap() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   $('#zoom').textContent = Math.round(view.s * 100) + '%';
   if (!W) return;
+  if (geo) drawGeoBackdrop();
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
-  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H);   // cheap drop shadow
+  if (!geo) { ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
   if (view.s >= VEC_ZOOM) drawVectorMap(ctx);
-  else { ctx.imageSmoothingEnabled = true; if (geo) drawBaseLayer(ctx); ctx.drawImage(over, 0, 0); }
+  else { ctx.imageSmoothingEnabled = true; ctx.drawImage(over, 0, 0); }
+  if (geo) drawRegionFrame();
   visCache = new Map();
   drawCities(ctx, true);
   drawArrows(ctx, true);
@@ -1131,6 +1197,21 @@ function drawUi() {
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
     if (tool === 'warp') { ctx.fillStyle = 'rgba(20,25,32,.9)'; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+  if (drag && drag.mode === 'region') {
+    const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
+    const x = Math.min(ax, bx), y = Math.min(ay, by), w = Math.abs(bx - ax), h = Math.abs(by - ay);
+    ctx.fillStyle = 'rgba(226,184,74,.14)'; ctx.fillRect(x, y, w, h);
+    ctx.setLineDash([7, 5]); ctx.lineWidth = 2; ctx.strokeStyle = '#e2b84a'; ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+    if (geo && w > 30) {
+      const wx = geoWpcX(), wy = geoWpcY();
+      const ext = { x0: geo.x0 + Math.min(drag.a.x, drag.b.x) * wx, x1: geo.x0 + Math.max(drag.a.x, drag.b.x) * wx, y0: geo.y0 + Math.min(drag.a.y, drag.b.y) * wy, y1: geo.y0 + Math.max(drag.a.y, drag.b.y) * wy };
+      const k = 40075016 * Math.cos(latAtY((ext.y0 + ext.y1) / 2) * Math.PI / 180), mw = (ext.x1 - ext.x0) * k, mh = (ext.y1 - ext.y0) * k;
+      const t = fmtMeters(mw) + ' × ' + fmtMeters(mh) + ' · клетка ≈ ' + fmtMeters(mw / geoDims(ext)[0]);
+      ctx.font = '600 12px ' + FONT_UI; const tw = ctx.measureText(t).width + 12;
+      ctx.fillStyle = 'rgba(27,32,40,.88)'; ctx.fillRect(x, y - 24, tw, 20);
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(t, x + 6, y - 14);
+    }
   }
   if (drag && drag.mode === 'arrow' && drag.pts.length > 1) {
     const c = rgb[drag.owner] || [20, 25, 32];
@@ -1160,7 +1241,7 @@ function fit() {
 }
 function zoomAt(p, k) {
   userView = true;
-  const ns = clamp(view.s * k, 0.05, geo ? 400 : 40), kk = ns / view.s;
+  const ns = clamp(view.s * k, 0.05, maxZoom()), kk = ns / view.s;
   view.x = p.x - (p.x - view.x) * kk; view.y = p.y - (p.y - view.y) * kk; view.s = ns;
   requestDraw();
 }
@@ -2390,6 +2471,7 @@ function setTool(t) {
   if (t === 'units') renderUnitPanel();
   $('#hint').textContent = HINTS[t];
   cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : t === 'units' ? 'copy' : t === 'cities' ? 'copy' : 'crosshair';
+  if (t === 'region') cv.style.cursor = 'crosshair';
   requestDraw();
 }
 // slider is logarithmic so small radii stay precise and big ones are still reachable
@@ -2473,6 +2555,9 @@ cv.addEventListener('pointerdown', e => {
       const nu = { x: g.x, y: g.y, era, type: unitType, owner: active, ech: unitEch, label: '' };
       units.push(nu); selectUnit(nu); unitsChanged();
     }
+  } else if (tool === 'region') {
+    const q = { x: clamp(g.x, 0, W), y: clamp(g.y, 0, H) };
+    drag = { mode: 'region', a: q, b: q };
   } else if (tool === 'arrows') {
     const a = hitArrow(g);
     if (a) { selArrow = a; renderArrowPanel(); requestDraw(); return; }
@@ -2514,7 +2599,7 @@ cv.addEventListener('pointermove', e => {
     if (pointers.size < 2) return;
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y), c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const ns = clamp(drag.v0.s * d / drag.d0, 0.05, geo ? 400 : 40);
+    const ns = clamp(drag.v0.s * d / drag.d0, 0.05, maxZoom());
     view.x = c.x - (drag.c0.x - drag.v0.x) * ns / drag.v0.s;
     view.y = c.y - (drag.c0.y - drag.v0.y) * ns / drag.v0.s;
     view.s = ns; userView = true; requestDraw();
@@ -2532,6 +2617,8 @@ cv.addEventListener('pointermove', e => {
     drag.moved = true; requestDraw();
   } else if (drag.mode === 'box') {
     drag.b = toGrid(p); requestUi();
+  } else if (drag.mode === 'region') {
+    const g = toGrid(p); drag.b = { x: clamp(g.x, 0, W), y: clamp(g.y, 0, H) }; requestUi();
   } else if (drag.mode === 'arrow') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 4) { drag.pts.push(g); requestUi(); }
@@ -2553,6 +2640,12 @@ function endPointer(e) {
     const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
     drag = null; requestUi();
     if (inBox.length) { const cur = targets(); setSel(cur.concat(inBox.filter(u => !cur.includes(u)))); toast('Выбрано отрядов: ' + targets().length); }
+    return;
+  }
+  if (drag.mode === 'region') {
+    const { a, b } = drag; drag = null; requestUi();
+    if (Math.abs(b.x - a.x) * view.s < 10 || Math.abs(b.y - a.y) * view.s < 10) { toast('Зажмите ЛКМ и протяните рамку вокруг города или района.'); return; }
+    geoRefineRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y));
     return;
   }
   if (drag.mode === 'arrow') {
@@ -2621,7 +2714,8 @@ window.addEventListener('keydown', e => {
   if (tool === 'units' && e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const mine = units.filter(u => u.owner === active); setSel(mine); toast('Выбраны все отряды: ' + (countries[active - 1] || {}).name + ' (' + mine.length + ')'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
-  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities' };
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities', Digit0: 'region' };
+  if (tools[e.code] === 'region' && !geo) return;
   if (tools[e.code]) { if ((tools[e.code] === 'arrows' && !game.arrows) || (tools[e.code] === 'cities' && !game.cities)) return; setTool(tools[e.code]); return; }
   if (tool === 'arrows' && selArrow && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); return; }
   if (tool === 'cities' && selCity && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteCity(); return; }
@@ -3053,6 +3147,7 @@ $('#cityDel').addEventListener('click', deleteCity);
 $('#unitStop').addEventListener('click', () => { targets().forEach(u => delete u.order); renderUnitPanel(); requestDraw(); });
 $('#btnEarth').addEventListener('click', openEarth);
 $('#geoRefine').addEventListener('click', geoRefine);
+$('#geoRegionBtn').addEventListener('click', () => { setTool('region'); toast('Зажмите ЛКМ и протяните рамку вокруг города или района.'); });
 $('#geoBack').addEventListener('click', geoBack);
 $('#geoGo').addEventListener('click', () => geoSearch($('#geoQuery').value));
 $('#geoQuery').addEventListener('keydown', e => { if (e.key === 'Enter') geoSearch(e.target.value); });
