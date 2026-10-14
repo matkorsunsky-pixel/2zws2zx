@@ -142,6 +142,13 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
   position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
   display: flex; gap: 6px; background: var(--panel); padding: 5px; border-radius: 10px; box-shadow: var(--shadow); align-items: center;
 }
+.bar2 { right: auto; left: max(12px, env(safe-area-inset-left, 0px)); }
+.bar .tgl { gap: 6px; font-size: 12.5px; border: 1px solid var(--line); }
+.bar .tgl .sh { display: none; }
+.bar .tgl b { font: 500 11px var(--f-mono); padding: 2px 6px; border-radius: 5px; background: var(--bg); color: var(--muted); }
+.bar .tgl[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.bar .tgl[aria-pressed="true"] b { background: var(--accent); color: var(--panel); }
+#tglBattle[aria-pressed="true"] b { background: var(--danger); }
 .bar button { padding: 7px 9px; border-color: transparent; background: transparent; }
 .bar button:hover:not(:disabled) { background: var(--bg); }
 #zoom { font: 12px var(--f-mono); color: var(--muted); min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -165,7 +172,12 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
   aside { grid-row: 2; border-right: 0; border-top: 1px solid var(--line); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .status > div:first-child { display: none; }
   .status { justify-content: flex-end; }
+  .bar2 { top: calc(62px + env(safe-area-inset-top, 0px)); left: auto; right: max(12px, env(safe-area-inset-right, 0px)); }
+  .bar .tgl .lg { display: none; }
+  .bar .tgl .sh { display: inline; }
+  #toast { top: calc(112px + env(safe-area-inset-top, 0px)); }
 }
+@media (max-width: 1100px) and (min-width: 761px) { .bar2 { top: calc(62px + env(safe-area-inset-top, 0px)); left: auto; right: max(12px, env(safe-area-inset-right, 0px)); } }
 </style>
 </head>
 <body>
@@ -250,6 +262,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <select id="unitEch"><option value="">Без обозначения</option><option value="•">Отделение (•)</option><option value="•••">Взвод (•••)</option><option value="I">Рота (I)</option><option value="II">Батальон (II)</option><option value="III">Полк (III)</option><option value="X">Бригада (X)</option><option value="XX">Дивизия (XX)</option><option value="XXX">Корпус (XXX)</option><option value="XXXX">Армия (XXXX)</option><option value="XXXXX">Фронт, группа армий (XXXXX)</option></select>
       <div class="unitsel" id="unitSel" hidden>
         <b id="unitSelName"></b>
+        <span class="hint" id="unitStats"></span>
         <input id="unitLabel" placeholder="Подпись, например «6-я армия»" aria-label="Подпись отряда">
         <div class="field">
           <label for="uscale">Размер этого отряда</label><output id="uscaleOut">100%</output>
@@ -263,6 +276,19 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <div class="row"><button id="unitOwnerBtn"></button><button id="unitDel">Удалить</button></div>
       </div>
       <p class="hint" id="unitCount"></p>
+      <div class="unitsel">
+        <b>Бои</b>
+        <div class="field">
+          <label for="bspeed">Скорость боёв</label><output id="bspeedOut">6 ходов/с</output>
+          <input type="range" id="bspeed" min="1" max="20" value="6">
+        </div>
+        <div class="field">
+          <label for="pushk">Зона влияния отряда</label><output id="pushkOut">100%</output>
+          <input type="range" id="pushk" min="20" max="300" step="10" value="100">
+        </div>
+        <label class="check"><input type="checkbox" id="autoAdv"><span>Войска сами сближаются с ближайшим противником</span></label>
+        <p class="hint">Отряды, стоящие вплотную к врагу, сражаются каждый ход. Исход решают род войск, размер соединения, состояние отряда, поддержка соседних своих отрядов, бонус обороны на своей земле и бросок случайности. Проигравший отступает, победитель занимает его место. Отряд, у которого состояние упало до нуля, разгромлен.</p>
+      </div>
     </div>
     <label class="check" id="fProtect"><input type="checkbox" id="protect" checked><span>Не заходить на нейтральные земли и море</span></label>
   </section>
@@ -311,6 +337,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>[ ]</b> или <b>Shift + колёсико</b> — радиус кисти, ластика и захвата</li>
       <li><b>F</b> — показать всю карту</li>
       <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
+      <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
       <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
     </ul>
@@ -326,6 +353,14 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <span id="zoom">100%</span>
     <button id="btnZoomIn" aria-label="Приблизить">+</button>
     <button id="btnFit" title="Вся карта (F)">Вся карта</button>
+  </div>
+  <div class="bar bar2">
+    <button class="tgl" id="tglPush" aria-pressed="true" title="Если включено, войска при движении отодвигают границу (клавиша B)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c5 0 5-12 10-12"/><path d="M13 12h8"/><path d="M18 9l3 3-3 3"/></svg>
+      <span class="lg">Войска двигают границу</span><span class="sh">Граница</span> <b>вкл</b></button>
+    <button class="tgl" id="tglBattle" aria-pressed="false" title="Запустить или остановить бои (клавиша P)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5L13 3h3v3l-3.5 3.5"/><path d="M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg>
+      Бои <b>выкл</b></button>
   </div>
   <div class="status">
     <div id="hint"></div>
@@ -473,6 +508,7 @@ function draw() {
   ctx.drawImage(base, 0, 0);
   ctx.drawImage(over, 0, 0);
   drawUnits(ctx, true);
+  drawBattles(ctx);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
     const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = brush * view.s;
@@ -836,9 +872,16 @@ function drawUnit(c, u, S, selected) {
     c.lineWidth = S * .12; c.strokeStyle = 'rgba(255,255,255,.9)'; c.strokeText(u.ech, 0, -h - S * .1);
     c.fillStyle = ink; c.fillText(u.ech, 0, -h - S * .1);
   }
+  const showHp = battlesOn || (u.hp !== undefined && u.hp < 100);
+  const bot = (frame === 'shield' ? h * 1.18 : h);
+  if (showHp) {
+    const hp = clamp(u.hp === undefined ? 100 : u.hp, 0, 100) / 100, bw = w * 1.6, by = bot + S * .08;
+    c.fillStyle = 'rgba(27,32,40,.85)'; c.fillRect(-bw / 2, by, bw, S * .12);
+    c.fillStyle = hp > .6 ? '#3faa58' : hp > .3 ? '#e0a526' : '#d0473f'; c.fillRect(-bw / 2 + S * .02, by + S * .02, (bw - S * .04) * hp, S * .08);
+  }
   if (u.label) {
     c.font = `600 ${S * .38}px ${FONT_UI}`; c.textBaseline = 'top';
-    const y = (frame === 'shield' ? h * 1.18 : h) + S * .1;
+    const y = bot + S * (showHp ? .26 : .1);
     c.lineWidth = S * .14; c.strokeStyle = 'rgba(255,255,255,.92)'; c.strokeText(u.label, 0, y);
     c.fillStyle = ink; c.fillText(u.label, 0, y);
   }
@@ -890,6 +933,7 @@ function renderUnitPanel() {
   if (selUnit) {
     const { def } = unitDef(selUnit), c = countries[selUnit.owner - 1];
     $('#unitSelName').textContent = def[1] + (c ? ' · ' + c.name : '');
+    $('#unitStats').textContent = 'Сила ' + unitPower(selUnit).toFixed(2) + ' · состояние ' + Math.round(hpOf(selUnit)) + '%';
     $('#unitLabel').value = selUnit.label || '';
     $('#unitEch').value = selUnit.ech || '';
     const sc = Math.round((selUnit.scale || 1) * 100);
@@ -903,6 +947,142 @@ function renderUnitPanel() {
     ? 'На карте: ' + countries.map((c, k) => c.name + ' — ' + counts[k]).filter((s, k) => counts[k]).join(', ')
     : 'Войск на карте пока нет. Выберите род войск и щёлкните по карте.';
   renderUnitPalette();
+}
+
+// ---------- troops vs border, battles ----------
+let unitsPushBorder = true, battlesOn = false, battleTimer = 0, battleTicks = 0;
+let battleSpeed = 6, pushK = 1, autoAdvance = false;
+let engaged = [];                     // [attacker, defender, winner] from the last tick, for drawing
+// base combat value by symbol, so the same rules work in every era
+const TYPE_POWER = {
+  x: 1, muskets: 1, sword: 1, spear: 1.1, bow: .8, crossbow: .9, horseshoe: 1.2, helmet: 1.6, swords: .7, wheel: 1.3,
+  elephant: 1.7, catapult: .8, galley: .6, ship: .7, sub: .5, tower: 2, hq: .4, armor: 1.8, mech: 1.5, motor: 1.2,
+  art: 1.3, heavyart: 1.5, mlrs: 1.4, at: 1.1, aa: .7, airborne: 1.1, eng: .8, heli: 1.3, plane: 1.4, biplane: 1,
+  drone: 1, missile: 1.2, sf: 1.2, mg: 1.2, tankmk: 1.4, train: 1.3, cannon: 1.3, grenade: 1.2, horn: 1, sabre: 1.2,
+  dragoon: 1.15, cav: 1.2, partisan: .8
+};
+const ECH_POWER = { '': 1, '•': .3, '•••': .45, 'I': .6, 'II': .8, 'III': 1, 'X': 1.2, 'XX': 1.5, 'XXX': 1.9, 'XXXX': 2.4, 'XXXXX': 3 };
+const unitS = u => unitSize * (u.scale || 1);
+const hpOf = u => u.hp === undefined ? 100 : u.hp;
+const immobile = u => unitDef(u).def[2] === 'tower';
+function unitPower(u) { return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3); }
+function cellOwner(x, y) { const gx = Math.floor(x), gy = Math.floor(y); return gx < 0 || gy < 0 || gx >= W || gy >= H ? 0 : own[gy * W + gx]; }
+const pushRadius = u => Math.max(3, unitS(u) * .9 * pushK);
+
+// Takes over enemy cells along a unit's path. Neutral land and sea stay untouched while protection is on.
+function captureAlong(a, b, R, val) {
+  const R2 = R * R, dist = Math.hypot(b.x - a.x, b.y - a.y);
+  const n = Math.max(1, Math.ceil(dist / Math.max(1, R / 3)));
+  let bx0 = W, by0 = H, bx1 = 0, by1 = 0, changed = 0;
+  for (let s = 0; s <= n; s++) {
+    const cx = a.x + (b.x - a.x) * s / n, cy = a.y + (b.y - a.y) * s / n;
+    const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W, Math.ceil(cx + R + 1));
+    const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H, Math.ceil(cy + R + 1));
+    for (let y = y0; y < y1; y++) {
+      const dy = y + .5 - cy, dy2 = dy * dy;
+      for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
+        const dx = x + .5 - cx, o = own[i];
+        if (o === val || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
+        own[i] = val; changed++;
+      }
+    }
+    if (x1 > x0 && y1 > y0) { bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1); }
+  }
+  if (changed) addDirty(bx0, by0, bx1, by1);
+  return changed;
+}
+function moveUnit(u, nx, ny) {
+  const from = { x: u.x, y: u.y };
+  u.x = clamp(nx, 0, W); u.y = clamp(ny, 0, H);
+  if (unitsPushBorder) captureAlong(from, u, pushRadius(u), u.owner);
+}
+function fight(a, b) {
+  const near = u => units.filter(v => v !== u && v.owner === u.owner && Math.hypot(v.x - u.x, v.y - u.y) < unitS(u) * 3).length;
+  const roll = u => unitPower(u) * (1 + .15 * Math.min(near(u), 4)) * (cellOwner(u.x, u.y) === u.owner ? 1.2 : 1) * (.55 + Math.random() * .9);
+  const pa = roll(a), pb = roll(b);
+  const win = pa >= pb ? a : b, lose = win === a ? b : a;
+  const ratio = Math.max(pa, pb) / (pa + pb);                 // 0.5 … 1
+  lose.hp = hpOf(lose) - (1.5 + 6 * (ratio - .5));
+  win.hp = hpOf(win) - (.8 + 1.5 * (1 - ratio));
+  let dx = lose.x - win.x, dy = lose.y - win.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+  const step = Math.min(unitS(win), unitS(lose)) * .1;
+  let retreated = false;
+  if (!immobile(lose)) {
+    const tx = lose.x + dx * step, ty = lose.y + dy * step;
+    if (cellOwner(tx, ty) === 0 && protect) lose.hp -= 1.5;     // pinned against the sea: nowhere to fall back
+    else { lose.x = clamp(tx, 0, W); lose.y = clamp(ty, 0, H); retreated = true; }
+  }
+  if (!immobile(win)) {
+    const gap = (unitS(win) + unitS(lose)) / 2 * 1.05;
+    const nd = Math.hypot(lose.x - win.x, lose.y - win.y);
+    const adv = Math.min(step, nd - gap);
+    if (adv > 0 || retreated) moveUnit(win, win.x + dx * Math.max(adv, 0), win.y + dy * Math.max(adv, 0));
+    else if (unitsPushBorder) captureAlong(win, win, pushRadius(win), win.owner);
+  }
+  engaged.push([a, b, win]);
+}
+function battleTick() {
+  if (!own || !units.length) return;
+  engaged = [];
+  const fought = new Set();
+  for (const u of units.slice()) {
+    if (fought.has(u)) continue;
+    let best = null, bd = Infinity;
+    for (const v of units) if (v.owner !== u.owner && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    if (!best) continue;
+    if (bd <= (unitS(u) + unitS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
+    else if (autoAdvance && !immobile(u) && bd <= unitS(u) * 8) {
+      const k = unitS(u) * .06 / bd;
+      moveUnit(u, u.x + (best.x - u.x) * k, u.y + (best.y - u.y) * k);
+    }
+  }
+  for (const u of units) if (!fought.has(u) && hpOf(u) < 100) u.hp = Math.min(100, hpOf(u) + .4);
+  const dead = units.filter(u => hpOf(u) <= 0);
+  if (dead.length) {
+    units = units.filter(u => hpOf(u) > 0);
+    if (dead.includes(selUnit)) selUnit = null;
+    toast('Разгромлены: ' + dead.map(u => (u.label || unitDef(u).def[1]) + ' (' + (countries[u.owner - 1] || {}).name + ')').join(', '));
+  }
+  requestDraw();
+  if (++battleTicks % Math.max(1, Math.round(battleSpeed)) === 0 || dead.length) { computePockets(); renderCountries(); renderPockets(); renderUnitPanel(); scheduleSave(); }
+}
+function setBattles(on) {
+  if (on === battlesOn) return;
+  battlesOn = on;
+  clearInterval(battleTimer);
+  if (on) {
+    if (!units.length) { battlesOn = false; toast('Сначала расставьте войска двух сторон.'); return; }
+    pushHist();
+    battleTimer = setInterval(battleTick, 1000 / battleSpeed);
+    toast('Бои начались. Ctrl+Z вернёт карту к моменту начала боёв.');
+  } else {
+    engaged = [];
+    edited(); renderUnitPanel();
+    toast('Бои остановлены.');
+  }
+  syncToggles(); requestDraw();
+}
+function setPushBorder(on) { unitsPushBorder = on; syncToggles(); scheduleSave(); toast(on ? 'Войска двигают границу.' : 'Войска не трогают границу.'); }
+function syncToggles() {
+  const pb = $('#tglPush'), bt = $('#tglBattle');
+  pb.setAttribute('aria-pressed', unitsPushBorder); pb.querySelector('b').textContent = unitsPushBorder ? 'вкл' : 'выкл';
+  bt.setAttribute('aria-pressed', battlesOn); bt.querySelector('b').textContent = battlesOn ? 'идут' : 'выкл';
+}
+function drawBattles(c) {
+  if (!battlesOn || !showUnits) return;
+  for (const [a, b, win] of engaged) {
+    const S = Math.min(unitS(a), unitS(b)), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const col = rgb[win.owner] || [200, 60, 50];
+    c.save();
+    c.strokeStyle = 'rgba(200,40,30,.85)'; c.lineWidth = S * .07; c.setLineDash([S * .18, S * .12]);
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke(); c.setLineDash([]);
+    c.translate(mx, my); c.rotate(Math.random() * .6);
+    c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.strokeStyle = '#1b2028'; c.lineWidth = S * .05;
+    c.beginPath();
+    for (let k = 0; k < 16; k++) { const r = (k % 2 ? .18 : .38) * S, t = k * Math.PI / 8; k ? c.lineTo(Math.cos(t) * r, Math.sin(t) * r) : c.moveTo(r, 0); }
+    c.closePath(); c.fill(); c.stroke();
+    c.restore();
+  }
 }
 
 // ---------- history ----------
@@ -1092,7 +1272,7 @@ cv.addEventListener('pointermove', e => {
     const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
   } else if (drag.mode === 'unit') {
     const g = toGrid(p);
-    drag.u.x = clamp(g.x - drag.ox, 0, W); drag.u.y = clamp(g.y - drag.oy, 0, H); drag.moved = true; requestDraw();
+    moveUnit(drag.u, g.x - drag.ox, g.y - drag.oy); drag.moved = true; requestDraw();
   } else if (drag.mode === 'lasso') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestDraw(); }
@@ -1104,7 +1284,7 @@ function endPointer(e) {
   if (drag.mode === 'pinch') { if (pointers.size === 0) drag = null; return; }
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
   if (drag.mode === 'unit') {
-    if (drag.moved) unitsChanged(); else { hist.pop(); updUndo(); }
+    if (drag.moved) { if (unitsPushBorder) edited(); unitsChanged(); } else { hist.pop(); updUndo(); }
     drag = null; return;
   }
   let wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
@@ -1153,6 +1333,8 @@ window.addEventListener('keydown', e => {
   if (tools[e.code]) { setTool(tools[e.code]); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && selUnit) { selectUnit(null); return; }
+  if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
+  if (e.code === 'KeyP') { setBattles(!battlesOn); return; }
   if (tool === 'units' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
     const k = e.code === 'BracketRight' ? 1.15 : 1 / 1.15;
     if (selUnit) setUnitScale(selUnit, (selUnit.scale || 1) * k, true); else setUnitSize(unitSize * k, true);
@@ -1324,7 +1506,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, units, unitSize, era }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -1343,6 +1525,11 @@ async function restoreSaved() {
     if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
     if (st.sizes) Object.assign(sizes, st.sizes);
     units = st.units || [];
+    if (typeof st.unitsPushBorder === 'boolean') unitsPushBorder = st.unitsPushBorder;
+    if (st.pushK) { pushK = st.pushK; $('#pushk').value = Math.round(pushK * 100); $('#pushkOut').textContent = Math.round(pushK * 100) + '%'; }
+    if (st.battleSpeed) { battleSpeed = st.battleSpeed; $('#bspeed').value = battleSpeed; $('#bspeedOut').textContent = battleSpeed + ' ходов/с'; }
+    if (st.autoAdvance) { autoAdvance = true; $('#autoAdv').checked = true; }
+    syncToggles();
     if (st.unitSize) setUnitSize(st.unitSize);
     if (st.era && ERAS[st.era]) { era = st.era; $('#era').value = era; unitType = ERAS[era].units[0][0]; }
     setTool(tool);
@@ -1416,6 +1603,15 @@ $('#unitLabel').addEventListener('input', e => {
   selUnit.label = e.target.value; requestDraw(); scheduleSave();
 });
 $('#unitDel').addEventListener('click', deleteUnit);
+$('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
+$('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
+$('#bspeed').addEventListener('input', e => {
+  battleSpeed = +e.target.value; $('#bspeedOut').textContent = battleSpeed + ' ходов/с';
+  if (battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
+  scheduleSave();
+});
+$('#pushk').addEventListener('input', e => { pushK = e.target.value / 100; $('#pushkOut').textContent = e.target.value + '%'; scheduleSave(); });
+$('#autoAdv').addEventListener('change', e => { autoAdvance = e.target.checked; scheduleSave(); });
 $('#unitOwnerBtn').addEventListener('click', () => { if (!selUnit || !active) return; pushHist(); selUnit.owner = active; unitsChanged(); });
 $('#tol').addEventListener('input', e => { tol = +e.target.value; $('#tolOut').textContent = tol; });
 $('#fillMode').addEventListener('change', e => { fillMode = e.target.value; setTool(tool); });
