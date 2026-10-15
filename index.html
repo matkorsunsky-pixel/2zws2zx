@@ -319,6 +319,13 @@ main { container-type: size; container-name: stage; }
   display: flex; align-items: center; gap: 5px; max-width: calc(100% - 24px); overflow-x: auto;
   padding: 5px 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 4px 18px rgb(0 0 0 / .12);
 }
+.sidepick { flex-wrap: wrap; row-gap: 6px; }
+.sidepick .usize { flex-basis: 100%; display: flex; align-items: center; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.sidepick .usize button.ech { min-width: 30px; height: 30px; padding: 0 6px; justify-content: center; font: 700 10.5px var(--f-mono); letter-spacing: -.04em; border-color: var(--line); background: var(--bg); }
+.sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 9px); height: calc(var(--k) * 6px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
+.sidepick .usize button.ech.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sidepick .usize .ename { display: flex; flex-direction: column; line-height: 1.1; margin-left: 6px; min-width: 110px; }
+.sidepick .usize .ename b { font-size: 12.5px; } .sidepick .usize .ename small { font-size: 10.5px; color: var(--muted); }
 .sidepick .umode { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); margin-right: 4px; }
 .sidepick .umode button { gap: 5px; font-weight: 600; padding: 5px 10px; }
 .sidepick .umode button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -819,6 +826,7 @@ body:not(.nopanel) .status > #hint { display: none; }
           <li><b>Размер войск</b> задаётся в километрах на местности: значки растут и уменьшаются вместе с картой</li>
           <li><b>Esc</b> — меню (игра встаёт на паузу), <b>H</b> — спрятать или показать панель</li>
           <li><b>W</b> — режим границы: резина → натиск → сгладить</li>
+          <li><b>Размер войска</b> — строка «Размер» на плашке «Ставить»: от отделения до фронта; <b>Z</b> — меньше, <b>X</b> — больше. Чем крупнее войско, тем больше значок, сила и полоса, которую оно занимает</li>
           <li><b>Войска</b>: плашка над картой — <b>Q</b> «Ставить» (щелчок ставит отряд) и <b>E</b> «Двигать» (щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут)</li>
           <li><b>+</b> и <b>−</b> — скорость боёв (5 ступеней, как в HOI4)</li>
           <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
@@ -4311,7 +4319,7 @@ let units = [];             // { x, y, era, type, owner, ech, label }
 let selUnit = null;          // the unit whose details the panel shows
 let selUnits = [];           // every selected unit (Shift + click / Shift + drag adds more)
 const targets = () => selUnits.length ? selUnits : selUnit ? [selUnit] : []; selUnits = [];
-let era = 'ww2', unitType = 'inf', unitEch = '';
+let era = 'ww2', unitType = 'inf', unitEch = 'XX';
 let unitSize = 36, showUnits = true;
 
 const unitDef = u => { const e = ERAS[u.era] || ERAS.ww2; return { frame: e.frame, def: e.units.find(d => d[0] === u.type) || e.units[0] }; };
@@ -4841,9 +4849,14 @@ function unitCellsAt(y) {
   const my = geo.y0 + clamp(y, 0, H) * (geo.y1 - geo.y0) / H;
   return unitSize * 1000 * W / ((geo.x1 - geo.x0) * 40075016 * Math.cos(latAtY(my) * Math.PI / 180));
 }
-const unitS = u => unitCellsAt(u.y) * (u.scale || 1);
+// the size of a force sets the size of its marker on the map, relative to a division: a company is about half
+// a division across, a front twice; the reach of its capture and the distance it fights at follow the marker
+const ECH_SIZE = { '': 1, '•': .42, '•••': .5, 'I': .58, 'II': .68, 'III': .78, 'X': .88, 'XX': 1, 'XXX': 1.35, 'XXXX': 1.7, 'XXXXX': 2.1 };
+const ECH_LIST = [['•', 'Отделение', 'около 10 человек'], ['•••', 'Взвод', 'около 30 человек'], ['I', 'Рота', '100–200 человек'], ['II', 'Батальон', '500–1000 человек'],
+  ['III', 'Полк', '2–3 тысячи'], ['X', 'Бригада', '3–5 тысяч'], ['XX', 'Дивизия', '10–15 тысяч'], ['XXX', 'Корпус', 'три дивизии'], ['XXXX', 'Армия', 'девять дивизий'], ['XXXXX', 'Фронт', 'двадцать семь дивизий']];
+const unitS = u => unitCellsAt(u.y) * (ECH_SIZE[u.ech || ''] || 1) * (u.scale || 1);
 // marker sizes of formations, relative to a division
-const ECH_K = { XXXXX: 2.1, XXXX: 1.7, XXX: 1.35 };
+const ECH_K = ECH_SIZE;
 // what a marker of grid size S is drawn at: never smaller than UNIT_MIN_PX on screen
 const drawS = S => Math.max(S, UNIT_MIN_PX / view.s);
 const hpOf = u => u.hp === undefined ? 100 : u.hp;
@@ -5285,7 +5298,7 @@ function marchFrame(t) {
     if (!u.order) continue;
     if (!game.orders || immobile(u)) { stopOrders(u); continue; }
     any = true;
-    let sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt * battleSpeed / 6;
+    let sp = unitCellsAt(u.y) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt * battleSpeed / 6;
     if (enemyContact(u)) {
       // an offensive: with battles on, the unit fights where it stands and goes on once the way is clear
       if (!u.fighting) { u.fighting = true; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — в бою', u.owner); }
@@ -5413,7 +5426,7 @@ function aiStep(fought) {
     if (!best) continue;
     const d = Math.hypot(best.x - u.x, best.y - u.y);
     if (d < bodyS(u) * .5) continue;
-    const step = bodyS(u) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
+    const step = unitCellsAt(u.y) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
     const lo = cellOwner(nx, ny);
     if ((protect && lo === 0) || (lo && !allied(lo, u.owner) && !atWar(lo, u.owner))) continue;
     moveUnit(u, nx, ny);
@@ -5658,6 +5671,19 @@ function renderSidePick() {
     return;
   }
   const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = 'Ставить за:'; box.append(lbl);
+  // second row: how big a force to place, from a squad to a front (Z smaller, X bigger)
+  const row = document.createElement('div'); row.className = 'usize'; row.setAttribute('role', 'radiogroup'); row.setAttribute('aria-label', 'Размер войска');
+  const rl = document.createElement('span'); rl.className = 'lbl'; rl.textContent = 'Размер:'; row.append(rl);
+  for (const [e, name, note] of ECH_LIST) {
+    const b = document.createElement('button'); b.className = 'ech' + (unitEch === e || (!unitEch && e === 'XX') ? ' on' : ''); b.textContent = e; b.title = name + ' — ' + note + (FORM_CHILD[e] && hierOn() ? '. Ставится соединением: при приближении делится на части' : '');
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitEch === e);
+    b.style.setProperty('--k', ECH_SIZE[e]);
+    b.addEventListener('click', () => setPlaceEch(e));
+    row.append(b);
+  }
+  const cur = ECH_LIST.find(x => x[0] === (unitEch || 'XX'));
+  const cn = document.createElement('span'); cn.className = 'ename'; cn.innerHTML = '<b></b><small></small>'; cn.firstChild.textContent = cur[1]; cn.lastChild.textContent = cur[2]; row.append(cn);
+  const kz = document.createElement('kbd'); kz.textContent = 'Z X'; kz.title = 'Z — меньше, X — больше'; row.append(kz);
   const chip = (i, name, color, title) => {
     const b = document.createElement('button');
     b.className = i === spawnSide ? 'on' : ''; b.title = title; b.setAttribute('aria-pressed', i === spawnSide);
@@ -5679,6 +5705,13 @@ function renderSidePick() {
     box.append(sel);
   }
   const k = document.createElement('kbd'); k.textContent = 'Tab'; k.title = 'Tab переключает, Ctrl + щелчок — наоборот'; box.append(k);
+  box.append(row);
+}
+// the size of the force the next click places (the selected units keep theirs)
+function setPlaceEch(e, quiet) {
+  unitEch = e; $('#unitEch').value = e;
+  renderSidePick(); requestUi(); scheduleSave();
+  if (!quiet) { const c = ECH_LIST.find(x => x[0] === e); if (c) toast('Ставить: ' + c[1].toLowerCase() + ' (' + c[2] + ')'); }
 }
 // a see-through marker under the cursor: what a click would place, in whose colours
 function drawSpawnGhost(c) {
@@ -5688,7 +5721,7 @@ function drawSpawnGhost(c) {
   if (!ct) return;
   const big = hierOn() && FORM_CHILD[unitEch];
   const m = { era, type: unitType, owner: o, ech: unitEch, label: '', x: hover.x, y: hover.y };
-  const Sp = Math.min(260, Math.max(UNIT_MIN_PX, unitS(m) * (big ? ECH_K[unitEch] || 1 : 1) * view.s));
+  const Sp = Math.min(260, Math.max(UNIT_MIN_PX, unitS(m) * view.s));
   const sp = unitSprite(m, Sp * dpr, false), sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y;
   c.save();
   c.globalAlpha = .55;
@@ -6034,6 +6067,12 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
   if (e.code === 'Escape') { if (!drag) openMenu(true); return; }
   if (e.code === 'KeyH') { setPanel(document.body.classList.contains('nopanel')); return; }
+  if ((e.code === 'KeyZ' || e.code === 'KeyX') && tool === 'units') {
+    const i = Math.max(0, ECH_LIST.findIndex(x => x[0] === (unitEch || 'XX')));
+    setPlaceEch(ECH_LIST[clamp(i + (e.code === 'KeyX' ? 1 : -1), 0, ECH_LIST.length - 1)][0]);
+    if (unitMode !== 'place') setUnitMode('place', true);
+    return;
+  }
   if (e.code === 'KeyQ' || e.code === 'KeyE') { if (tool !== 'units') setTool('units'); setUnitMode(e.code === 'KeyE' ? 'move' : 'place'); return; }
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
@@ -6420,7 +6459,7 @@ function scheduleSave() {
     saveFn = null;
     if (!own) return;
     if (geoStore && !battlesOn && !marchRaf) commitWindow();
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -6454,6 +6493,7 @@ async function restoreSaved() {
     if (typeof st.hideCursor === 'boolean') { hideCursor = st.hideCursor; $('#hideCursor').checked = hideCursor; }
     if (typeof st.spawnSide === 'number') spawnSide = st.spawnSide;
     if (st.unitMode) unitMode = st.unitMode;
+    if (typeof st.unitEch === 'string' && st.unitEch in ECH_SIZE) { unitEch = st.unitEch; $('#unitEch').value = unitEch; }
     if (st.warpMode) setWarpMode(st.warpMode, true);
     mapTitle = st.mapTitle || '';
     if (typeof st.warOnly === 'boolean') { warOnly = st.warOnly; $('#warOnly').checked = warOnly; }
