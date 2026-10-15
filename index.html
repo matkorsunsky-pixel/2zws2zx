@@ -246,10 +246,14 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
 .hbtn { width: 42px; height: 42px; padding: 0; justify-content: center; }
 .hud > .hcountry { height: 42px; padding: 0 12px 0 6px; gap: 9px; min-width: 132px; max-width: 240px; flex: 0 1 auto; overflow: hidden; }
 main { container-type: size; container-name: stage; }
+@container stage (max-width: 1300px) { .hud .tgl .tl { display: none; } }
 @container stage (max-width: 1240px) { .hdate small { display: none; } .hdate { min-width: 0; } }
-@container stage (max-width: 1000px) { .hscore small { display: none; } .hscore .hbar { grid-row: 1 / span 2; } .hud .tgl .tl { display: none; } }
-@container stage (max-width: 900px) { .hud > .hscore { display: none !important; } .hctext small { display: none; } }
-@container stage (max-width: 700px) { .hud > .hcountry { min-width: 0; } .hud .hctext { display: none; } .hspeed { display: none; } }
+@container stage (max-width: 1150px) { .hscore small { display: none; } .hscore .hbar { grid-row: 1 / span 2; } }
+@container stage (max-width: 1100px) { .hpockets .pw { display: none; } }
+@container stage (max-width: 960px) { .hud > .hscore { display: none !important; } .hctext small { display: none; } }
+@container stage (max-width: 860px) { .hud .hctext { display: none; } .hud > .hcountry { min-width: 0; } }
+@container stage (max-width: 800px) { .hud { flex-wrap: wrap; } .sidepick { top: calc(114px + env(safe-area-inset-top, 0px)); } }
+@container stage (max-width: 600px) { .hspeed { display: none; } }
 .hflag { width: 30px; height: 30px; border-radius: 8px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25), 0 0 0 2px rgb(255 255 255 / .06); background: var(--muted); }
 .hctext { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .hctext small { font: 600 9.5px var(--f-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
@@ -278,7 +282,7 @@ main { container-type: size; container-name: stage; }
 .hbar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--line); width: 104px; }
 .hbar span { height: 100%; }
 .hpockets { height: 42px; padding: 0 12px; gap: 6px; font: 600 13px var(--f-mono); color: var(--danger); }
-.hgrow { flex: 1; }
+.hud > .hgrow { flex: 1 1 0; min-width: 0; }
 .hgroup { display: flex; align-items: center; gap: 2px; padding: 4px; height: 42px; }
 .hgroup button { padding: 7px 9px; border-color: transparent; background: transparent; height: 32px; }
 .hgroup button:hover:not(:disabled) { background: var(--panel2); }
@@ -353,7 +357,6 @@ body:not(.nopanel) .status > #hint { display: none; }
 #toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
 
-@media (max-width: 1100px) and (min-width: 761px) { .sidepick { top: calc(112px + env(safe-area-inset-top, 0px)); } }
 @media (max-width: 960px) and (min-width: 761px) { .hud { flex-wrap: wrap; } }
 @media (max-width: 760px) {
   body, body.nopanel { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 56%) auto 1fr; }
@@ -2375,10 +2378,10 @@ function drawStoreBackdrop(c, k, ox, oy) {
 function storeOwnerAtGrid(gx, gy) { return cellAt(win.L, Math.floor(win.cx0 + gx), Math.floor(win.cy0 + gy)); }
 function fitWorld() {
   if (!geoStore || !win) return fit();
-  const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight, n = worldCells(win.L);
+  const r = stage.getBoundingClientRect(), top = hudInset(), strip = $('#genStrip').offsetHeight + top, n = worldCells(win.L);
   const y0 = latToY(78) * n - win.cy0, y1 = latToY(-58) * n - win.cy0, x0 = -win.cx0, x1 = n - win.cx0;
   view.s = Math.min(r.width / (x1 - x0), (r.height - strip) / (y1 - y0)) * .96;
-  view.x = (r.width - (x1 - x0) * view.s) / 2 - x0 * view.s; view.y = (r.height - strip - (y1 - y0) * view.s) / 2 - y0 * view.s;
+  view.x = (r.width - (x1 - x0) * view.s) / 2 - x0 * view.s; view.y = top + (r.height - strip - (y1 - y0) * view.s) / 2 - y0 * view.s;
   userView = true; requestDraw(); viewChanged();
 }
 function startEarthStore() {
@@ -3245,10 +3248,10 @@ async function applyWar(id) {
     logEvent('Сценарий: ' + w.name);
     mapTitle = w.name;
     // look at the theatre of war
-    const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight, v = w.view;
+    const r = stage.getBoundingClientRect(), top = hudInset(), strip = $('#genStrip').offsetHeight + top, v = w.view;
     const gx0 = lonToX(v[1]) * n - win.cx0, gx1 = lonToX(v[3]) * n - win.cx0, gy0 = latToY(v[2]) * n - win.cy0, gy1 = latToY(v[0]) * n - win.cy0;
     view.s = Math.min(r.width / (gx1 - gx0), (r.height - strip) / (gy1 - gy0)) * .95;
-    view.x = r.width / 2 - (gx0 + gx1) / 2 * view.s; view.y = (r.height - strip) / 2 - (gy0 + gy1) / 2 * view.s;
+    view.x = r.width / 2 - (gx0 + gx1) / 2 * view.s; view.y = top + (r.height - strip) / 2 - (gy0 + gy1) / 2 * view.s;
     userView = true; requestDraw(); viewChanged();
     setTool('units');
     toast(w.name + ' — карта готова. Играете за: ' + (countries[player - 1] || {}).name + '.');
@@ -3387,13 +3390,15 @@ function drawUi() {
   }
 }
 
+// height of the HUD strip over the top of the map (it floats over the map, so fitted views start below it)
+function hudInset() { const h = $('#hud'); return h && !h.hidden ? Math.min(140, h.offsetTop + h.offsetHeight + 6) : 0; }
 function fit() {
   if (!W) return;
   userView = false;
   const r = stage.getBoundingClientRect();
-  const strip = $('#genStrip') ? $('#genStrip').offsetHeight : 0, rh = Math.max(60, r.height - strip);
+  const strip = $('#genStrip') ? $('#genStrip').offsetHeight : 0, top = hudInset(), rh = Math.max(60, r.height - strip - top);
   const s = Math.min(r.width / W, rh / H) * 0.92;
-  view.s = s; view.x = (r.width - W * s) / 2; view.y = (rh - H * s) / 2;
+  view.s = s; view.x = (r.width - W * s) / 2; view.y = top + (rh - H * s) / 2;
   requestDraw();
 }
 function zoomAt(p, k) {
@@ -3635,6 +3640,7 @@ function fillPolygon(pts, val) {
 
 // Finds pockets: pieces of a country cut off from its largest piece and bordered
 // by exactly one other country (sea and neutral land around them do not break the ring).
+const POCKET_MIN = 30;
 function* pocketWork(src) {
   // 1. cut every row into runs of one owner (neutral cells are not runs)
   let cap = Math.max(1024, H * 8), n = 0;
@@ -3733,7 +3739,8 @@ function* pocketWork(src) {
       }
     }
   }
-  pockets = comps.filter(c => c !== main[c.owner] && c.enc && !c.edge && !(geoStore && sea && sea[c.id] > foe[c.id] * 2.5));
+  // a handful of cells cut off is a speck left by a coarse outline or a stray pixel of paint, not a pocket
+  pockets = comps.filter(c => c !== main[c.owner] && c.enc && !c.edge && c.size >= POCKET_MIN && !(geoStore && sea && sea[c.id] > foe[c.id] * 2.5));
   for (const c of pockets) {
     c.cx = sxs[c.id] / c.size; c.cy = sys[c.id] / c.size;
     const m = foeBy.get(c.id);
@@ -5124,7 +5131,7 @@ function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.
   if (e.st && geoStore) { applyStoreLog(e.st); readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null; }
 }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
-function afterChange() { recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
+function afterChange() { whereText = ''; updWhere(); recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
 function undo() { if (!hist.length || drag) return; const e = hist.pop(), r = snap(); if (e.st) r.st = captureStore(e.st.keys()); redoStack.push(r); restore(e); afterChange(); }
 function redo() { if (!redoStack.length || drag) return; const e = redoStack.pop(), h = snap(); if (e.st) h.st = captureStore(e.st.keys()); hist.push(h); restore(e); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
@@ -5697,7 +5704,7 @@ function loadImageFile(file) {
   img.src = url;
 }
 $('#fileMap').addEventListener('change', e => { loadImageFile(e.target.files[0]); e.target.value = ''; });
-$('#fileProj').addEventListener('change', e => { loadProjectFile(e.target.files[0]); e.target.value = ''; });
+$('#fileProj').addEventListener('change', e => { const f = e.target.files[0]; if (f) mapTitle = f.name.replace(/\.json$/i, ''); loadProjectFile(f); e.target.value = ''; });
 ['dragenter', 'dragover'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add('drop'); }));
 ['dragleave', 'drop'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove('drop'); }));
 stage.addEventListener('drop', e => {
@@ -5935,7 +5942,7 @@ $('#btnGetHtml').addEventListener('click', () => {
   setTimeout(() => toast('Откройте Mezha.html двойным щелчком — программа запустится в браузере.'), 1800);
 });
 // inside the desktop app there is nothing to download: it is the app
-if (inApp) document.querySelectorAll('#btnGetApp, #btnGetHtml').forEach(b => b.remove());
+if (inApp) { document.querySelectorAll('#btnGetApp, #btnGetHtml').forEach(b => b.remove()); const sec = document.querySelector('[data-pane="file"] section:nth-of-type(2)'); if (sec && !sec.querySelector('button')) sec.remove(); }
 else if (!document.getElementById('winshell')) $('#btnGetApp').hidden = true;
 
 $('#btnPng').addEventListener('click', async () => {
@@ -6147,9 +6154,10 @@ function renderHud() {
       $('#hudScore').title = 'Победные очки. ' + top.map(([v, k]) => countries[k].name + ': ' + v).join(', ');
     }
   }
-  const np = pockets.filter(p => p.size >= 3).length;
+  const np = pockets.length;
   $('#hudPockets').hidden = !np;
-  setTxt($('#hudPocketN'), np + ' ' + plural(np, 'котёл', 'котла', 'котлов'));
+  const pn = $('#hudPocketN'), sig = String(np);
+  if (pn.dataset.n !== sig) { pn.dataset.n = sig; pn.innerHTML = ''; const w = document.createElement('span'); w.className = 'pw'; w.textContent = ' ' + plural(np, 'котёл', 'котла', 'котлов'); pn.append(String(np), w); }
 }
 $('#hudMenu').addEventListener('click', () => openMenu(true));
 $('#railMenu').addEventListener('click', () => openMenu(true));
@@ -6159,7 +6167,7 @@ document.querySelectorAll('#hudSpeed button').forEach((b, k) => b.addEventListen
 $('#hudPockets').addEventListener('click', () => { setPanel(true); showTab('war'); $('#pockets').scrollIntoView({ block: 'center' }); });
 
 // ---------- start menu ----------
-let mapTitle = '', menuPaused = false, menuWasBattles = false, menuIngame = false;
+let mapTitle = '', menuPaused = false, menuWasBattles = false, menuIngame = false, firstRun = false;
 const menuOpen = () => !$('#menu').hidden;
 function guessTitle() {
   if (mapTitle) return mapTitle;
@@ -6169,9 +6177,11 @@ function guessTitle() {
 function renderMenuState() {
   const box = $('#mState'), c = countries[player - 1];
   const t = guessTitle();
-  $('#mContinueS').textContent = t + (c ? ' · ' + c.name : '');
+  const fresh = firstRun && !menuIngame;
+  $('#mContinueT').textContent = menuIngame ? 'Вернуться в игру' : fresh ? 'Быстрый старт' : 'Продолжить';
+  $('#mContinueS').textContent = fresh ? 'Учебная карта — войска уже на местах' : t + (c ? ' · ' + c.name : '');
   box.textContent = '';
-  if (!W) { box.hidden = true; return; }
+  if (!W || fresh) { box.hidden = true; return; }
   box.hidden = false;
   const sm = document.createElement('small'); sm.textContent = menuIngame ? 'Сейчас на карте' : 'Последняя игра';
   const b = document.createElement('b'); b.textContent = t;
@@ -6185,7 +6195,7 @@ function renderMenuState() {
 }
 function showScreen(id) {
   document.querySelectorAll('#menu .mscreen').forEach(s => { s.hidden = s.id !== id; });
-  $('#menuMain').hidden = !!id; $('#mState').hidden = !!id || !W;
+  $('#menuMain').hidden = !!id; $('#mState').hidden = !!id || !W || (firstRun && !menuIngame);
   if (!id) setTimeout(() => { if (menuOpen()) $('#mContinue').focus(); }, 20);
 }
 function openMenu(ingame) {
@@ -6198,8 +6208,9 @@ function openMenu(ingame) {
   if (battlesOn) { menuWasBattles = true; clearInterval(battleTimer); } else menuWasBattles = false;
   $('#mContinueT').textContent = ingame ? 'Вернуться в игру' : 'Продолжить';
   $('#mSave').hidden = !ingame || $('#btnProj').hidden;
-  $('#mApp').hidden = $('#btnGetApp').hidden;
-  $('#mCampaignS').textContent = WARS.filter(w => !w.peace).length + ' войн от 1812 года до наших дней';
+  const ga = $('#btnGetApp'); $('#mApp').hidden = !ga || ga.hidden;
+  const nw = WARS.filter(w => !w.peace).length;
+  $('#mCampaignS').textContent = nw + ' ' + plural(nw, 'война', 'войны', 'войн') + ' от 1812 года до наших дней';
   showScreen(null);
   renderMenuState();
   m.hidden = false;
@@ -6208,7 +6219,7 @@ function openMenu(ingame) {
 function closeMenu() {
   const m = $('#menu');
   if (m.hidden) return;
-  m.hidden = true; menuPaused = false;
+  m.hidden = true; menuPaused = false; firstRun = false;
   if (menuWasBattles && battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
   menuWasBattles = false;
   renderHud(); requestDraw();
@@ -6218,14 +6229,16 @@ function menuEsc() {
   if (W) closeMenu();
 }
 $('#mContinue').addEventListener('click', closeMenu);
+// a mouse click leaves no focus on HUD and toolbar buttons, so keys typed afterwards go to the map, not to the button
+document.addEventListener('click', e => { const bt = e.target.closest && e.target.closest('.hud button, .rail button, .mapctl button, .ptabs button'); if (bt && e.detail) bt.blur(); });
 $('#mCampaign').addEventListener('click', () => { showScreen('scrCampaign'); renderCampaign(); });
 $('#mSandbox').addEventListener('click', () => showScreen('scrSandbox'));
 $('#mSettings').addEventListener('click', () => { showScreen('scrSettings'); renderSettings(); });
 $('#mHelp').addEventListener('click', () => { $('#helpKeys').innerHTML = document.querySelector('#panel .help').innerHTML; showScreen('scrHelp'); });
 $('#mSave').addEventListener('click', () => $('#btnProj').click());
 $('#mLoad').addEventListener('click', () => $('#fileProj').click());
-$('#mApp').addEventListener('click', () => $('#btnGetApp').click());
-$('#fileProj').addEventListener('change', () => { mapTitle = 'Проект из файла'; closeMenu(); });
+$('#mApp').addEventListener('click', () => { const ga = $('#btnGetApp'); if (ga) ga.click(); });
+$('#fileProj').addEventListener('change', () => closeMenu());
 document.querySelectorAll('#menu [data-back]').forEach(b => b.addEventListener('click', () => showScreen(null)));
 // sandbox
 function freshWorld() {
@@ -6597,6 +6610,8 @@ $('#genFold').addEventListener('click', () => {
   $('#genFold').textContent = st.classList.contains('folded') ? '▴' : '▾';
   if (st.classList.contains('folded')) closeGen();
 });
+// on a phone the generals strip starts folded, so the map keeps its room
+if (matchMedia('(max-width: 760px)').matches && !$('#genStrip').classList.contains('folded')) $('#genFold').click();
 const curGen = () => selGen && genById(selGen);
 let genNameHist = false;
 $('#genName').addEventListener('focus', () => { genNameHist = false; });
@@ -6748,8 +6763,9 @@ renderLog();
 renderGeoPanel();
 renderWarPanel();
 const skipMenu = /[?&]nomenu/.test(location.search);
-if (!skipMenu) openMenu(false);
-restoreSaved().then(ok => { if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
+// the menu must never stand between the player and the game: if it fails to open, the game still loads
+if (!skipMenu) { try { openMenu(false); } catch (e) { console.error(e); $('#menu').hidden = true; menuPaused = false; } }
+restoreSaved().then(ok => { firstRun = !ok; if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
 })();
 </script>
 </body>
