@@ -789,7 +789,7 @@ function buildVectors(x0, y0, x1, y1) {
   }
   // 2. chain edges into closed outlines; at a diagonal touch prefer the right turn
   const used = new Uint8Array(n);
-  const fills = new Map(), coasts = new Map(), fronts = new Path2D();
+  const fills = new Map(), coasts = new Map(), fronts = new Path2D(), borders = new Path2D();
   const sx = [], sy = [], sd = [], sn = [];
   for (let e0 = 0; e0 < n; e0++) {
     if (used[e0]) continue;
@@ -809,11 +809,17 @@ function buildVectors(x0, y0, x1, y1) {
       if (best < 0) break;
       e = best;
     }
-    addOutline(L, sx, sy, sd, sn, x0, y0, fills, coasts, fronts);
+    addOutline(L, sx, sy, sd, sn, x0, y0, fills, coasts, fronts, borders);
   }
-  return { win: [x0, y0, x1, y1], version: vecVersion, fills, coasts, fronts };
+  return { win: [x0, y0, x1, y1], version: vecVersion, fills, coasts, fronts, borders };
 }
-function addOutline(L, sx, sy, sd, sn, ox, oy, fills, coasts, fronts) {
+// a front runs between two enemies; a border between friends or between countries outside the war
+function isFront(a, b) {
+  if (allied(a, b)) return false;
+  const x = countries[a - 1], y = countries[b - 1];
+  return !countries.some(c => c.side) || !!(x && y && x.side && y.side);
+}
+function addOutline(L, sx, sy, sd, sn, ox, oy, fills, coasts, fronts, borders) {
   const m = sx.length;
   if (m < 4) return;
   // merge straight runs that face the same neighbour
@@ -827,14 +833,37 @@ function addOutline(L, sx, sy, sd, sn, ox, oy, fills, coasts, fronts) {
     else { cx.push(sx[i]); cy.push(sy[i]); cd.push(sd[i]); cn.push(sn[i]); cl.push(1); }
   }
   // turn the corners of each run into control points: long runs keep their straight middle
-  let px = [], py = [], pt = [];
+  let px = [], py = [], pt = [], pin = [];
   for (let k = 0; k < cx.length; k++) {
     const d = cd[k], len = cl[k], bx = cx[k] + ox, by = cy[k] + oy;
+    // long straight runs and the edges of the traced window are real shape, not staircase: they stay where they are
+    const keep = len >= 8 || cn[k] < 0 ? 1 : 0;
     if (len >= 4) {
-      px.push(bx + DXV[d], bx + DXV[d] * (len - 1)); py.push(by + DYV[d], by + DYV[d] * (len - 1)); pt.push(cn[k], cn[k]);
-    } else { px.push(bx + DXV[d] * len / 2); py.push(by + DYV[d] * len / 2); pt.push(cn[k]); }
+      px.push(bx + DXV[d], bx + DXV[d] * (len - 1)); py.push(by + DYV[d], by + DYV[d] * (len - 1)); pt.push(cn[k], cn[k]); pin.push(keep, keep);
+    } else { px.push(bx + DXV[d] * len / 2); py.push(by + DYV[d] * len / 2); pt.push(cn[k]); pin.push(keep); }
   }
-  // two rounds of corner cutting (Chaikin) smooth out the staircase
+  // even out the staircase along each stretch facing one neighbour; the points where the neighbour
+  // changes stay put, so the two countries on either side of a line get exactly the same curve
+  {
+    const q = px.length, fixed = new Uint8Array(q);
+    for (let k = 0; k < q; k++) {
+      const a = (k - 1 + q) % q, c = (k + 1) % q;
+      if (pt[a] !== pt[k] || pin[k] || Math.abs(px[a] - px[k]) + Math.abs(py[a] - py[k]) > 6 || Math.abs(px[c] - px[k]) + Math.abs(py[c] - py[k]) > 6) fixed[k] = 1;
+    }
+    if (q >= 6) {
+      let ax = Float64Array.from(px), ay = Float64Array.from(py), bx = new Float64Array(q), by = new Float64Array(q);
+      for (let it = 0; it < 24; it++) {
+        for (let k = 0; k < q; k++) {
+          if (fixed[k]) { bx[k] = ax[k]; by[k] = ay[k]; continue; }
+          const a = (k - 1 + q) % q, c = (k + 1) % q;
+          bx[k] = ax[k] * .5 + (ax[a] + ax[c]) * .25; by[k] = ay[k] * .5 + (ay[a] + ay[c]) * .25;
+        }
+        const tx = ax; ax = bx; bx = tx; const ty = ay; ay = by; by = ty;
+      }
+      px = Array.from(ax); py = Array.from(ay);
+    }
+  }
+  // two rounds of corner cutting (Chaikin) round off what is left
   for (let it = 0; it < 2; it++) {
     const qx = [], qy = [], qt = [], q = px.length;
     for (let k = 0; k < q; k++) {
@@ -859,7 +888,7 @@ function addOutline(L, sx, sy, sd, sn, ox, oy, fills, coasts, fronts) {
     const nb = pt[k], a = (k + 1) % q;
     let path = null;
     if (nb === 0) { if (!coast) { coast = new Path2D(); coasts.set(o, coast); } path = coast; }
-    else if (nb > 0 && (nb & 255) !== o && L < nb) path = fronts;
+    else if (nb > 0 && (nb & 255) !== o && L < nb) path = isFront(o, nb & 255) ? fronts : borders;
     if (path) { if (path !== prev) path.moveTo(px[k], py[k]); path.lineTo(px[a], py[a]); }
     prev = path;
   }
@@ -913,7 +942,12 @@ function drawVectorMap(c) {
     if (geoStore && win) lw *= clamp(worldCells(win.L) * view.s / 9000, .3, 1);
     c.lineWidth = lw * .7;
     for (const [o, path] of vec.coasts) { const col = rgb[o] || [90, 90, 90]; c.strokeStyle = `rgb(${col[0] * .55 | 0},${col[1] * .55 | 0},${col[2] * .55 | 0})`; c.stroke(path); }
-    c.lineWidth = lw; c.strokeStyle = 'rgba(24,28,36,.92)'; c.stroke(vec.fronts);
+    c.lineWidth = lw * .8; c.strokeStyle = 'rgba(24,28,36,.88)'; c.stroke(vec.borders);
+    // the front: a dark line on a light edge, so it reads over forest, snow, sea and any colour of country
+    // and never thinner than about two pixels, even with the whole world on screen
+    const lf = Math.max(lw * 1.15, 1.9 / view.s);
+    c.lineWidth = lf * 2; c.strokeStyle = 'rgba(255,255,255,.7)'; c.stroke(vec.fronts);
+    c.lineWidth = lf; c.strokeStyle = 'rgba(16,18,24,.96)'; c.stroke(vec.fronts);
   }
   c.restore();
 }
@@ -997,6 +1031,7 @@ function drawGeoBackdrop() {
   ctx.imageSmoothingEnabled = true;
   const k = view.s * dpr, ox = view.x * dpr, oy = view.y * dpr;
   drawGeoTiles(ctx, k, ox, oy, cv.width, cv.height);
+  drawBorderOverlay();                // country and province lines lie under the coloured land, the fronts go over it
   if (geoStore) drawStoreBackdrop(ctx, k, ox, oy); else drawParentTerritory(ctx, k, ox, oy);
   ctx.restore();
 }
@@ -1105,10 +1140,9 @@ function vbRenderTile(z, x, y, lines) {
   c.lineJoin = c.lineCap = 'round';
   const w = clamp(.6 + z * .12, .6, 2);
   if (lines) {
-    // over satellite imagery: light lines with a dark edge, readable over forest, desert and snow alike
-    if (z >= 4) { c.lineWidth = w * 1.6; c.strokeStyle = 'rgba(0,0,0,.25)'; c.stroke(paths[2]); c.lineWidth = w * .7; c.strokeStyle = 'rgba(255,255,255,.55)'; c.stroke(paths[2]); }
-    c.lineWidth = w * 2.6; c.strokeStyle = 'rgba(0,0,0,.45)'; c.stroke(paths[1]);
-    c.lineWidth = w * 1.2; c.strokeStyle = 'rgba(255,240,200,.95)'; c.stroke(paths[1]);
+    // over satellite imagery and under the coloured land: thin single lines, the fronts are drawn above them
+    if (z >= 6) { c.lineWidth = w * .6; c.strokeStyle = 'rgba(255,255,255,.4)'; c.stroke(paths[2]); }
+    c.lineWidth = w * 1.1; c.strokeStyle = 'rgba(255,248,225,.85)'; c.stroke(paths[1]);
     return cvs;
   }
   if (z >= 4) { c.lineWidth = w * .7; c.strokeStyle = VB_PROV; c.stroke(paths[2]); }
@@ -2417,7 +2451,6 @@ function drawMap() {
   if (view.s >= (geoStore ? .9 : VEC_ZOOM)) drawVectorMap(ctx);   // on the Earth borders are always drawn as curves
   else { ctx.imageSmoothingEnabled = true; ctx.drawImage(over, 0, 0); }
   if (geo) drawRegionFrame();
-  drawBorderOverlay();
   drawVecLabels(ctx);
   visCache = new Map();
   drawCities(ctx, true);
