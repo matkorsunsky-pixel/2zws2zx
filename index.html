@@ -620,15 +620,15 @@ body:not(.nopanel) .status > #hint { display: none; }
         <label for="era" class="sub">Эпоха</label>
         <select id="era"><option value="ancient">Древний мир</option><option value="medieval">Средневековье</option><option value="gunpowder">Эпоха пороха (XVII–XIX вв.)</option><option value="ww1">Первая мировая</option><option value="ww2">Вторая мировая</option><option value="modern">Современность</option></select>
         <div class="field">
-          <label for="usize" title="На карте Земли — в километрах на местности: значки растут и уменьшаются вместе с картой">Размер войск на карте</label><output id="usizeOut">36 px</output>
+          <label for="usize" title="На карте Земли — в метрах и километрах на местности: от 20 м (бои за кварталы и улицы) до 300 км. Значки растут и уменьшаются вместе с картой">Размер войск на карте</label><output id="usizeOut">36 px</output>
           <div class="sizer">
             <button id="usizeDown" aria-label="Уменьшить все значки">−</button>
             <input type="range" id="usize" min="0" max="1000" value="500">
             <button id="usizeUp" aria-label="Увеличить все значки">+</button>
           </div>
           <div class="presets" id="usizePresets">
-            <button data-size="16">16</button><button data-size="24">24</button><button data-size="36">36</button><button data-size="56">56</button><button data-size="90">90</button><button data-size="150">150</button>
           </div>
+          <label class="check" style="grid-column: span 2"><input type="checkbox" id="echScale"><span>Крупные соединения — крупнее значок<br><small class="hint">Выключено: все войска одного размера, крупное соединение отличается только силой и обозначением</small></span></label>
         </div>
         <label class="check"><input type="checkbox" id="showUnits" checked><span>Показывать войска</span></label>
         <div class="utypes" id="unitTypes"></div>
@@ -822,11 +822,12 @@ body:not(.nopanel) .status > #hint { display: none; }
           <li><b>,</b> и <b>.</b> (Б и Ю) — предыдущая и следующая страна, <b>Shift + , .</b> — сразу взять её под управление</li>
           <li>Страны в списке перетаскиваются за <b>⋮⋮</b>, разделы слева сворачиваются щелчком по заголовку, <b>Shift + щелчок</b> оставляет открытым только этот раздел</li>
           <li><b>Войны</b> — кнопка вверху: объявить войну одной стране другой или заключить мир. Пока страны не воюют, их граница стоит, а войска не дерутся и не заходят на чужую землю</li>
-          <li>Цвета земли: <b>свой</b> — своя земля, <b>ярче</b> — занятая в войне, <b>темнее</b> — освобождённая. После мира занятое становится своим</li>
+          <li>Цвета земли: <b>свой</b> — своя земля, <b>яркий</b> — занятая в войне; отбитая обратно — снова свой цвет. После мира занятое становится своим</li>
           <li><b>Размер войск</b> задаётся в километрах на местности: значки растут и уменьшаются вместе с картой</li>
           <li><b>Esc</b> — меню (игра встаёт на паузу), <b>H</b> — спрятать или показать панель</li>
           <li><b>W</b> — режим границы: резина → натиск → сгладить</li>
-          <li><b>Размер войска</b> — строка «Размер» на плашке «Ставить»: от отделения до фронта; <b>Z</b> — меньше, <b>X</b> — больше. Чем крупнее войско, тем больше значок, сила и полоса, которую оно занимает</li>
+          <li><b>Размер войска</b> — строка «Размер» на плашке «Ставить»: от отделения до фронта (<b>Z</b> — меньше, <b>X</b> — больше), это сила и обозначение</li>
+          <li><b>Размер войск на карте</b> — от 20 м до 300 км: для боёв за кварталы и микрорайоны поставьте 200–500 м и приблизьте город. По умолчанию все значки одного размера; крупнее у крупных соединений — галочка рядом</li>
           <li><b>Войска</b>: плашка над картой — <b>Q</b> «Ставить» (щелчок ставит отряд) и <b>E</b> «Двигать» (щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут)</li>
           <li><b>+</b> и <b>−</b> — скорость боёв (5 ступеней, как в HOI4)</li>
           <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
@@ -883,7 +884,7 @@ body:not(.nopanel) .status > #hint { display: none; }
     </div>
     <p class="hint">Союзники (страны одной стороны) вступают в войну вместе. Пока страны не воюют, их граница не двигается, войска не дерутся и не заходят на чужую землю.</p>
     <ul class="dlist" id="dList"></ul>
-    <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне (ярче)</span><span><i id="dLeg3"></i>освобождённая (темнее)</span></div>
+    <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне (яркий цвет)</span><span><i id="dLeg3"></i>отбитая обратно — снова свой цвет</span></div>
     <p class="hint">После мира занятые земли становятся землёй того, кто их занял, а освобождённые — снова обычными.</p>
   </div>
   <div class="mapctl" id="mapCtl">
@@ -1005,7 +1006,7 @@ body:not(.nopanel) .status > #hint { display: none; }
         <li>Инструмент <b>Войска (7)</b>: щелчок по карте ставит отряд. По своей земле — свой, по чужой — вражеский.</li>
         <li>Выделите свои отряды рамкой (<b>Shift</b> + протянуть) и <b>протяните ПКМ</b> — они пойдут в наступление по нарисованному пути.</li>
         <li>Нажмите <b>P</b> или ▶ вверху — пойдут бои, время и календарь. Скорость — <b>+</b> и <b>−</b>.</li>
-        <li>Воюют только страны в войне: кнопка <b>«Войны»</b> вверху объявляет войну и заключает мир. Занятая земля — яркий оттенок цвета страны, освобождённая — темнее.</li>
+        <li>Воюют только страны в войне: кнопка <b>«Войны»</b> вверху объявляет войну и заключает мир. Занятая земля — яркий оттенок цвета страны, отбитая обратно — снова свой цвет.</li>
         <li>Окружите врага — образуется <b>котёл</b>. Через несколько дней боёв он сдаётся, отряды внутри попадают в плен.</li>
       </ol></div>
       <div class="setcard"><h4>Граница</h4><ul>
@@ -1092,6 +1093,7 @@ let toastT = 0;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 function addDirty(x0, y0, x1, y1) {
   vecVersion++;
+  if (preview) previewGrow(x0, y0, x1, y1);
   // merge with a region it overlaps (or nearly touches); otherwise keep it separate
   for (const d of dirty) {
     if (x0 <= d[2] + 8 && x1 >= d[0] - 8 && y0 <= d[3] + 8 && y1 >= d[1] - 8) {
@@ -1162,7 +1164,7 @@ function renderRect(x0, y0, x1, y1) {
   const n = rgb.length, CR = new Uint8Array(256 * 3).fill(128), CG = new Uint8Array(256 * 3).fill(128), CB = new Uint8Array(256 * 3).fill(128);
   // three shades per country: own land, occupied land (+256), liberated land (+512)
   for (let k = 1; k < n; k++) for (const [o, src] of [[0, rgb], [256, occRgb], [512, libRgb]]) { const c = src[k] || rgb[k]; CR[k + o] = c[0]; CG[k + o] = c[1]; CB[k + o] = c[2]; }
-  const oc = occ;
+  const oc = occ, sw = getSrcWin();
   let r, g, b, aa;
   for (let y = y0; y < y1; y++) {
     let i = y * W + x0;
@@ -1182,7 +1184,7 @@ function renderRect(x0, y0, x1, y1) {
       else if (showPockets && pocket[i] && pocket[i] !== o && ((x + y) % 10) < 4) {
         const e = pocket[i]; r = CR[e]; g = CG[e]; b = CB[e]; aa = a > 200 ? a : 200;
       }
-      else { const s_ = oc ? oc[i] : 0, q = s_ === 0 || s_ === o ? o : s_ === OCC_LIB ? o + 512 : o + 256; r = CR[q]; g = CG[q]; b = CB[q]; aa = a; }
+      else { const q = oc && occStateAt(i, sw) ? o + 256 : o; r = CR[q]; g = CG[q]; b = CB[q]; aa = a; }
       if (geoMode) { d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = aa; continue; }
       const k = aa / 255;
       d[p] = bp[p] + (r - bp[p]) * k; d[p + 1] = bp[p + 1] + (g - bp[p + 1]) * k; d[p + 2] = bp[p + 2] + (b - bp[p + 2]) * k; d[p + 3] = 255;
@@ -1200,7 +1202,7 @@ let vec = null;
 const DXV = [1, 0, -1, 0], DYV = [0, 1, 0, -1];
 // the working grid of a rectangle as outline labels: owner, plus the encircler in the high bits inside a pocket
 function labelRegion(x0, y0, x1, y1) {
-  const ww = x1 - x0, wh = y1 - y0, pk = showPockets && pockets.length, oc = occBox && occ;
+  const ww = x1 - x0, wh = y1 - y0, pk = showPockets && pockets.length, sw = getSrcWin(), oc = (sw || occBox) && occ;
   // plain owners fit a byte and are copied row by row; inside pockets the encircler rides in the second byte,
   // and the occupation state (whose land it was, or liberated) in the third
   const lab = oc ? new Int32Array(ww * wh) : pk ? new Uint16Array(ww * wh) : new Uint8Array(ww * wh);
@@ -1210,19 +1212,24 @@ function labelRegion(x0, y0, x1, y1) {
     for (let y = by0; y < by1; y++) for (let x = bx0, i = y * W + bx0, j = (y - y0) * ww + bx0 - x0; x < bx1; x++, i++, j++) fn(i, j);
   };
   if (pk) for (const p of pockets) each(p.box, (i, j) => { const o = own[i], q = pocket[i]; if (o && q && q !== o) lab[j] = o + (q << 8); });
-  if (oc && occBox) each([occBox[0] - 2, occBox[1] - 2, occBox[2] + 2, occBox[3] + 2], (i, j) => { const o = own[i], st = oc[i]; if (o && st && st !== o) lab[j] += st << 16; });
+  if (oc) each(sw ? [x0, y0, x1, y1] : [occBox[0] - 2, occBox[1] - 2, occBox[2] + 2, occBox[3] + 2], (i, j) => { const st = occStateAt(i, sw); if (st) lab[j] += st << 16; });
   return lab;
 }
 // the same labels from copied rows of owner, pocket and occupation (this runs in the background thread)
 function labelsFrom(d) {
-  const n = d.ww * d.wh, own = d.own, pk = d.pk, oc = d.oc;
+  const n = d.ww * d.wh, own = d.own, pk = d.pk, oc = d.oc, src = d.src, set = d.set;
   if (!pk && !oc) return own;
   const lab = oc ? new Int32Array(n) : new Uint16Array(n);
   for (let i = 0; i < n; i++) {
     const o = own[i];
     if (!o) continue;
-    const q = pk ? pk[i] : 0, st = oc ? oc[i] : 0;
-    lab[i] = (q && q !== o ? o + (q << 8) : o) + (st && st !== o ? st << 16 : 0);
+    const q = pk ? pk[i] : 0;
+    let st = 0;
+    // occupied: on a scenario map, land the scenario gives to someone else (unless painted by hand or settled
+    // by a peace); elsewhere the mark kept for the cell. 254 and 255 are plain marks
+    if (src) { const c = src[i]; if (c && c !== o && oc[i] !== 254 && !(set && set[(o << 8) | c])) st = c; }
+    else if (oc) { const v = oc[i]; if (v && v < 254 && v !== o) st = v; }
+    lab[i] = (q && q !== o ? o + (q << 8) : o) + (st << 16);
   }
   return lab;
 }
@@ -1361,8 +1368,6 @@ function vecPaths(outs) {
       let path = null;
       if (nb === 0) { if (!coast) { coast = new Path2D(); coasts.set(o, coast); } path = coast; }
       else if (nb > 0 && (nb & 255) !== o && L < nb) path = isFront(o, nb & 255) ? fronts : borders;
-      // inside one country's land: the border as it was before the war, where occupied land meets other land
-      else if (nb > 0 && (nb & 255) === o && L < nb && coreOf(L) !== coreOf(nb)) path = olds;
       if (path) { if (path !== prev) path.moveTo(px[k], py[k]); path.lineTo(px[a], py[a]); }
       prev = path;
     }
@@ -1399,9 +1404,10 @@ function vecAsync(x0, y0, x1, y1) {
       vecWorker.onerror = () => { vecWorkerOff = true; vecJob = null; requestDraw(); };
     }
     const ww = x1 - x0, wh = y1 - y0, rows = a => { const o = new Uint8Array(ww * wh); for (let y = 0; y < wh; y++) { const i = (y0 + y) * W + x0; o.set(a.subarray(i, i + ww), y * ww); } return o; };
-    const pk = showPockets && pockets.length ? rows(pocket) : null, oc = occBox ? rows(occ) : null, ow = rows(own);
+    const sw = getSrcWin();
+    const pk = showPockets && pockets.length ? rows(pocket) : null, oc = sw || occBox ? rows(occ) : null, ow = rows(own), src = sw ? rows(sw) : null, set = sw && settled.size ? settledArr.slice() : null;
     vecJob = { id: Math.random(), rect: [x0, y0, x1, y1], version: vecVersion, W, H, win };
-    vecWorker.postMessage({ id: vecJob.id, own: ow, pk, oc, ww, wh, ox: x0, oy: y0, iters: vecIters() }, [ow.buffer, ...(pk ? [pk.buffer] : []), ...(oc ? [oc.buffer] : [])]);
+    vecWorker.postMessage({ id: vecJob.id, own: ow, pk, oc, src, set, ww, wh, ox: x0, oy: y0, iters: vecIters() }, [ow.buffer, ...[pk, oc, src, set].filter(Boolean).map(a => a.buffer)]);
     return true;
   } catch (e) { vecWorkerOff = true; vecJob = null; return false; }
 }
@@ -1457,7 +1463,7 @@ function drawVecSet(c, vec, hole, part, opaque) {
   for (const [L, path] of vec.fills) {
     const o = L & 255, st = (L >> 16) & 255;
     if (part !== 'lines') {
-      const col = (st === 0 ? rgb[o] : st === OCC_LIB ? libRgb[o] : occRgb[o]) || rgb[o] || [128, 128, 128];
+      const col = (st === 0 ? rgb[o] : occRgb[o]) || rgb[o] || [128, 128, 128];
       c.globalAlpha = a; c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill(path);
     }
     const enc = (L >> 8) & 255;
@@ -1478,7 +1484,6 @@ function drawVecSet(c, vec, hole, part, opaque) {
     c.lineWidth = lw * .7;
     for (const [o, path] of vec.coasts) { const col = rgb[o] || [90, 90, 90]; c.strokeStyle = `rgb(${col[0] * .55 | 0},${col[1] * .55 | 0},${col[2] * .55 | 0})`; c.stroke(path); }
     c.lineWidth = lw * .8; c.strokeStyle = 'rgba(24,28,36,.88)'; c.stroke(vec.borders);
-    if (vec.olds) { c.lineWidth = lw * .55; c.setLineDash([lw * 2.2, lw * 1.8]); c.strokeStyle = 'rgba(24,28,36,.5)'; c.stroke(vec.olds); c.setLineDash([]); }
     // the front: a dark line on a light edge, so it reads over forest, snow, sea and any colour of country
     // and never thinner than about two pixels, even with the whole world on screen
     const lf = Math.max(lw * 1.15, 1.9 / view.s);
@@ -3341,10 +3346,46 @@ let occ = null, occ0 = null, occWin0 = null, occStore = new Map(), occAny = fals
 // the state a cell gets when it passes from one owner to another
 function occNext(c, from, to) {
   if (from === to) return c;
+  // on a scenario map it needs no mark: whose land it is comes from the scenario's map at every zoom
+  if (vsrc) return 0;
   if (!from || !to || !atWar(from, to)) return 0;     // painted by hand, or taken from no one: plain land
-  const core = c && c !== OCC_LIB ? c : from;          // whose land it was before the war
+  const core = c && c < OCC_PLAIN ? c : from;          // whose land it was before the war
   occAny = true;
-  return to === core ? OCC_LIB : core;
+  return to === core ? 0 : core;                      // won back: the owner's own colour again
+}
+// OCC_PLAIN: shown in the owner's own colour whatever the map says (painted by hand on a scenario map)
+const OCC_PLAIN = 254;
+// pairs (holder, old owner) settled by a peace on a scenario map: such land is the holder's own from then on
+let settled = new Set();
+const settledArr = new Uint8Array(65536);
+function syncSettled() { settledArr.fill(0); for (const k of settled) settledArr[k] = 1; }
+// the scenario map's owner of every window cell, read from the same tiles the territory starts from
+let srcWin = null, srcWinKey = '';
+function getSrcWin() {
+  if (!vsrc || !geoStore || !win) return null;
+  const key = win.L + ',' + win.cx0 + ',' + win.cy0 + ',' + W + ',' + H + ',' + srcVer;
+  if (key === srcWinKey && srcWin && srcWin.length === W * H) return srcWin;
+  srcWinKey = key; srcWin = new Uint8Array(W * H);
+  const L = win.L, nT = 1 << L;
+  const ty0 = Math.floor(win.cy0 / TS), ty1 = Math.floor((win.cy0 + H - 1) / TS), tx0 = Math.floor(win.cx0 / TS), tx1 = Math.floor((win.cx0 + W - 1) / TS);
+  for (let ty = Math.max(0, ty0); ty <= Math.min(nT - 1, ty1); ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const t = srcTile(L, ((tx % nT) + nT) % nT, ty);
+    const gx0 = Math.max(win.cx0, tx * TS), gx1 = Math.min(win.cx0 + W, (tx + 1) * TS), gy0 = Math.max(win.cy0, ty * TS), gy1 = Math.min(win.cy0 + H, (ty + 1) * TS);
+    for (let gy = gy0; gy < gy1; gy++) {
+      const row = (gy - win.cy0) * W - win.cx0;
+      if (typeof t === 'number') srcWin.fill(t, row + gx0, row + gx1);
+      else { const a = ((gy - ty * TS) << 8) + gx0 - tx * TS; srcWin.set(t.subarray(a, a + gx1 - gx0), row + gx0); }
+    }
+  }
+  return srcWin;
+}
+// whose land a cell was, if its present owner holds it as occupied land; 0 = shown in the owner's own colour
+function occStateAt(i, sw) {
+  const o = own[i];
+  if (!o) return 0;
+  if (sw) { const c = sw[i]; return !c || c === o || occ[i] === OCC_PLAIN || settledArr[(o << 8) | c] ? 0 : c; }
+  const v = occ[i];
+  return v && v < OCC_PLAIN && v !== o ? v : 0;
 }
 let occBox = null;                   // [x0, y0, x1, y1) around every occupied or liberated cell of the window
 function occGrow(i) {
@@ -3511,7 +3552,7 @@ async function applyWar(id) {
     gameDate = Date.parse(w.date + 'T04:00:00Z'); gameLog = [];
     era = w.era; $('#era').value = era; unitType = ERAS[era].units[0][0]; paletteKey = '';
     exclaves = []; exclaveLearn = !w.siege;   // pieces cut off at the start are exclaves (Kaliningrad), unless the scenario opens with real encirclements
-    wars = scenarioWars(w); occStore = new Map(); loadOcc(); recalcWars();
+    wars = scenarioWars(w); settled = new Set(); syncSettled(); occStore = new Map(); loadOcc(); recalcWars();
     afterChange();
     checkCities(true); saveImage(); renderGeoPanel(); syncGameControls();
     logEvent('Сценарий: ' + w.name);
@@ -3544,7 +3585,7 @@ function draw() {
   if (dirty.length && own) {
     // on the Earth the territory is always drawn as curves: the pixel picture is only brought up to date when
     // it is needed (saving a picture)
-    if (geoStore) overStale = true; else { for (const d of dirty) renderRect(d[0], d[1], d[2], d[3]); rasterEpoch++; }
+    if (geoStore && !preview) overStale = true; else { for (const d of dirty) renderRect(d[0], d[1], d[2], d[3]); rasterEpoch++; }
     needMap = true;
   }
   dirty = [];
@@ -3552,6 +3593,53 @@ function draw() {
   if (needUi) { needUi = false; drawUi(); }
 }
 let layerSig = '';
+// the preview of a border drag: the imagery under the map (taken once when the drag starts) and the box of
+// cells changed so far; it is drawn until the curves traced after the drag are on screen
+let preview = null;
+const prevCv = document.createElement('canvas'), pctx = prevCv.getContext('2d');
+function startPreview() {
+  preview = { box: null, view: view.x + ',' + view.y + ',' + view.s, until: 0 };
+  prevCv.width = mapCv.width; prevCv.height = mapCv.height;
+  pctx.setTransform(1, 0, 0, 1, 0, 0); pctx.clearRect(0, 0, prevCv.width, prevCv.height);
+  if (geo) drawGeoBackdrop(pctx);
+  else { pctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y); pctx.drawImage(base, 0, 0); }
+}
+// the cell picture is kept current over the whole preview box: changed rectangles are painted as they come
+// (in draw), and when the box widens, the strips it gains are painted once
+function previewGrow(x0, y0, x1, y1) {
+  if (!preview) return;
+  const b = preview.box, m = borderW + 2;
+  const n = b ? [Math.min(b[0], x0), Math.min(b[1], y0), Math.max(b[2], x1), Math.max(b[3], y1)] : [x0, y0, x1, y1];
+  const R = (a, c, d, e) => { a = Math.max(0, a - m); c = Math.max(0, c - m); d = Math.min(W, d + m); e = Math.min(H, e + m); if (d > a && e > c) renderRect(a, c, d, e); };
+  if (!b) R(...n);
+  else {
+    if (n[1] < b[1]) R(n[0], n[1], n[2], b[1]);
+    if (n[3] > b[3]) R(n[0], b[3], n[2], n[3]);
+    if (n[0] < b[0]) R(n[0], b[1], b[0], b[3]);
+    if (n[2] > b[2]) R(b[2], b[1], n[2], b[3]);
+  }
+  preview.box = n;
+}
+function drawPreview(vecMode) {
+  const p = preview;
+  // the view moved, or the traced curves have caught up with the drag: the preview is no longer needed
+  if (!vecMode || p.view !== view.x + ',' + view.y + ',' + view.s || (p.until && vec && vec.version >= p.until)) { preview = null; return; }
+  if (!p.box) return;
+  const m = borderW + 1, x0 = Math.max(0, p.box[0] - m), y0 = Math.max(0, p.box[1] - m), x1 = Math.min(W, p.box[2] + m), y1 = Math.min(H, p.box[3] + m);
+  if (x1 <= x0 || y1 <= y0) return;
+  const k = dpr * view.s, X0 = Math.floor(x0 * k + view.x * dpr), Y0 = Math.floor(y0 * k + view.y * dpr), X1 = Math.ceil(x1 * k + view.x * dpr), Y1 = Math.ceil(y1 * k + view.y * dpr);
+  const cx0 = Math.max(0, X0), cy0 = Math.max(0, Y0), cx1 = Math.min(cv.width, X1), cy1 = Math.min(cv.height, Y1);
+  if (cx1 <= cx0 || cy1 <= cy0) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(prevCv, cx0, cy0, cx1 - cx0, cy1 - cy0, cx0, cy0, cx1 - cx0, cy1 - cy0);
+  ctx.beginPath(); ctx.rect(cx0, cy0, cx1 - cx0, cy1 - cy0); ctx.clip();
+  ctx.setTransform(k, 0, 0, k, view.x * dpr, view.y * dpr);
+  ctx.imageSmoothingEnabled = true;
+  // the cells are taken two beyond the clip, so the smoothing at its edge blends real cells, not a seam
+  const sx0 = Math.max(0, x0 - 2), sy0 = Math.max(0, y0 - 2), sx1 = Math.min(W, x1 + 2), sy1 = Math.min(H, y1 + 2);
+  ctx.drawImage(over, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0, sy0, sx1 - sx0, sy1 - sy0);
+  ctx.restore();
+}
 function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -3561,7 +3649,10 @@ function drawMap() {
   // switch between pixels and curves at some zoom would make the same border look different
   const vecMode = geoStore || view.s >= VEC_ZOOM;
   // territory changed under the curves: retrace them in the background; the layer below is kept until then
-  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff) vecAsync(...vec.win);
+  // (not while a border is being dragged: the dragged area is painted from cells over the layer meanwhile)
+  const editing = drag && (drag.mode === 'warp' || drag.mode === 'paint');
+  if (vecMode && editing && !preview) startPreview();
+  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && !editing) vecAsync(...vec.win);
   const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   if (layerSig !== sigNow()) {
     const m = mctx;
@@ -3576,6 +3667,7 @@ function drawMap() {
     drawTerritoryLabels(m);
     layerSig = sigNow();
   }
+  if (preview) drawPreview(vecMode);
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
   visCache = new Map();
   drawCities(ctx, true);
@@ -3711,7 +3803,7 @@ function stamp(a, b, val) {
       const dy = y + .5 - cy, dy2 = dy * dy;
       for (let x = x0; x < x1; x++) {
         const dx = x + .5 - cx;
-        if (dx * dx + dy2 <= R2) { own[y * W + x] = val; occ[y * W + x] = 0; }
+        if (dx * dx + dy2 <= R2) { own[y * W + x] = val; occ[y * W + x] = vsrc ? OCC_PLAIN : 0; }
       }
     }
     if (x1 > x0 && y1 > y0) { bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1); }
@@ -3791,6 +3883,18 @@ function warpTo(p0, q) {
 }
 function commitBox(b) {
   for (let y = b[1]; y < b[3]; y++) { const s = y * W + b[0], e = y * W + b[2]; own0.set(own.subarray(s, e), s); occ0.set(occ.subarray(s, e), s); }
+}
+// each frame the grip moves part of the way to the hand (all the way for a short distance), so a front being
+// pulled glides instead of jumping between mouse events; it stops when it has caught up
+function warpFollow() {
+  if (!drag || drag.mode !== 'warp') return;
+  drag.pending = false;
+  const t = drag.tp || drag.p, dx = t.x - drag.p.x, dy = t.y - drag.p.y, d = Math.hypot(dx, dy) * view.s;
+  if (d < .5) return;
+  const k = d < 3 ? 1 : .45;
+  drag.p = { x: drag.p.x + dx * k, y: drag.p.y + dy * k };
+  warpStep();
+  if (k < 1) { drag.pending = true; requestAnimationFrame(warpFollow); }
 }
 function warpStep() {
   if (!drag || drag.mode !== 'warp') return;
@@ -3928,7 +4032,7 @@ function fillAt(g) {
   stack[sp++] = start; seen[start] = 1;
   while (sp) {
     const i = stack[--sp];
-    own[i] = active; occ[i] = 0; count++;
+    own[i] = active; occ[i] = vsrc ? OCC_PLAIN : 0; count++;
     const x = i % W, y = (i - x) / W;
     if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
     if (x > 0 && !seen[i - 1]) { seen[i - 1] = 1; if (test(i - 1)) stack[sp++] = i - 1; }
@@ -4257,6 +4361,22 @@ function renderPockets() {
   renderHud();
   $('#btnTakeAll').hidden = pockets.length < 2;
 }
+// After a border drag: the same work as edited(), spread out so the frame the button is released in stays light.
+// Pockets are searched in slices; the window goes to the tiles when the browser is idle (or on zoom, or on leaving).
+function editedSoon() {
+  updUndo(); renderHud();
+  computePocketsSoon(() => { renderPockets(); if (typeof game !== 'undefined') logPockets(); requestDraw(); });
+  setTimeout(() => {
+    renderCountries(); scheduleSave(); scheduleCommit();
+    if (typeof game !== 'undefined') { if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); }
+  }, 40);
+}
+let commitIdle = 0;
+function scheduleCommit() {
+  if (!geoStore || commitIdle) return;
+  const run = () => { commitIdle = 0; if (drag && (drag.mode === 'warp' || drag.mode === 'paint')) { scheduleCommit(); return; } commitWindow(); };
+  commitIdle = window.requestIdleCallback ? requestIdleCallback(run, { timeout: 15000 }) : setTimeout(run, 3000);
+}
 // called after every finished edit
 function edited() { if (geoStore) commitWindow(); computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); if (typeof game !== 'undefined') { logPockets(); if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); } }
 
@@ -4566,12 +4686,12 @@ function layoutUnits() {
   for (const u of loose) leaf(u);
   const visit = n => {
     if (!n.all.length) return;
-    const nodeS = unitCellsAt(n.y) * (ECH_K[n.f.ech] || 1), pad = nodeS * 2;
+    const nodeS = unitCellsAt(n.y) * echK(n.f.ech), pad = nodeS * 2;
     if (n.x1 < vx0 - pad || n.x0 > vx1 + pad || n.y1 < vy0 - pad || n.y0 > vy1 + pad) { n.f._open = false; return; }
     const parts = [...n.sub.filter(q => q.all.length), ...n.leaves];
     if (parts.length === 1) { const q = parts[0]; if (q.all) visit(q); else leaf(q); return; }
     // the parts' markers on screen: open when they are big enough to read and stand clear of each other
-    const partS = unitCellsAt(n.y) * (ECH_K[FORM_CHILD[n.f.ech]] || 1), partPx = partS * s;
+    const partS = unitCellsAt(n.y) * echK(FORM_CHILD[n.f.ech]), partPx = partS * s;
     let sep = Infinity;
     for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
       const d = Math.hypot(parts[a].x - parts[b].x, parts[a].y - parts[b].y) * s; if (d < sep) sep = d;
@@ -4880,7 +5000,9 @@ function unitCellsAt(y) {
 const ECH_SIZE = { '': 1, '•': .42, '•••': .5, 'I': .58, 'II': .68, 'III': .78, 'X': .88, 'XX': 1, 'XXX': 1.35, 'XXXX': 1.7, 'XXXXX': 2.1 };
 const ECH_LIST = [['•', 'Отделение', 'около 10 человек'], ['•••', 'Взвод', 'около 30 человек'], ['I', 'Рота', '100–200 человек'], ['II', 'Батальон', '500–1000 человек'],
   ['III', 'Полк', '2–3 тысячи'], ['X', 'Бригада', '3–5 тысяч'], ['XX', 'Дивизия', '10–15 тысяч'], ['XXX', 'Корпус', 'три дивизии'], ['XXXX', 'Армия', 'девять дивизий'], ['XXXXX', 'Фронт', 'двадцать семь дивизий']];
-const unitS = u => unitCellsAt(u.y) * (ECH_SIZE[u.ech || ''] || 1) * (u.scale || 1);
+let echScale = false;              // bigger forces get bigger markers (off: every marker the size set for troops)
+const echK = e => echScale ? ECH_SIZE[e || ''] || 1 : 1;
+const unitS = u => unitCellsAt(u.y) * echK(u.ech) * (u.scale || 1);
 // marker sizes of formations, relative to a division
 const ECH_K = ECH_SIZE;
 // what a marker of grid size S is drawn at: never smaller than UNIT_MIN_PX on screen
@@ -5500,11 +5622,12 @@ function applySystems() {
 }
 
 // ---------- history ----------
-function snap() { exclaveLearn = false; if (geoStore) commitOcc(); return { wr: JSON.stringify(wars), oc: occ ? occ.slice() : null, os: geoStore ? new Map(occStore) : null, vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms) }; }
+function snap() { exclaveLearn = false; if (geoStore) commitOcc(); return { sl: [...settled], wr: JSON.stringify(wars), oc: occ ? occ.slice() : null, os: geoStore ? new Map(occStore) : null, vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
 function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); forms = JSON.parse(e.fm || '[]'); selArrow = selCity = null;
   if (e.st && geoStore) { applyStoreLog(e.st); readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null; }
   if (e.wr) { wars = JSON.parse(e.wr); recalcWars(); }
+  if (e.sl) { settled = new Set(e.sl); syncSettled(); }
   if (e.os) occStore = new Map(e.os);
   if (e.oc && occ && e.oc.length === occ.length) { occ.set(e.oc); occWin0 = occ.slice(); }
   occScan();
@@ -5629,6 +5752,7 @@ function removeCountry(idx) {
   if (player === idx) player = 1; else if (player > idx) player--;
   const rn = x => x > idx ? x - 1 : x;
   wars = wars.filter(w => w.all || (w.a !== idx && w.b !== idx)).map(w => w.all ? w : Object.assign({}, w, { a: rn(w.a), b: rn(w.b) }));
+  settled = new Set([...settled].filter(k => (k >> 8) !== idx && (k & 255) !== idx).map(k => (rn(k >> 8) << 8) | rn(k & 255))); syncSettled();
   const remapOcc = v => v === OCC_LIB || !v ? v : v === idx ? 0 : rn(v);
   for (let i = 0; i < occ.length; i++) if (occ[i]) occ[i] = own[i] ? remapOcc(occ[i]) : 0;
   if (geoStore) { occWin0 = occ.slice(); for (const [k, t] of [...occStore]) { const nt = t.map(remapOcc); occStore.set(k, nt); } }
@@ -5703,7 +5827,7 @@ function renderSidePick() {
   for (const [e, name, note] of ECH_LIST) {
     const b = document.createElement('button'); b.className = 'ech' + (unitEch === e || (!unitEch && e === 'XX') ? ' on' : ''); b.textContent = e; b.title = name + ' — ' + note + (FORM_CHILD[e] && hierOn() ? '. Ставится соединением: при приближении делится на части' : '');
     b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitEch === e);
-    b.style.setProperty('--k', ECH_SIZE[e]);
+    b.style.setProperty('--k', echScale ? ECH_SIZE[e] : 1);
     b.addEventListener('click', () => setPlaceEch(e));
     row.append(b);
   }
@@ -5942,11 +6066,9 @@ cv.addEventListener('pointermove', e => {
     userView = true;
     view.x = drag.vx + p.x - drag.sx; view.y = drag.vy + p.y - drag.sy; requestDraw();
   } else if (drag.mode === 'warp') {
-    drag.p = toGrid(p);
-    if (!drag.pending) { drag.pending = true; requestAnimationFrame(() => { if (drag && drag.mode === 'warp') { drag.pending = false; warpStep(); } }); }
-    // pockets show up while the line is still being dragged, not only once the button is released
-    const now = performance.now();
-    if (now - drag.pk > 350 && drag.wm !== 'smooth') { drag.pk = now; computePocketsSoon(() => { renderPockets(); requestUi(); }); }
+    drag.tp = toGrid(p);
+    if (!drag.pending) { drag.pending = true; requestAnimationFrame(warpFollow); }
+
   } else if (drag.mode === 'paint') {
     const g = toGrid(p); stamp(drag.last, g, drag.val); drag.last = g;
   } else if (drag.mode === 'unit') {
@@ -5975,11 +6097,13 @@ const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : to
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
+  if (preview && (drag.mode === 'warp' || drag.mode === 'paint')) setTimeout(() => { if (preview) { preview.until = vecVersion; requestDrawFast(); } }, 0);
   if (drag.mode === 'pan' || drag.mode === 'warp' || drag.mode === 'paint' || drag.mode === 'unit') cv.style.cursor = spaceDown ? 'grab' : toolCursor();
   if (drag.mode === 'pan' && drag.mid && Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 5) { takeControlAt(toGrid(drag.p0)); drag = null; return; }
   if (drag.mode === 'pinch') { if (pointers.size === 0) { drag = null; viewChanged(); } return; }
   if (drag.mode === 'pan') viewChanged();
   if (drag.mode === 'warp') {
+    if (drag.tp) drag.p = drag.tp;
     warpStep(); if (drag.wm !== 'smooth') cleanBox(drag.ub); $('#hint').textContent = HINTS.warp;
     if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
   }
@@ -6034,9 +6158,10 @@ function endPointer(e) {
       else { hist.pop(); updUndo(); toast('Внутри кольца нечего занимать.'); }
     }
   }
+  const quick = drag.mode === 'warp' || drag.mode === 'paint';
   drag = null;
   setTool(tool);
-  if (wasEdit) edited();
+  if (wasEdit) { if (quick) editedSoon(); else edited(); }
 }
 cv.addEventListener('pointerup', endPointer);
 addEventListener('keydown', e => { if ((e.key === 'Control' || e.key === 'Meta') && !ctrlDown) { ctrlDown = true; if (tool === 'units') requestUi(); } });
@@ -6259,7 +6384,7 @@ function loadSample() {
   mapTitle = 'Учебная карта';
   gameLog = []; gameDate = Date.UTC(1941, 5, 22, 4); selArrow = selCity = null;
   cities.forEach(c => { c.lastOwner = undefined; });
-  wars = [{ a: 1, b: 2, t: gameDate }]; occNew(); occAny = false; recalcWars();
+  wars = [{ a: 1, b: 2, t: gameDate }]; settled = new Set(); syncSettled(); occNew(); occAny = false; recalcWars();
   afterChange();
   saveImage();
   setTool('warp');
@@ -6418,7 +6543,7 @@ $('#btnProj').addEventListener('click', () => {
   if (!W) return;
   const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoBorders, geoStore, win,
     forms, vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth,
-    wars, occ: geoStore ? undefined : rle(occ), occTiles: geoStore ? (commitOcc(), [...occStore].map(([k, t]) => [k, rle(t)])) : undefined };
+    wars, settled: [...settled], occ: geoStore ? undefined : rle(occ), occTiles: geoStore ? (commitOcc(), [...occStore].map(([k, t]) => [k, rle(t)])) : undefined };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -6447,6 +6572,7 @@ function loadProjectFile(file) {
           occStore = new Map((d.occTiles || []).map(([k, v]) => [k, unrle(v, TS * TS)])); loadOcc();
           clearTileDB().then(() => { store.forEach((t, k) => storeDirty.add(k)); scheduleTileSave(); });
         } else if (d.occ) { occ.set(unrle(d.occ, W * H)); occScan(); }
+        settled = new Set(d.settled || []); syncSettled();
         afterChange(); saveImage(); setTool('warp');
         toast('Проект открыт.');
       };
@@ -6484,8 +6610,7 @@ function scheduleSave() {
   saveT = setTimeout(saveFn = () => {
     saveFn = null;
     if (!own) return;
-    if (geoStore && !battlesOn && !marchRaf) commitWindow();
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, echScale, warpMode, mapTitle, wars, settled: [...settled], warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -6519,10 +6644,12 @@ async function restoreSaved() {
     if (typeof st.hideCursor === 'boolean') { hideCursor = st.hideCursor; $('#hideCursor').checked = hideCursor; }
     if (typeof st.spawnSide === 'number') spawnSide = st.spawnSide;
     if (st.unitMode) unitMode = st.unitMode;
+    if (typeof st.echScale === 'boolean') { echScale = st.echScale; $('#echScale').checked = echScale; }
     if (typeof st.unitEch === 'string' && st.unitEch in ECH_SIZE) { unitEch = st.unitEch; $('#unitEch').value = unitEch; }
     if (st.warpMode) setWarpMode(st.warpMode, true);
     mapTitle = st.mapTitle || '';
     if (typeof st.warOnly === 'boolean') { warOnly = st.warOnly; $('#warOnly').checked = warOnly; }
+    settled = new Set(st.settled || []); syncSettled();
     if (st.geoStore && st.win) { occStore = new Map(st.occTiles || []); loadOcc(); if (st.occ && st.occ.length === occ.length) { occ.set(st.occ); occScan(); } }
     else if (st.occ && st.occ.length === W * H) { occ.set(st.occ); occScan(); }
     units = st.units || []; forms = st.forms || [];
@@ -6551,6 +6678,9 @@ function declareWar(a, b) {
   if (atWar(a, b)) { toast(ownerName(a) + ' и ' + ownerName(b) + ' уже воюют.'); return false; }
   pushHist();
   wars.push({ a, b, t: gameDate });
+  // a new war reopens what an old peace settled between these sides
+  for (const k of [...settled]) { const h = k >> 8, c = k & 255; if ((sideOf(a).includes(h) && sideOf(b).includes(c)) || (sideOf(b).includes(h) && sideOf(a).includes(c))) settled.delete(k); }
+  syncSettled();
   recalcWars();
   const withA = sideOf(a).filter(k => k !== a), withB = sideOf(b).filter(k => k !== b);
   logEvent(ownerName(a) + ' объявила войну стране ' + ownerName(b) + (withA.length || withB.length ? ' (вместе с союзниками)' : ''), a);
@@ -6558,8 +6688,8 @@ function declareWar(a, b) {
   afterWarChange();
   return true;
 }
-// Peace: everything one side took from the other becomes its own land for good (the occupied shade turns into
-// the country's own colour), and the liberated shade goes back to the plain one.
+// Peace: everything one side took from the other becomes its own land for good: the occupied shade turns into
+// the country's own colour.
 function makePeace(k) {
   const w = wars[k];
   if (!w) return;
@@ -6568,10 +6698,14 @@ function makePeace(k) {
   wars.splice(k, 1);
   const inA = x => w.all || x === w.a || allied(x, w.a), inB = x => w.all || x === w.b || allied(x, w.b);
   const across = (holder, core) => holder !== core && ((inA(holder) && inB(core)) || (inB(holder) && inA(core)));
-  const settle = (v, o) => !v || v === o ? 0 : v === OCC_LIB ? (inA(o) || inB(o) ? 0 : v) : across(o, v) ? 0 : v;
+  const settle = (v, o) => !v || v === o || v >= OCC_PLAIN ? (v === OCC_PLAIN ? v : 0) : across(o, v) ? 0 : v;
   let annexed = 0;
-  for (let i = 0; i < occ.length; i++) { const v = occ[i]; if (v) { const nv = settle(v, own[i]); if (nv !== v) { occ[i] = nv; if (v !== OCC_LIB) annexed++; } } }
-  if (geoStore && occStore.size) {
+  // a scenario map: every pair of holder and old owner across the two sides is settled for good
+  const sw = getSrcWin();
+  if (sw) for (let i = 0; i < own.length; i++) { const o = own[i], c = sw[i]; if (o && c && c !== o && across(o, c)) annexed++; }
+  if (vsrc) { for (let h = 1; h <= countries.length; h++) for (let c = 1; c <= countries.length; c++) if (across(h, c)) settled.add((h << 8) | c); syncSettled(); }
+  for (let i = 0; i < occ.length; i++) { const v = occ[i]; if (v) { const nv = settle(v, own[i]); if (nv !== v) { occ[i] = nv; if (v < OCC_PLAIN) annexed++; } } }
+  if (geoStore && occStore.size && !vsrc) {
     // the tiles outside the window: the owner of each occupied cell from the territory at the same level
     for (const [key, t] of [...occStore]) {
       const tx = key % 65536, ty = Math.floor(key / 65536) % 65536;
@@ -6630,7 +6764,7 @@ function renderDiplo() {
   const c = countries[player - 1] || countries[0];
   if (c) {
     const col = hex2rgb(c.color);
-    $('#dLeg1').style.background = c.color; $('#dLeg2').style.background = 'rgb(' + occShade(col) + ')'; $('#dLeg3').style.background = 'rgb(' + libShade(col) + ')';
+    $('#dLeg1').style.background = c.color; $('#dLeg2').style.background = 'rgb(' + occShade(col) + ')'; $('#dLeg3').style.background = c.color;
   }
 }
 function openDiplo(on) { const d = $('#diplo'); d.hidden = on === undefined ? !d.hidden : !on; if (!d.hidden) renderDiplo(); }
@@ -7165,6 +7299,15 @@ function renderSettings() {
   range(mp, 'Насыщенность заливки', '#alpha', '#alphaOut');
   range(mp, 'Толщина границы', '#bw', '#bwOut');
   mirrorCheck(mp, 'Подсвечивать котлы штриховкой', 'И подписывать их на карте: кто окружён, кто окружил, сколько продержится.', '#showPockets');
+  const tr = card('Войска');
+  range(tr, 'Размер войск на карте', '#usize', '#usizeOut');
+  const pr = document.createElement('div'); pr.className = 'seg';
+  for (const [v, t] of geoStore ? [[.05, '50 м'], [.2, '200 м'], [.5, '500 м'], [2, '2 км'], [10, '10 км'], [36, '36 км']] : [[16, '16'], [24, '24'], [36, '36'], [56, '56'], [90, '90']]) {
+    const b = document.createElement('button'); b.textContent = t; b.classList.toggle('on', Math.abs(v - unitSize) < unitSize * .01);
+    b.addEventListener('click', () => { setUnitSize(v, true); renderSettings(); }); pr.append(b);
+  }
+  const prw = document.createElement('div'); prw.className = 'setrow'; prw.append(pr); tr.append(prw);
+  mirrorCheck(tr, 'Крупные соединения — крупнее значок', 'Выключено: все войска одного размера, от отделения до фронта. Для боёв за кварталы и улицы поставьте размер в сотни метров и приблизьте город.', '#echScale');
   const bt = card('Бои');
   range(bt, 'Скорость боёв', '#bspeed', '#bspeedOut');
   range(bt, 'Зона влияния отряда', '#pushk', '#pushkOut');
@@ -7187,13 +7330,30 @@ $('#btnTakeAll').addEventListener('click', () => {
   pushHist(); const n = pockets.length; pockets.forEach(takePocket); edited();
   toast('Котлы отошли окружившим странам: ' + n + '.');
 });
-// global icon size uses a logarithmic slider (8…240 px); each unit can also carry its own scale
-const USMIN = 8, USMAX = 240;
+// The size of troops on a logarithmic slider. On the Earth it is ground distance, from 20 m (a fight for a block
+// of houses) to 300 km (fronts across a continent); on a picture map it is cells of the map. Each unit can also
+// carry its own scale.
+const usMin = () => geoStore ? .02 : 2, usMax = () => geoStore ? 300 : 240;
+const round2 = v => { const p = Math.pow(10, Math.floor(Math.log10(v)) - 1); return Math.round(v / p) * p; };
+const fmtUnitSize = v => !geoStore ? Math.round(v) + ' px' : v < 1 ? Math.round(v * 1000) + ' м' : (v < 10 ? String(Math.round(v * 10) / 10).replace('.', ',') : Math.round(v)) + ' км';
+let usPresetsKey = '';
 function setUnitSize(v, save) {
-  unitSize = clamp(Math.round(+v), USMIN, USMAX);
-  $('#usize').value = Math.round(1000 * Math.log(unitSize / USMIN) / Math.log(USMAX / USMIN));
-  $('#usizeOut').textContent = unitSize + (geoStore ? ' км' : ' px');
-  document.querySelectorAll('#usizePresets button').forEach(b => b.classList.toggle('on', +b.dataset.size === unitSize));
+  const lo = usMin(), hi = usMax();
+  unitSize = clamp(round2(+v || 36), lo, hi);
+  $('#usize').value = Math.round(1000 * Math.log(unitSize / lo) / Math.log(hi / lo));
+  $('#usizeOut').textContent = fmtUnitSize(unitSize);
+  // ready sizes for the kind of map: streets to fronts on the Earth, cells on a picture
+  const key = geoStore ? 'g' : 'p';
+  if (key !== usPresetsKey) {
+    usPresetsKey = key;
+    const box = $('#usizePresets'); box.textContent = '';
+    for (const v of geoStore ? [.05, .2, .5, 2, 10, 36] : [8, 16, 24, 36, 56, 90]) {
+      const b = document.createElement('button'); b.dataset.size = v; b.textContent = fmtUnitSize(v).replace(' px', '');
+      b.title = geoStore ? ['отделение в доме', 'бой за квартал', 'бой за микрорайон', 'бой за город', 'фронт области', 'фронт страны'][[.05, .2, .5, 2, 10, 36].indexOf(v)] : '';
+      b.addEventListener('click', () => setUnitSize(v, true)); box.append(b);
+    }
+  }
+  document.querySelectorAll('#usizePresets button').forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.size - unitSize) < unitSize * .01));
   requestDraw();
   if (save) scheduleSave();
 }
@@ -7213,16 +7373,16 @@ function setUnitsScale(list, f, save, u = list[list.length - 1]) {
 function resizeUnitAt(p, k) {
   const u = hitUnit(toGrid(p));
   if (u) { if (u !== selUnit) selectUnit(u); setUnitScale(u, (u.scale || 1) * k, true); toast('Размер отряда: ' + Math.round((u.scale || 1) * 100) + '%'); }
-  else { setUnitSize(unitSize * k, true); toast('Размер войск: ' + unitSize + (geoStore ? ' км на местности' : ' клеток карты')); }
+  else { setUnitSize(unitSize * k, true); toast('Размер войск: ' + fmtUnitSize(unitSize) + (geoStore ? ' на местности' : '')); }
 }
 function deleteUnit() {
   if (!selUnit) return;
   pushHist(); const gone = new Set(targets()); units = units.filter(u => !gone.has(u)); selUnit = null; selUnits = []; unitsChanged();
 }
-$('#usize').addEventListener('input', e => setUnitSize(USMIN * Math.pow(USMAX / USMIN, e.target.value / 1000), true));
-$('#usizeDown').addEventListener('click', () => setUnitSize(Math.min(unitSize - 1, unitSize / 1.2), true));
-$('#usizeUp').addEventListener('click', () => setUnitSize(Math.max(unitSize + 1, unitSize * 1.2), true));
-document.querySelectorAll('#usizePresets button').forEach(b => b.addEventListener('click', () => setUnitSize(+b.dataset.size, true)));
+$('#usize').addEventListener('input', e => setUnitSize(usMin() * Math.pow(usMax() / usMin(), e.target.value / 1000), true));
+$('#usizeDown').addEventListener('click', () => setUnitSize(unitSize / 1.25, true));
+$('#usizeUp').addEventListener('click', () => setUnitSize(unitSize * 1.25, true));
+$('#echScale').addEventListener('change', e => { echScale = e.target.checked; spriteCache.clear(); renderSidePick(); requestDraw(); scheduleSave(); });
 $('#uscale').addEventListener('input', e => { if (selUnit) setUnitsScale(targets(), () => e.target.value / 100, true, selUnit); });
 $('#uscaleDown').addEventListener('click', () => { if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) / 1.2, true, selUnit); });
 $('#uscaleUp').addEventListener('click', () => { if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) * 1.2, true, selUnit); });
