@@ -1,0 +1,40 @@
+{
+  "applicationId": "app.mezha.editor",
+  "applicationName": "Межа",
+  "author": "Межа",
+  "description": "Межа — редактор границ и карта войн",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 47391,
+  "documentRoot": "/resources/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": false,
+  "tokenSecurity": "one-time",
+  "logging": { "enabled": false, "writeToLogFile": false },
+  "modes": {
+    "window": {
+      "title": "Межа",
+      "width": 1400,
+      "height": 900,
+      "minWidth": 900,
+      "minHeight": 600,
+      "center": true,
+      "maximize": true,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/resources/icon.png",
+      "enableInspector": false,
+      "borderless": false,
+      "resizable": true,
+      "exitProcessOnClose": true
+    }
+  },
+  "cli": {
+    "binaryName": "Mezha",
+    "resourcesPath": "/resources/",
+    "extensionsPath": "/extensions/",
+    "binaryVersion": "6.10.0",
+    "clientVersion": "6.10.0"
+  }
+}
