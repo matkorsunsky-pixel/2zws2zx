@@ -225,7 +225,8 @@ section > h2:hover { color: var(--ink); }
 
 main { position: relative; min-width: 0; min-height: 0; background-color: var(--stage);
   background-image: radial-gradient(var(--stage-dot) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
-#view, #ui { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#mapcv, #view, #ui { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#mapcv { pointer-events: none; }
 #ui { pointer-events: none; }
 main.drop::after { content: "Отпустите, чтобы открыть карту"; position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-items: center; font: 600 16px var(--f-ui); color: var(--accent); background: rgb(0 0 0 / .04); pointer-events: none; }
 /* --- HUD over the map --- */
@@ -249,7 +250,8 @@ main { container-type: size; container-name: stage; }
 @container stage (max-width: 1300px) { .hud .tgl .tl { display: none; } }
 @container stage (max-width: 1240px) { .hdate small { display: none; } .hdate { min-width: 0; } }
 @container stage (max-width: 1150px) { .hscore small { display: none; } .hscore .hbar { grid-row: 1 / span 2; } }
-@container stage (max-width: 1100px) { .hpockets .pw { display: none; } }
+@container stage (max-width: 1100px) { .hpockets .pw, .hwar .pw { display: none; } }
+@container stage (max-width: 1000px) { .hud .hbar { width: 64px; } .hud > .hcountry { min-width: 110px; } }
 @container stage (max-width: 960px) { .hud > .hscore { display: none !important; } .hctext small { display: none; } }
 @container stage (max-width: 860px) { .hud .hctext { display: none; } .hud > .hcountry { min-width: 0; } }
 @container stage (max-width: 800px) { .hud { flex-wrap: wrap; } .sidepick { top: calc(114px + env(safe-area-inset-top, 0px)); } }
@@ -281,6 +283,26 @@ main { container-type: size; container-name: stage; }
 .hscore b { grid-row: span 2; font: 600 15px var(--f-mono); color: var(--gold); font-variant-numeric: tabular-nums; }
 .hbar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--line); width: 104px; }
 .hbar span { height: 100%; }
+.hwar { height: 42px; padding: 0 12px; gap: 7px; font: 600 12.5px var(--f-ui); color: var(--muted); }
+.hwar.on { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)) !important; }
+.diplo { position: absolute; z-index: 7; top: calc(62px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 24px));
+  max-height: calc(100% - 140px); overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgb(0 0 0 / .4);
+  padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.diplo header { display: flex; align-items: center; justify-content: space-between; }
+.diplo header b { font: 600 16px var(--f-brand); letter-spacing: .03em; }
+.diplo header button { width: 32px; height: 32px; padding: 0; justify-content: center; font-size: 18px; border-color: transparent; background: transparent; }
+.dform { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+.dform .dvs { font-size: 12.5px; color: var(--danger); font-weight: 600; white-space: nowrap; }
+.dform button { grid-column: span 3; justify-content: center; padding: 11px; background: var(--danger); border-color: var(--danger); color: #fff; }
+.dlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dlist li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.dlist li.dnone { display: block; color: var(--muted); font-size: 12.5px; }
+.dlist .dsw { display: flex; } .dlist .dsw i { width: 14px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 2px var(--bg); }
+.dlist .dsw i + i { margin-left: -4px; }
+.dlist .dt b { display: block; font-size: 13px; } .dlist .dt small { color: var(--muted); font-size: 11.5px; }
+.dlist button { padding: 7px 10px; font-size: 12px; }
+.dleg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.dleg span { display: inline-flex; align-items: center; gap: 6px; } .dleg i { width: 16px; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25); }
 .hpockets { height: 42px; padding: 0 12px; gap: 6px; font: 600 13px var(--f-mono); color: var(--danger); }
 .hud > .hgrow { flex: 1 1 0; min-width: 0; }
 .hgroup { display: flex; align-items: center; gap: 2px; padding: 4px; height: 42px; }
@@ -582,7 +604,7 @@ body:not(.nopanel) .status > #hint { display: none; }
         <label for="era" class="sub">Эпоха</label>
         <select id="era"><option value="ancient">Древний мир</option><option value="medieval">Средневековье</option><option value="gunpowder">Эпоха пороха (XVII–XIX вв.)</option><option value="ww1">Первая мировая</option><option value="ww2">Вторая мировая</option><option value="modern">Современность</option></select>
         <div class="field">
-          <label for="usize">Размер всех значков</label><output id="usizeOut">36 px</output>
+          <label for="usize" title="На карте Земли — в километрах на местности: значки растут и уменьшаются вместе с картой">Размер войск на карте</label><output id="usizeOut">36 px</output>
           <div class="sizer">
             <button id="usizeDown" aria-label="Уменьшить все значки">−</button>
             <input type="range" id="usize" min="0" max="1000" value="500">
@@ -650,6 +672,7 @@ body:not(.nopanel) .status > #hint { display: none; }
         <p class="hint">Щелчок по карте ставит город, город можно перетащить. Хозяин города — тот, чья территория под ним. Очки городов складываются в счёт войны.</p>
       </div>
       <label class="check" id="fProtect"><input type="checkbox" id="protect" checked><span>Не заходить на нейтральные земли и море</span></label>
+    <label class="check" id="fWarOnly"><input type="checkbox" id="warOnly" checked><span>Двигать границу только между странами в войне<br><small class="hint">Снимите, чтобы свободно перекраивать карту</small></span></label>
       </div>
     </div>
     <div class="pane" data-pane="countries" hidden>
@@ -661,6 +684,11 @@ body:not(.nopanel) .status > #hint { display: none; }
       </section>
     </div>
     <div class="pane" data-pane="war" hidden>
+      <section>
+        <h2>Войны и мир</h2>
+        <ul class="dlist" id="warList"></ul>
+        <div class="row"><button id="warOpen" class="primary">Объявить войну…</button></div>
+      </section>
       <section>
         <h2>Игра</h2>
         <div id="gameSystems"></div>
@@ -776,6 +804,9 @@ body:not(.nopanel) .status > #hint { display: none; }
           <li><b>Щелчок колёсиком</b> по стране на карте или в списке — играть за неё и рисовать её цветом</li>
           <li><b>,</b> и <b>.</b> (Б и Ю) — предыдущая и следующая страна, <b>Shift + , .</b> — сразу взять её под управление</li>
           <li>Страны в списке перетаскиваются за <b>⋮⋮</b>, разделы слева сворачиваются щелчком по заголовку, <b>Shift + щелчок</b> оставляет открытым только этот раздел</li>
+          <li><b>Войны</b> — кнопка вверху: объявить войну одной стране другой или заключить мир. Пока страны не воюют, их граница стоит, а войска не дерутся и не заходят на чужую землю</li>
+          <li>Цвета земли: <b>свой</b> — своя земля, <b>светлее</b> — занятая в войне, <b>темнее</b> — освобождённая. После мира занятое становится своим</li>
+          <li><b>Размер войск</b> задаётся в километрах на местности: значки растут и уменьшаются вместе с картой</li>
           <li><b>Esc</b> — меню (игра встаёт на паузу), <b>H</b> — спрятать или показать панель</li>
           <li><b>W</b> — режим границы: резина → натиск → сгладить</li>
           <li><b>+</b> и <b>−</b> — скорость боёв (5 ступеней, как в HOI4)</li>
@@ -788,6 +819,7 @@ body:not(.nopanel) .status > #hint { display: none; }
 </aside>
 
 <main id="stage">
+  <canvas id="mapcv" aria-hidden="true"></canvas>
   <canvas id="view"></canvas>
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
@@ -802,6 +834,7 @@ body:not(.nopanel) .status > #hint { display: none; }
       </div>
     </div>
     <div class="hscore" id="hudScore" hidden title="Победные очки за города"><small>Победные очки</small><div class="hbar" id="hudBar"></div><b id="hudVp"></b></div>
+    <button class="hwar" id="hudWar" title="Войны и мир: объявить войну, заключить мир"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5L13 3h3v3l-3.5 3.5"/><path d="M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg><span id="hudWarN">Мир</span></button>
     <button class="hpockets" id="hudPockets" hidden title="Котлы: открыть список"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="3 2.4"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span id="hudPocketN">0</span></button>
     <div class="hgrow"></div>
     <div class="hgroup">
@@ -821,6 +854,19 @@ body:not(.nopanel) .status > #hint { display: none; }
     </div>
     <span class="ginfo" id="gameInfo" hidden></span>
   </header>
+  <div class="diplo" id="diplo" hidden role="dialog" aria-label="Войны и мир">
+    <header><b>Войны и мир</b><button id="diploClose" aria-label="Закрыть">×</button></header>
+    <div class="dform">
+      <select id="dA" aria-label="Кто объявляет войну"></select>
+      <span class="dvs">объявляет войну</span>
+      <select id="dB" aria-label="Кому"></select>
+      <button class="primary" id="dDeclare">Объявить войну</button>
+    </div>
+    <p class="hint">Союзники (страны одной стороны) вступают в войну вместе. Пока страны не воюют, их граница не двигается, войска не дерутся и не заходят на чужую землю.</p>
+    <ul class="dlist" id="dList"></ul>
+    <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне</span><span><i id="dLeg3"></i>освобождённая</span></div>
+    <p class="hint">После мира занятые земли становятся землёй того, кто их занял, а освобождённые — снова обычными.</p>
+  </div>
   <div class="mapctl" id="mapCtl">
     <button id="btnZoomIn" aria-label="Приблизить" title="Приблизить">+</button>
     <span id="zoom">100%</span>
@@ -936,6 +982,7 @@ body:not(.nopanel) .status > #hint { display: none; }
         <li>Инструмент <b>Войска (7)</b>: щелчок по карте ставит отряд. По своей земле — свой, по чужой — вражеский.</li>
         <li>Выделите свои отряды рамкой (<b>Shift</b> + протянуть) и <b>протяните ПКМ</b> — они пойдут в наступление по нарисованному пути.</li>
         <li>Нажмите <b>P</b> или ▶ вверху — пойдут бои, время и календарь. Скорость — <b>+</b> и <b>−</b>.</li>
+        <li>Воюют только страны в войне: кнопка <b>«Войны»</b> вверху объявляет войну и заключает мир. Занятая земля светлее цвета страны, освобождённая — темнее.</li>
         <li>Окружите врага — образуется <b>котёл</b>. Через несколько дней боёв он сдаётся, отряды внутри попадают в плен.</li>
       </ol></div>
       <div class="setcard"><h4>Граница</h4><ul>
@@ -962,6 +1009,7 @@ const PRISTINE = document.documentElement.outerHTML;
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), cv = $('#view'), ctx = cv.getContext('2d');
 const uiCv = $('#ui'), uctx = uiCv.getContext('2d');
+const mapCv = $('#mapcv'), mctx = mapCv.getContext('2d');
 const MAXDIM = 1800;
 const PALETTE = ['#d0473f', '#3766c9', '#2f9e5b', '#e0a526', '#8a4fc7', '#d4689f', '#1f9aa8', '#8c6d46', '#5a6b2f', '#c4652a'];
 const HINTS = {
@@ -1025,19 +1073,22 @@ function addDirty(x0, y0, x1, y1) {
   for (const d of dirty) {
     if (x0 <= d[2] + 8 && x1 >= d[0] - 8 && y0 <= d[3] + 8 && y1 >= d[1] - 8) {
       d[0] = Math.min(d[0], x0); d[1] = Math.min(d[1], y0); d[2] = Math.max(d[2], x1); d[3] = Math.max(d[3], y1);
-      requestDraw(); return;
+      requestDrawFast(); return;
     }
   }
   if (dirty.length >= 48) {
     const d = dirty[dirty.length - 1];
     d[0] = Math.min(d[0], x0); d[1] = Math.min(d[1], y0); d[2] = Math.max(d[2], x1); d[3] = Math.max(d[3], y1);
   } else dirty.push([x0, y0, x1, y1]);
-  requestDraw();
+  requestDrawFast();
 }
 // The map layer (picture + troops) redraws only when something on it changes;
 // the cursor ring, lasso and selection box live on a light layer above it.
 let needMap = true, needUi = true;
-function requestDraw() { needMap = needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
+let mapEpoch = 0;                     // bumped by every change that can alter the map layer itself
+function requestDraw() { mapEpoch++; needMap = needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
+// troops, battles, cities and orders moved, the map under them did not: the cached map layer is reused
+function requestDrawFast() { needMap = needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
 function requestUi() { needUi = true; if (!raf) raf = requestAnimationFrame(draw); }
 function toGrid(p) { return { x: (p.x - view.x) / view.s, y: (p.y - view.y) / view.s }; }
 function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
@@ -1060,6 +1111,7 @@ function setMap(src, w, h, geoExt) {
   own = new Uint8Array(W * H);
   own0 = new Uint8Array(W * H);
   pocket = new Uint8Array(W * H);
+  if (typeof occNew === 'function') { occNew(); occStore = new Map(); occAny = false; }
   pockets = [];
   units = []; selUnit = null; selUnits = [];
   if (typeof arrows !== 'undefined') { arrows = []; cities = []; selArrow = selCity = null; }
@@ -1068,7 +1120,13 @@ function setMap(src, w, h, geoExt) {
 }
 function histMax() { return clamp(Math.floor(160e6 / Math.max(1, W * H)), 5, 60); }
 
-function recolor() { rgb = [null, ...countries.map(c => hex2rgb(c.color))]; addDirty(0, 0, W, H); }
+function recolor() {
+  rgb = [null, ...countries.map(c => hex2rgb(c.color))];
+  occRgb = rgb.map(c => c && c.map(v => Math.round(v + (255 - v) * .46)));
+  libRgb = rgb.map(c => c && [Math.round(c[0] * .74), Math.round(c[1] * .74), Math.round(c[2] * .74)]);
+  if (typeof recalcWars === 'function') recalcWars();
+  addDirty(0, 0, W, H);
+}
 
 function renderRect(x0, y0, x1, y1) {
   const t = borderW;
@@ -1078,8 +1136,10 @@ function renderRect(x0, y0, x1, y1) {
   // `over` holds the finished picture: the map with territory colours blended in,
   // so each frame needs a single image blit.
   const d = oimg.data, bp = basePix, a = Math.round(alpha * 255), geoMode = !!geo;
-  const n = rgb.length, CR = new Uint8Array(256).fill(128), CG = new Uint8Array(256).fill(128), CB = new Uint8Array(256).fill(128);
-  for (let k = 1; k < n; k++) { CR[k] = rgb[k][0]; CG[k] = rgb[k][1]; CB[k] = rgb[k][2]; }
+  const n = rgb.length, CR = new Uint8Array(256 * 3).fill(128), CG = new Uint8Array(256 * 3).fill(128), CB = new Uint8Array(256 * 3).fill(128);
+  // three shades per country: own land, occupied land (+256), liberated land (+512)
+  for (let k = 1; k < n; k++) for (const [o, src] of [[0, rgb], [256, occRgb], [512, libRgb]]) { const c = src[k] || rgb[k]; CR[k + o] = c[0]; CG[k + o] = c[1]; CB[k + o] = c[2]; }
+  const oc = occ;
   let r, g, b, aa;
   for (let y = y0; y < y1; y++) {
     let i = y * W + x0;
@@ -1099,7 +1159,7 @@ function renderRect(x0, y0, x1, y1) {
       else if (showPockets && pocket[i] && pocket[i] !== o && ((x + y) % 10) < 4) {
         const e = pocket[i]; r = CR[e]; g = CG[e]; b = CB[e]; aa = a > 200 ? a : 200;
       }
-      else { r = CR[o]; g = CG[o]; b = CB[o]; aa = a; }
+      else { const s_ = oc ? oc[i] : 0, q = s_ === 0 || s_ === o ? o : s_ === OCC_LIB ? o + 512 : o + 256; r = CR[q]; g = CG[q]; b = CB[q]; aa = a; }
       if (geoMode) { d[p] = r; d[p + 1] = g; d[p + 2] = b; d[p + 3] = aa; continue; }
       const k = aa / 255;
       d[p] = bp[p] + (r - bp[p]) * k; d[p + 1] = bp[p + 1] + (g - bp[p + 1]) * k; d[p + 2] = bp[p + 2] + (b - bp[p + 2]) * k; d[p + 3] = 255;
@@ -1117,18 +1177,29 @@ let vec = null;
 const DXV = [1, 0, -1, 0], DYV = [0, 1, 0, -1];
 // the working grid of a rectangle as outline labels: owner, plus the encircler in the high bits inside a pocket
 function labelRegion(x0, y0, x1, y1) {
-  const ww = x1 - x0, wh = y1 - y0, pk = showPockets && pockets.length;
-  // plain owners fit a byte and are copied row by row; inside pockets the encircler rides in the high byte
-  const lab = pk ? new Uint16Array(ww * wh) : new Uint8Array(ww * wh);
-  for (let y = 0; y < wh; y++) {
-    let i = (y0 + y) * W + x0, j = y * ww;
-    if (!pk) { lab.set(own.subarray(i, i + ww), j); continue; }
-    for (let x = 0; x < ww; x++, i++, j++) {
-      const o = own[i];
-      if (!o) continue;
-      const q = pocket[i];
-      lab[j] = q && q !== o ? o + (q << 8) : o;
-    }
+  const ww = x1 - x0, wh = y1 - y0, pk = showPockets && pockets.length, oc = occBox && occ;
+  // plain owners fit a byte and are copied row by row; inside pockets the encircler rides in the second byte,
+  // and the occupation state (whose land it was, or liberated) in the third
+  const lab = oc ? new Int32Array(ww * wh) : pk ? new Uint16Array(ww * wh) : new Uint8Array(ww * wh);
+  for (let y = 0; y < wh; y++) { const i = (y0 + y) * W + x0; lab.set(own.subarray(i, i + ww), y * ww); }
+  const each = (b, fn) => {
+    const bx0 = Math.max(x0, b[0] - 1), by0 = Math.max(y0, b[1] - 1), bx1 = Math.min(x1, b[2] + 1), by1 = Math.min(y1, b[3] + 1);
+    for (let y = by0; y < by1; y++) for (let x = bx0, i = y * W + bx0, j = (y - y0) * ww + bx0 - x0; x < bx1; x++, i++, j++) fn(i, j);
+  };
+  if (pk) for (const p of pockets) each(p.box, (i, j) => { const o = own[i], q = pocket[i]; if (o && q && q !== o) lab[j] = o + (q << 8); });
+  if (oc && occBox) each([occBox[0] - 2, occBox[1] - 2, occBox[2] + 2, occBox[3] + 2], (i, j) => { const o = own[i], st = oc[i]; if (o && st && st !== o) lab[j] += st << 16; });
+  return lab;
+}
+// the same labels from copied rows of owner, pocket and occupation (this runs in the background thread)
+function labelsFrom(d) {
+  const n = d.ww * d.wh, own = d.own, pk = d.pk, oc = d.oc;
+  if (!pk && !oc) return own;
+  const lab = oc ? new Int32Array(n) : new Uint16Array(n);
+  for (let i = 0; i < n; i++) {
+    const o = own[i];
+    if (!o) continue;
+    const q = pk ? pk[i] : 0, st = oc ? oc[i] : 0;
+    lab[i] = (q && q !== o ? o + (q << 8) : o) + (st && st !== o ? st << 16 : 0);
   }
   return lab;
 }
@@ -1246,14 +1317,12 @@ function traceOutlines(lab, ww, wh, ox, oy, iters) {
   return outs;
 }
 // a front runs between two enemies; a border between friends or between countries outside the war
-function isFront(a, b) {
-  if (allied(a, b)) return false;
-  const x = countries[a - 1], y = countries[b - 1];
-  return !countries.some(c => c.side) || !!(x && y && x.side && y.side);
-}
+function isFront(a, b) { return atWar(a, b); }
 // outlines to the paths drawn each frame: fills per label, coasts per owner, fronts and borders
 function vecPaths(outs) {
-  const fills = new Map(), coasts = new Map(), fronts = new Path2D(), borders = new Path2D();
+  const fills = new Map(), coasts = new Map(), fronts = new Path2D(), borders = new Path2D(), olds = new Path2D();
+  // whose land a label is by right: occupied land belongs to its old owner, everything else to the owner
+  const coreOf = L => { const st = (L >> 16) & 255; return st && st !== 255 ? st : L & 255; };
   for (const { L, px, py, pt } of outs) {
     let f = fills.get(L);
     if (!f) { f = new Path2D(); fills.set(L, f); }
@@ -1269,11 +1338,13 @@ function vecPaths(outs) {
       let path = null;
       if (nb === 0) { if (!coast) { coast = new Path2D(); coasts.set(o, coast); } path = coast; }
       else if (nb > 0 && (nb & 255) !== o && L < nb) path = isFront(o, nb & 255) ? fronts : borders;
+      // inside one country's land: the border as it was before the war, where occupied land meets other land
+      else if (nb > 0 && (nb & 255) === o && L < nb && coreOf(L) !== coreOf(nb)) path = olds;
       if (path) { if (path !== prev) path.moveTo(px[k], py[k]); path.lineTo(px[a], py[a]); }
       prev = path;
     }
   }
-  return { fills, coasts, fronts, borders };
+  return { fills, coasts, fronts, borders, olds };
 }
 // exact scenario outlines only need the last pixel steps taken off; enlarged coarse cells need more
 const vecIters = () => geoStore && !vsrc ? 24 : 6;
@@ -1284,25 +1355,30 @@ function buildVectors(x0, y0, x1, y1) {
 // The same tracing in a background thread, so a moving front never stalls a frame: the frame draws the last
 // outlines while the next ones are being traced. Falls back to tracing in place where workers are not allowed.
 let vecWorker = null, vecJob = null, vecWorkerOff = false;
+let vecSerial = 0, vecLast = 0, vecRetry = 0;
 function vecAsync(x0, y0, x1, y1) {
   if (vecWorkerOff) return false;
   if (vecJob) return true;
+  const since = performance.now() - vecLast;
+  if (vec && since < 150) { if (!vecRetry) vecRetry = setTimeout(() => { vecRetry = 0; requestDrawFast(); }, 155 - since); return true; }
+  vecLast = performance.now();
   try {
     if (!vecWorker) {
-      const src = traceOutlines.toString() + '\nonmessage = e => { const d = e.data, outs = traceOutlines(d.lab, d.ww, d.wh, d.ox, d.oy, d.iters);' +
+      const src = traceOutlines.toString() + '\n' + labelsFrom.toString() + '\nonmessage = e => { const d = e.data, outs = traceOutlines(d.lab || labelsFrom(d), d.ww, d.wh, d.ox, d.oy, d.iters);' +
         ' postMessage({ id: d.id, outs }, outs.flatMap(o => [o.px.buffer, o.py.buffer, o.pt.buffer])); };';
       vecWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
       vecWorker.onmessage = e => {
         const job = vecJob; vecJob = null;
         if (!job || e.data.id !== job.id || job.W !== W || job.H !== H || job.win !== win) { requestDraw(); return; }
-        vec = Object.assign({ win: job.rect, version: job.version, t: performance.now() }, vecPaths(e.data.outs));
+        vec = Object.assign({ win: job.rect, version: job.version, t: performance.now(), serial: ++vecSerial }, vecPaths(e.data.outs));
         requestDraw();
       };
       vecWorker.onerror = () => { vecWorkerOff = true; vecJob = null; requestDraw(); };
     }
-    const lab = labelRegion(x0, y0, x1, y1);
+    const ww = x1 - x0, wh = y1 - y0, rows = a => { const o = new Uint8Array(ww * wh); for (let y = 0; y < wh; y++) { const i = (y0 + y) * W + x0; o.set(a.subarray(i, i + ww), y * ww); } return o; };
+    const pk = showPockets && pockets.length ? rows(pocket) : null, oc = occBox ? rows(occ) : null, ow = rows(own);
     vecJob = { id: Math.random(), rect: [x0, y0, x1, y1], version: vecVersion, W, H, win };
-    vecWorker.postMessage({ id: vecJob.id, lab, ww: x1 - x0, wh: y1 - y0, ox: x0, oy: y0, iters: vecIters() }, [lab.buffer]);
+    vecWorker.postMessage({ id: vecJob.id, own: ow, pk, oc, ww, wh, ox: x0, oy: y0, iters: vecIters() }, [ow.buffer, ...(pk ? [pk.buffer] : []), ...(oc ? [oc.buffer] : [])]);
     return true;
   } catch (e) { vecWorkerOff = true; vecJob = null; return false; }
 }
@@ -1333,10 +1409,14 @@ function drawVectorMap(c) {
   else if (outside || vec.version !== vecVersion) {
     // after a pan, build a bit wider than the screen so small pans reuse it;
     // while the territory is being edited, trace only what is visible
-    const k = vec && vec.version !== vecVersion ? .02 : .25;
+    // no outlines yet (a new detail level): trace just the screen now, the wider area follows in the background
+    const k = !vec || (vec.version !== vecVersion && !outside) ? .02 : .25;
     const mx = Math.ceil((need[2] - need[0]) * k) + 4, my = Math.ceil((need[3] - need[1]) * k) + 4;
-    vec = buildVectors(Math.max(0, need[0] - mx), Math.max(0, need[1] - my), Math.min(W, need[2] + mx), Math.min(H, need[3] + my));
-    vec.t = performance.now();
+    const rect = [Math.max(0, need[0] - mx), Math.max(0, need[1] - my), Math.min(W, need[2] + mx), Math.min(H, need[3] + my)];
+    // panned past the traced area: the old outlines stay on screen while the new ones are traced in the
+    // background (tracing a whole screen in place would stall the pan for a tenth of a second)
+    if (vec && vec.win[0] < rect[2] && vec.win[2] > rect[0] && vec.win[1] < rect[3] && vec.win[3] > rect[1] && vecAsync(...rect)) { /* drawn stale */ }
+    else { vec = buildVectors(...rect); vec.t = performance.now(); vec.serial = ++vecSerial; }
   }
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
@@ -1346,21 +1426,27 @@ function drawVectorMap(c) {
   // window edges inside the map are artificial: keep them out of sight
   const a = alpha;
   for (const [L, path] of vec.fills) {
-    const col = rgb[L & 255] || [128, 128, 128];
+    const o = L & 255, st = (L >> 16) & 255;
+    const col = (st === 0 ? rgb[o] : st === OCC_LIB ? libRgb[o] : occRgb[o]) || rgb[o] || [128, 128, 128];
     c.globalAlpha = a; c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill(path);
-    const enc = L >> 8;
+    const enc = (L >> 8) & 255;
     if (enc && rgb[enc]) { c.globalAlpha = Math.max(a, 200 / 255); c.fillStyle = hatchPattern(c, rgb[enc]); c.fill(path); }
   }
   c.globalAlpha = 1;
   c.lineJoin = 'round'; c.lineCap = 'round';
   if (borderW > 0) {
     // matches the raster line where the smooth mode takes over, then thickens gently with zoom
-    let lw = (borderW * 1.6 * VEC_ZOOM * Math.pow(view.s / VEC_ZOOM, .35) + .5) / view.s;
-    // the whole world on one screen: thinner lines, or small countries drown in them
-    if (geoStore && win) lw *= clamp(worldCells(win.L) * view.s / 9000, .3, 1);
+    let lw;
+    if (geoStore && win) {
+      // on the Earth the width follows the real scale only (pixels per world width), which runs on smoothly when the
+      // grid switches detail level: thinner with the whole world on screen, a little bolder over a city
+      const worldPx = worldCells(win.L) * view.s;
+      lw = (borderW * 1.25 * clamp(Math.pow(worldPx / 30000, .12), .55, 1.35) + .4) / view.s;
+    } else lw = (borderW * 1.6 * VEC_ZOOM * Math.pow(view.s / VEC_ZOOM, .35) + .5) / view.s;
     c.lineWidth = lw * .7;
     for (const [o, path] of vec.coasts) { const col = rgb[o] || [90, 90, 90]; c.strokeStyle = `rgb(${col[0] * .55 | 0},${col[1] * .55 | 0},${col[2] * .55 | 0})`; c.stroke(path); }
     c.lineWidth = lw * .8; c.strokeStyle = 'rgba(24,28,36,.88)'; c.stroke(vec.borders);
+    if (vec.olds) { c.lineWidth = lw * .55; c.setLineDash([lw * 2.2, lw * 1.8]); c.strokeStyle = 'rgba(24,28,36,.5)'; c.stroke(vec.olds); c.setLineDash([]); }
     // the front: a dark line on a light edge, so it reads over forest, snow, sea and any colour of country
     // and never thinner than about two pixels, even with the whole world on screen
     const lf = Math.max(lw * 1.15, 1.9 / view.s);
@@ -1443,15 +1529,15 @@ function drawGeoTiles(c, k, ox, oy, dw, dh, cacheOnly) {
   return z;
 }
 // imagery over the whole screen plus the coarser territory around a detailed area
-function drawGeoBackdrop() {
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#b9c6d2'; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.imageSmoothingEnabled = true;
+function drawGeoBackdrop(c) {
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  c.fillStyle = '#b9c6d2'; c.fillRect(0, 0, cv.width, cv.height);
+  c.imageSmoothingEnabled = true;
   const k = view.s * dpr, ox = view.x * dpr, oy = view.y * dpr;
-  drawGeoTiles(ctx, k, ox, oy, cv.width, cv.height);
-  drawBorderOverlay();                // country and province lines lie under the coloured land, the fronts go over it
-  if (geoStore) drawStoreBackdrop(ctx, k, ox, oy); else drawParentTerritory(ctx, k, ox, oy);
-  ctx.restore();
+  drawGeoTiles(c, k, ox, oy, cv.width, cv.height);
+  drawBorderOverlay(c);               // country and province lines lie under the coloured land, the fronts go over it
+  if (geoStore) drawStoreBackdrop(c, k, ox, oy); else drawParentTerritory(c, k, ox, oy);
+  c.restore();
 }
 // ---------- built-in Earth map: drawn from the Natural Earth borders inside the program ----------
 // Works with no internet at all. Tiles are drawn on the fly from the country and province outlines,
@@ -1633,14 +1719,14 @@ function vbLabelPoint(f, G = 12) {
   return L;
 }
 // country and province borders over the satellite imagery, above the coloured territory
-function drawBorderOverlay() {
+function drawBorderOverlay(c) {
   if (!geo || geoLayer === 'vec' || !geoBorders) return;
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
   VB.spent = 0;
   // in a scenario before 1992 today's state borders would only mislead: then just the provinces are drawn
   const w = vsrc && WARS.find(x => x.id === vsrc.def.war);
-  drawVecTiles(ctx, view.s * dpr, view.x * dpr, view.y * dpr, cv.width, cv.height, false, w && w.date < '1992' ? 2 : 1);
-  ctx.restore();
+  drawVecTiles(c, view.s * dpr, view.x * dpr, view.y * dpr, cv.width, cv.height, false, w && w.date < '1992' ? 2 : 1);
+  c.restore();
 }
 // names of the countries of the map, written across the widest part of each one, like on a strategy map
 let terrLab = null, terrLabKey = '', terrLabT = 0;
@@ -1780,16 +1866,16 @@ function drawParentTerritory(c, k, ox, oy) {
   c.drawImage(parentCv, sx0, sy0, sx1 - sx0, sy1 - sy0, PX(sx0), PY(sy0), PX(sx1) - PX(sx0), PY(sy1) - PY(sy0));
 }
 // shade everything outside the detailed area and outline it
-function drawRegionFrame() {
+function drawRegionFrame(c) {
   if (!geoStack.length) return;
   const k = view.s * dpr, X0 = view.x * dpr, Y0 = view.y * dpr, X1 = W * k + X0, Y1 = H * k + Y0, cw = cv.width, ch = cv.height;
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = 'rgba(15,20,28,.3)';
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  c.fillStyle = 'rgba(15,20,28,.3)';
   const ya = clamp(Y0, 0, ch), yb = clamp(Y1, 0, ch), xa = clamp(X0, 0, cw), xb = clamp(X1, 0, cw);
-  ctx.fillRect(0, 0, cw, ya); ctx.fillRect(0, yb, cw, ch - yb); ctx.fillRect(0, ya, xa, yb - ya); ctx.fillRect(xb, ya, cw - xb, yb - ya);
-  ctx.setLineDash([8 * dpr, 6 * dpr]); ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#e2b84a';
-  ctx.strokeRect(X0, Y0, X1 - X0, Y1 - Y0); ctx.setLineDash([]);
-  ctx.restore();
+  c.fillRect(0, 0, cw, ya); c.fillRect(0, yb, cw, ch - yb); c.fillRect(0, ya, xa, yb - ya); c.fillRect(xb, ya, cw - xb, yb - ya);
+  c.setLineDash([8 * dpr, 6 * dpr]); c.lineWidth = 2 * dpr; c.strokeStyle = '#e2b84a';
+  c.strokeRect(X0, Y0, X1 - X0, Y1 - Y0); c.setLineDash([]);
+  c.restore();
 }
 const latAtY = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
 function metersPerCell() { return geo ? (geo.x1 - geo.x0) * 40075016 * Math.cos(latAtY((geo.y0 + geo.y1) / 2) * Math.PI / 180) / W : 1; }
@@ -2159,9 +2245,9 @@ function commitWindow() {
     if (!c) continue;
     const a = own[i - 1], b = own[i + 1], u = own[i - W], d = own[i + W];
     const v = a === b || a === u || a === d ? a : b === u || b === d ? b : u === d ? u : 0;
-    if (v && v !== c && (a === v) + (b === v) + (u === v) + (d === v) >= 3) own[i] = v;
-    else if (a && a === b && a !== c && own[i] === c && winOwn0[i] === c && (u === c || d === c)) own[i] = a;
-    else if (u && u === d && u !== c && winOwn0[i] === c && (a === c || b === c)) own[i] = u;
+    if (v && v !== c && (a === v) + (b === v) + (u === v) + (d === v) >= 3) { own[i] = v; occ[i] = occ[a === v ? i - 1 : b === v ? i + 1 : u === v ? i - W : i + W]; }
+    else if (a && a === b && a !== c && own[i] === c && winOwn0[i] === c && (u === c || d === c)) { own[i] = a; occ[i] = occ[i - 1]; }
+    else if (u && u === d && u !== c && winOwn0[i] === c && (a === c || b === c)) { own[i] = u; occ[i] = occ[i - W]; }
   }
   // only the changed block is written: its cells, plus (on a scenario) two cells around every change, stored
   // exactly as on screen, since the outlines there may hold threads of the old border finer than these cells
@@ -2182,6 +2268,7 @@ function commitWindow() {
   }
   const res = storeWrite(win.L, win.cx0 + x0, win.cy0 + y0, w, h, msk, src, 0);
   for (let y = y0; y < y1; y++) winOwn0.set(own.subarray(y * W + x0, y * W + x1), y * W + x0);
+  commitOcc();
   return res;
 }
 function captureStore(keys) { const m = new Map(); for (const k of keys) { const t = store.get(k); m.set(k, t === undefined ? undefined : typeof t === 'number' ? t : t.slice()); } return m; }
@@ -2291,6 +2378,7 @@ function allocGrid(w, h) {
   over.width = W; over.height = H;
   oimg = octx.createImageData(W, H);
   own = new Uint8Array(W * H); own0 = new Uint8Array(W * H); pocket = new Uint8Array(W * H);
+  occNew();
   pockets = []; exclaves = []; vec = null; dirty = [];
 }
 let settleT = 0;
@@ -2317,7 +2405,7 @@ function maybeReload() {
   reloadWindow(tl, nx0, ny0, Math.max(16, w), Math.max(16, h));
 }
 function reloadWindow(tl, nx0, ny0, w, h) {
-  commitWindow();
+  commitWindow(); commitOcc();
   const old = win, f = Math.pow(2, tl - old.L);
   const T = p => ({ x: (p.x + old.cx0) * f - nx0, y: (p.y + old.cy0) * f - ny0 });
   for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); if (u.route) u.route = u.route.map(T); if (u.roff) u.roff = { x: u.roff.x * f, y: u.roff.y * f }; if (u.r) u.r *= f; }
@@ -2330,6 +2418,7 @@ function reloadWindow(tl, nx0, ny0, w, h) {
   geo = windowExt(tl, nx0, ny0, w, h);
   readGrid(tl, nx0, ny0, w, h, own);
   winOwn0 = own.slice();
+  loadOcc();
   hist = []; redoStack = []; updUndo();
   spriteCache.clear();
   backdrop = null;
@@ -2394,6 +2483,7 @@ function startEarthStore() {
   geoStore = true;
   win = { L, cx0: 0, cy0 };
   winOwn0 = own.slice();
+  occStore = new Map(); loadOcc();
 }
 // browser storage for tiles
 let tileSaveT = 0;
@@ -3179,6 +3269,135 @@ WARS.unshift(
 );
 // the menu goes in order of time, today's world last
 WARS.sort((a, b) => (a.peace ? '9' : a.date).localeCompare(b.peace ? '9' : b.date));
+// ---------- wars and peace ----------
+// Countries fight only when they are at war. A war is declared by one country on another, and the allies of
+// both (countries of the same side) are in it too. { a, b, t }: a declared war on b at game time t.
+// { all: true }: the rule of projects made before wars existed, everyone against everyone outside their side.
+let wars = [];
+const warM = new Uint8Array(256 * 256);
+function recalcWars() {
+  warM.fill(0);
+  const n = Math.min(countries.length, 250), all = wars.some(w => w.all);
+  const inSide = (x, a) => x === a || allied(x, a);
+  for (let a = 1; a <= n; a++) for (let b = a + 1; b <= n; b++) {
+    if (allied(a, b)) continue;
+    let on = all;
+    for (let k = 0; k < wars.length && !on; k++) { const w = wars[k]; if (!w.all && ((inSide(a, w.a) && inSide(b, w.b)) || (inSide(a, w.b) && inSide(b, w.a)))) on = true; }
+    if (on) { warM[(a << 8) | b] = 1; warM[(b << 8) | a] = 1; }
+  }
+  vecVersion++;                        // front lines are drawn between countries at war only
+}
+const atWar = (a, b) => warM[((a & 255) << 8) | (b & 255)] === 1;
+// whether the border tools move a border only between countries at war (on), or anywhere (map editing)
+let warOnly = true;
+// the wars a scenario opens with: its two named sides against each other (the Cold War stays cold)
+function scenarioWars(w) {
+  if (w.peace || w.id === 'cold') return [];
+  const sides = [...new Set(w.countries.map(c => c.side).filter(Boolean))], out = [];
+  for (let i = 0; i < sides.length; i++) for (let j = i + 1; j < sides.length; j++)
+    out.push({ a: w.countries.findIndex(c => c.side === sides[i]) + 1, b: w.countries.findIndex(c => c.side === sides[j]) + 1, t: Date.parse(w.date + 'T04:00:00Z') });
+  return out;
+}
+
+// ---------- occupation ----------
+// occ[i] for every cell of the working grid: 0 = its owner's own land, OCC_LIB = land the owner has won back
+// (liberated), k = land of country k that its present owner has taken in a war (occupied). The three are drawn
+// as three shades of the owner's colour. On the Earth the layer keeps its own tiles at one fixed level, cells of
+// about 400 m, so zooming in and out never changes it; on a picture map it is a single array.
+const OCC_L = 8, OCC_LIB = 255;
+let occ = null, occ0 = null, occWin0 = null, occStore = new Map(), occAny = false;
+// the state a cell gets when it passes from one owner to another
+function occNext(c, from, to) {
+  if (from === to) return c;
+  if (!from || !to || !atWar(from, to)) return 0;     // painted by hand, or taken from no one: plain land
+  const core = c && c !== OCC_LIB ? c : from;          // whose land it was before the war
+  occAny = true;
+  return to === core ? OCC_LIB : core;
+}
+let occBox = null;                   // [x0, y0, x1, y1) around every occupied or liberated cell of the window
+function occGrow(i) {
+  const x = i % W, y = (i - x) / W, b = occBox;
+  if (!b) occBox = [x, y, x + 1, y + 1];
+  else { if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x >= b[2]) b[2] = x + 1; if (y >= b[3]) b[3] = y + 1; }
+}
+function occScan() {
+  occBox = null; let any = false;
+  if (occ) for (let i = 0; i < occ.length; i++) if (occ[i]) { occGrow(i); any = true; }
+  occAny = any || occStore.size > 0;
+}
+const occTrack = (i, from, to) => { const v = occNext(occ[i], from, to); occ[i] = v; if (v) occGrow(i); };
+function occNew() { occ = new Uint8Array(W * H); occ0 = new Uint8Array(W * H); occWin0 = null; occBox = null; }
+// the window's occupation, read from the tiles (centre of each window cell)
+function loadOcc() {
+  occNew();
+  if (!geoStore || !win) return;
+  if (occStore.size) {
+    const L = win.L, d = OCC_L - L, nO = worldCells(OCC_L), half = d > 0 ? 1 << (d - 1) : 0;
+    for (let y = 0; y < H; y++) {
+      const gy = win.cy0 + y, oy = d >= 0 ? gy * (1 << d) + half : gy >> -d;
+      if (oy < 0 || oy >= nO) continue;
+      const ty = oy >> 8, ry = (oy & 255) << 8;
+      let lastTx = -1, tile = null;
+      for (let x = 0, i = y * W; x < W; x++, i++) {
+        const gx = win.cx0 + x;
+        let ox = d >= 0 ? gx * (1 << d) + half : gx >> -d;
+        ox = ((ox % nO) + nO) % nO;
+        const tx = ox >> 8;
+        if (tx !== lastTx) { lastTx = tx; tile = occStore.get(tk(OCC_L, tx, ty)) || null; }
+        if (tile) occ[i] = tile[ry | (ox & 255)];
+      }
+    }
+  }
+  occWin0 = occ.slice();
+  occScan();
+}
+// write the window's changed occupation back to the tiles; a tile is copied before its first change in a
+// commit, so the maps kept for undo never change under it
+function commitOcc() {
+  if (!geoStore || !win || !occ || !occWin0) return;
+  const L = win.L, d = OCC_L - L, nO = worldCells(OCC_L), copied = new Set();
+  const tileFor = (tx, ty) => {
+    const k = tk(OCC_L, tx, ty);
+    let t = occStore.get(k);
+    if (!copied.has(k)) { t = t ? t.slice() : new Uint8Array(TS * TS); occStore.set(k, t); copied.add(k); }
+    return t;
+  };
+  let ltx = -1, lty = -1, lt = null;
+  const put = (ox, oy, v) => {
+    if (oy < 0 || oy >= nO) return;
+    if (ox < 0 || ox >= nO) ox = ((ox % nO) + nO) % nO;
+    const tx = ox >> 8, ty = oy >> 8;
+    if (tx !== ltx || ty !== lty) { ltx = tx; lty = ty; lt = tileFor(tx, ty); }
+    lt[((oy & 255) << 8) | (ox & 255)] = v;
+  };
+  let any = false;
+  const n4 = occ.length >> 2, a32 = new Uint32Array(occ.buffer, occ.byteOffset, n4), b32 = new Uint32Array(occWin0.buffer, occWin0.byteOffset, n4);
+  let r0 = -1, r1 = -1;
+  for (let i = 0; i < n4; i++) if (a32[i] !== b32[i]) { r0 = Math.floor(i * 4 / W); break; }
+  for (let i = n4 * 4; i < occ.length; i++) if (occ[i] !== occWin0[i]) { const r = Math.floor(i / W); if (r0 < 0) r0 = r; r1 = r; }
+  if (r0 < 0) return;
+  if (r1 < 0) { for (let i = n4 - 1; i >= 0; i--) if (a32[i] !== b32[i]) { r1 = Math.floor((i * 4 + 3) / W); break; } }
+  for (let y = r0; y <= Math.min(H - 1, r1); y++) for (let x = 0, i = y * W; x < W; x++, i++) {
+    const v = occ[i];
+    if (v === occWin0[i]) continue;
+    any = true;
+    const gx = win.cx0 + x, gy = win.cy0 + y;
+    if (d >= 0) {
+      // a coarse window cell covers a block of occupation cells
+      const k = 1 << d;
+      for (let yy = 0; yy < k; yy++) for (let xx = 0; xx < k; xx++) put(gx * k + xx, gy * k + yy, v);
+    } else {
+      // a fine window cell: its occupation cell takes the value of the window cell at its centre
+      const k = 1 << -d, ox = gx >> -d, oy = gy >> -d, cxw = ox * k + (k >> 1) - win.cx0, cyw = oy * k + (k >> 1) - win.cy0;
+      const j = cyw >= 0 && cyw < H && cxw >= 0 && cxw < W ? cyw * W + cxw : i;
+      put(ox, oy, occ[j]);
+    }
+  }
+  if (any) { for (let y = r0; y <= Math.min(H - 1, r1); y++) occWin0.set(occ.subarray(y * W, y * W + W), y * W); for (const k of copied) { const t = occStore.get(k); if (!t.some(v => v)) occStore.delete(k); } }
+}
+// the three shades of each country: its own land, land it occupies (lighter), land it has liberated (deeper)
+let occRgb = [null], libRgb = [null];
+
 // countries in the same alliance never fight each other
 const allied = (a, b) => {
   if (a === b) return true;
@@ -3243,6 +3462,7 @@ async function applyWar(id) {
     gameDate = Date.parse(w.date + 'T04:00:00Z'); gameLog = [];
     era = w.era; $('#era').value = era; unitType = ERAS[era].units[0][0]; paletteKey = '';
     exclaves = []; exclaveLearn = !w.siege;   // pieces cut off at the start are exclaves (Kaliningrad), unless the scenario opens with real encirclements
+    wars = scenarioWars(w); occStore = new Map(); loadOcc(); recalcWars();
     afterChange();
     checkCities(true); saveImage(); renderGeoPanel(); syncGameControls();
     logEvent('Сценарий: ' + w.name);
@@ -3264,30 +3484,50 @@ async function applyWar(id) {
 function resize() {
   dpr = window.devicePixelRatio || 1;
   const r = stage.getBoundingClientRect();
-  uiCv.width = cv.width = Math.max(1, Math.round(r.width * dpr));
-  uiCv.height = cv.height = Math.max(1, Math.round(r.height * dpr));
+  mapCv.width = uiCv.width = cv.width = Math.max(1, Math.round(r.width * dpr));
+  mapCv.height = uiCv.height = cv.height = Math.max(1, Math.round(r.height * dpr));
+  layerSig = '';
   requestDraw();
 }
+let rasterEpoch = 0, overStale = false;
 function draw() {
   raf = 0;
-  if (dirty.length && own) { for (const d of dirty) renderRect(d[0], d[1], d[2], d[3]); needMap = true; }
+  if (dirty.length && own) {
+    // on the Earth the territory is always drawn as curves: the pixel picture is only brought up to date when
+    // it is needed (saving a picture)
+    if (geoStore) overStale = true; else { for (const d of dirty) renderRect(d[0], d[1], d[2], d[3]); rasterEpoch++; }
+    needMap = true;
+  }
   dirty = [];
   if (needMap) { needMap = false; drawMap(); }
   if (needUi) { needUi = false; drawUi(); }
 }
+let layerSig = '';
 function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
-  $('#zoom').textContent = Math.round(view.s * 100) + '%';
-  if (!W) return;
-  if (geo) drawGeoBackdrop();
+  const zt = Math.round(view.s * 100) + '%'; if ($('#zoom').textContent !== zt) $('#zoom').textContent = zt;
+  if (!W) { mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, mapCv.width, mapCv.height); layerSig = ''; return; }
+  // on the Earth borders are always drawn as curves: the working grid changes its detail level as you zoom, and a
+  // switch between pixels and curves at some zoom would make the same border look different
+  const vecMode = geoStore || view.s >= VEC_ZOOM;
+  // territory changed under the curves: retrace them in the background; the layer below is kept until then
+  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff) vecAsync(...vec.win);
+  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
+  if (layerSig !== sigNow()) {
+    const m = mctx;
+    m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
+    if (geo) drawGeoBackdrop(m);
+    m.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
+    if (!geo) { m.fillStyle = 'rgba(0,0,0,.18)'; m.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
+    if (vecMode) drawVectorMap(m);
+    else { m.imageSmoothingEnabled = true; m.drawImage(over, 0, 0); }
+    if (geo) drawRegionFrame(m);
+    drawVecLabels(m);
+    drawTerritoryLabels(m);
+    layerSig = sigNow();
+  }
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
-  if (!geo) { ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
-  if (view.s >= (geoStore ? .9 : VEC_ZOOM)) drawVectorMap(ctx);   // on the Earth borders are always drawn as curves
-  else { ctx.imageSmoothingEnabled = true; ctx.drawImage(over, 0, 0); }
-  if (geo) drawRegionFrame();
-  drawVecLabels(ctx);
-  drawTerritoryLabels(ctx);
   visCache = new Map();
   drawCities(ctx, true);
   drawArrows(ctx, true);
@@ -3422,7 +3662,7 @@ function stamp(a, b, val) {
       const dy = y + .5 - cy, dy2 = dy * dy;
       for (let x = x0; x < x1; x++) {
         const dx = x + .5 - cx;
-        if (dx * dx + dy2 <= R2) own[y * W + x] = val;
+        if (dx * dx + dy2 <= R2) { own[y * W + x] = val; occ[y * W + x] = 0; }
       }
     }
     if (x1 > x0 && y1 > y0) { bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1); }
@@ -3444,7 +3684,7 @@ function warpTo(p0, q) {
       const dx = x + .5 - q.x;
       const r2 = (dx * dx + dy * dy) / R2;
       const o0 = own0[i];
-      if (r2 >= 1) { own[i] = o0; continue; }
+      if (r2 >= 1) { own[i] = o0; occ[i] = occ0[i]; continue; }
       // flat-topped falloff: the whole core of the ring moves together, the rim blends out
       const r = Math.sqrt(r2);
       let w = 1;
@@ -3452,9 +3692,13 @@ function warpTo(p0, q) {
       const sx = clamp(Math.floor(x + .5 - ddx * w), 0, W - 1);
       const sy = clamp(Math.floor(y + .5 - ddy * w), 0, H - 1);
       const s = own0[sy * W + sx];
-      if (o0 === 0 && protect) own[i] = 0;
-      else if (s === 0 && o0 !== 0) own[i] = o0;
-      else own[i] = s;
+      let v;
+      if (o0 === 0 && protect) v = 0;
+      else if (s === 0 && o0 !== 0) v = o0;
+      else if (warOnly && s !== o0 && o0 !== 0 && !atWar(s, o0)) { v = o0; drag.blk = drag.blk || [s, o0]; }
+      else v = s;
+      own[i] = v;
+      if (v !== o0) { const st = occ[i] = occNext(occ0[i], o0, v); if (st) occGrow(i); drag.moved = true; } else occ[i] = occ0[i];
     }
   }
   drag.box = nb;
@@ -3462,7 +3706,7 @@ function warpTo(p0, q) {
   return wb;
 }
 function commitBox(b) {
-  for (let y = b[1]; y < b[3]; y++) { const s = y * W + b[0], e = y * W + b[2]; own0.set(own.subarray(s, e), s); }
+  for (let y = b[1]; y < b[3]; y++) { const s = y * W + b[0], e = y * W + b[2]; own0.set(own.subarray(s, e), s); occ0.set(occ.subarray(s, e), s); }
 }
 function warpStep() {
   if (!drag || drag.mode !== 'warp') return;
@@ -3502,7 +3746,8 @@ function pushAlong(a, b, R, val) {
       for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
         const dx = x + .5 - cx, o = own[i];
         if (o === val || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
-        own[i] = val;
+        if (warOnly && o && !atWar(o, val)) { drag.blk = drag.blk || [val, o]; continue; }
+        occTrack(i, o, val); own[i] = val; drag.moved = true;
         if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
       }
     }
@@ -3549,8 +3794,8 @@ function smoothAt(c, R) {
       }
       let best = me, bc = 0, mc = 0;
       for (let k = 0; k < nk; k++) { if (ids[k] === me) mc = cnt[k]; if (cnt[k] > bc) { bc = cnt[k]; best = ids[k]; } }
-      if (best !== me && bc > mc + 1) {
-        own[y * W + x] = best;
+      if (best !== me && bc > mc + 1 && !(warOnly && !atWar(best, me))) {
+        occTrack(y * W + x, me, best); own[y * W + x] = best; if (drag) drag.moved = true;
         if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
       }
     }
@@ -3573,7 +3818,7 @@ function cleanBox(b) {
       if (!v || v === c) continue;
       // a speck (no neighbour of its own) or the tip of a one-cell spike (one neighbour of its own, three of the other)
       const same = (a === c) + (bb === c) + (u === c) + (d === c);
-      if (same === 0 || (same === 1 && (a === v) + (bb === v) + (u === v) + (d === v) >= 3)) { own[i] = v; ch++; }
+      if (same === 0 || (same === 1 && (a === v) + (bb === v) + (u === v) + (d === v) >= 3)) { own[i] = v; occ[i] = occ[a === v ? i - 1 : bb === v ? i + 1 : u === v ? i - W : i + W]; ch++; }
     }
     if (!ch) break;
   }
@@ -3599,7 +3844,7 @@ function fillAt(g) {
   stack[sp++] = start; seen[start] = 1;
   while (sp) {
     const i = stack[--sp];
-    own[i] = active; count++;
+    own[i] = active; occ[i] = 0; count++;
     const x = i % W, y = (i - x) / W;
     if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
     if (x > 0 && !seen[i - 1]) { seen[i - 1] = 1; if (test(i - 1)) stack[sp++] = i - 1; }
@@ -3612,6 +3857,8 @@ function fillAt(g) {
 }
 
 // Even-odd scanline fill of a closed polygon (grid coords) with one owner.
+let lassoBlk = null;
+const noWarMsg = ([a, b]) => 'Граница не двигается: ' + ownerName(a) + ' и ' + ownerName(b) + ' не воюют. Объявите войну — кнопка «Войны» вверху (или снимите «только на войне» в настройках границы).';
 function fillPolygon(pts, val) {
   let y0 = H, y1 = 0, x0 = W, x1 = 0;
   for (const q of pts) { y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
@@ -3630,7 +3877,8 @@ function fillPolygon(pts, val) {
       for (let x = xa, i = y * W + xa; x <= xb; x++, i++) {
         const o = own[i];
         if (o === val || (o === 0 && protect)) continue;
-        own[i] = val; changed++;
+        if (warOnly && o && !atWar(o, val)) { lassoBlk = lassoBlk || [val, o]; continue; }
+        occTrack(i, o, val); own[i] = val; changed++;
       }
     }
   }
@@ -3701,7 +3949,7 @@ function* pocketWork(src) {
   // only enemies close a ring: a piece that touches an ally is still connected to friendly land.
   // The ring may be closed by several enemies together (Germany and Romania around Odessa): it is still a pocket.
   const multi = new Uint8Array(n);
-  const touch = (r, own_, o) => { if (enc[r] < 0) return; if (allied(own_, o)) { enc[r] = -1; return; } if (!enc[r]) enc[r] = o; else if (enc[r] !== o) multi[r] = 1; };
+  const touch = (r, own_, o) => { if (enc[r] < 0) return; if (!atWar(own_, o)) { enc[r] = -1; return; } if (!enc[r]) enc[r] = o; else if (enc[r] !== o) multi[r] = 1; };
   for (let y = 0; y < H; y++) {
     if ((y & 255) === 255) yield;
     for (let k = rowStart[y]; k + 1 < rowStart[y + 1]; k++) if (re[k] === rs[k + 1] && ro[k] !== ro[k + 1]) { touch(root[k], ro[k], ro[k + 1]); touch(root[k + 1], ro[k + 1], ro[k]); }
@@ -3729,12 +3977,12 @@ function* pocketWork(src) {
       for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
         const r = root[k], a = rs[k], b = re[k], o = ro[k];
         if (!cand[r]) continue;
-        if (a > 0) { const q = src[base + a - 1]; if (!q) sea[r]++; else if (!allied(o, q)) { foe[r]++; addFoe(r, q); } }
-        if (b < W) { const q = src[base + b]; if (!q) sea[r]++; else if (!allied(o, q)) { foe[r]++; addFoe(r, q); } }
+        if (a > 0) { const q = src[base + a - 1]; if (!q) sea[r]++; else if (atWar(o, q)) { foe[r]++; addFoe(r, q); } }
+        if (b < W) { const q = src[base + b]; if (!q) sea[r]++; else if (atWar(o, q)) { foe[r]++; addFoe(r, q); } }
         for (let yy = y - 1; yy <= y + 1; yy += 2) {
           if (yy < 0 || yy >= H) continue;
           const bb = yy * W;
-          for (let x = a; x < b; x++) { const q = src[bb + x]; if (!q) sea[r]++; else if (q !== o && !allied(o, q)) { foe[r]++; addFoe(r, q); } }
+          for (let x = a; x < b; x++) { const q = src[bb + x]; if (!q) sea[r]++; else if (q !== o && atWar(o, q)) { foe[r]++; addFoe(r, q); } }
         }
       }
     }
@@ -3815,7 +4063,7 @@ function takePocket(pk) {
   if (!pk.coal || pk.coal.length < 2) {
     for (let y = by0; y < by1; y++) for (let k = rowStart[y]; k < rowStart[y + 1]; k++) if (root[k] === pk.id) {
       const base = y * W;
-      for (let x = rs[k]; x < re[k]; x++) if (own[base + x] === pk.owner) { own[base + x] = pk.enc; pocket[base + x] = 0; }
+      for (let x = rs[k]; x < re[k]; x++) if (own[base + x] === pk.owner) { occTrack(base + x, pk.owner, pk.enc); own[base + x] = pk.enc; pocket[base + x] = 0; }
     }
   } else {
     // multi-source flood from the enemy cells around the pocket, inside the pocket's box (plus a margin)
@@ -3836,8 +4084,8 @@ function takePocket(pk) {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const j = y * w + x;
       if (!mark[j]) continue;
-      const i = (y + y0) * W + x + x0;
-      own[i] = mark[j] === 2 ? lab[j] : pk.enc; pocket[i] = 0;
+      const i = (y + y0) * W + x + x0, to = mark[j] === 2 ? lab[j] : pk.enc;
+      occTrack(i, own[i], to); own[i] = to; pocket[i] = 0;
     }
   }
   addDirty(bx0, by0, bx1, by1);
@@ -4118,13 +4366,13 @@ let forms = [];                       // { id, parent, ech, owner, era, type, la
 let shown = [];                       // what the last frame drew: { x, y, S, unit } or { x, y, S, node, leaves }
 const FORM_CHILD = { XXXXX: 'XXXX', XXXX: 'XXX', XXX: 'XX' };
 const FORM_WORD = { XXXXX: ['фронт', 'й'], XXXX: ['армия', 'я'], XXX: ['корпус', 'й'], XX: ['дивизия', 'я'] };
-const FORM_SPLIT = 3, FORM_OPEN = 1.12, FORM_CLOSE = .9;
+const FORM_SPLIT = 3, FORM_OPEN = 1.12, FORM_CLOSE = .9, FORM_READ_PX = 20;
 const hierOn = () => !!game.hier;
 const isHier = u => u.f !== undefined;
 // marker height: hierarchy markers keep their size on screen on every map, so zooming is what opens them
-const iconS = u => isHier(u) ? unitSize / view.s * (u.scale || 1) : unitS(u);
+const iconS = u => unitS(u);
 // size of a unit on the battlefield: divisions of a formation have their own, fixed on the map
-const bodyS = u => u.r ? u.r * 2 : unitS(u);
+const bodyS = u => unitS(u);
 // where the line of a new formation should run: along the border nearest to the click
 function frontTangent(g, R) {
   const o = cellOwner(g.x, g.y);
@@ -4145,19 +4393,27 @@ function formNumber(owner, ech) {
 const formLabel = (n, ech) => n + '-' + FORM_WORD[ech][1] + ' ' + FORM_WORD[ech][0];
 // place a whole formation; spacing is chosen so it shows as one marker at the zoom it was placed at
 function spawnFormation(g, ech, owner) {
-  const icon = unitSize / view.s * 1.5, t = frontTangent(g, icon * 3);
-  const made = [];
-  let d1 = icon * .8;
-  const make = (ech_, x, y, sp, parent) => {
-    if (ech_ === 'XX') {
-      const u = { x: clamp(x, 0, W), y: clamp(y, 0, H), era, type: unitType, owner, ech: 'XX', label: formLabel(formNumber(owner, 'XX'), 'XX'), f: parent, r: Math.max(sp, d1 / 9) * .45 };
-      units.push(u); made.push(u); return;
-    }
+  const S = unitCellsAt(g.y), t = frontTangent(g, S * 6);
+  const made = [], divs = [];
+  // the tree first, then the divisions laid out along the front: markers side by side, a second rank behind
+  // the first when the line would get too long
+  const make = (ech_, parent) => {
+    if (ech_ === 'XX') { divs.push(parent); return; }
     const f = { id: genSeqForm(), parent, ech: ech_, owner, era, type: unitType, label: formLabel(formNumber(owner, ech_), ech_) };
     forms.push(f);
-    for (let k = 0; k < FORM_SPLIT; k++) { const o = (k - (FORM_SPLIT - 1) / 2) * sp; make(FORM_CHILD[ech_], x + t.x * o, y + t.y * o, sp / FORM_SPLIT, f.id); }
+    for (let k = 0; k < FORM_SPLIT; k++) make(FORM_CHILD[ech_], f.id);
   };
-  make(ech, g.x, g.y, d1, 0);
+  make(ech, 0);
+  const n = divs.length, ranks = n > 9 ? 2 : 1, perRank = Math.ceil(n / ranks), step = S * 1.6;
+  // the normal of the front points into own land: the second rank stands behind the first
+  let nx = -t.y, ny = t.x;
+  if (cellOwner(g.x + nx * S * 2, g.y + ny * S * 2) !== owner) { nx = -nx; ny = -ny; }
+  divs.forEach((parent, k) => {
+    const r = k % ranks, j = Math.floor(k / ranks), o = (j - (perRank - 1) / 2) * step + (r ? step / 2 : 0);
+    const x = g.x + t.x * o + nx * r * S * 1.25, y = g.y + t.y * o + ny * r * S * 1.25;
+    const u = { x: clamp(x, 0, W), y: clamp(y, 0, H), era, type: unitType, owner, ech: 'XX', label: formLabel(formNumber(owner, 'XX'), 'XX'), f: parent };
+    units.push(u); made.push(u);
+  });
   return made;
 }
 let formSeq = 1;
@@ -4224,28 +4480,29 @@ function layoutUnits() {
   if (!hierOn() || !forms.length) { for (const u of units) leaf(u); return; }
   const { roots, loose } = formTree();
   for (const u of loose) leaf(u);
-  const iconW = unitSize * 1.5;                                  // marker width on screen, pixels
   const visit = n => {
     if (!n.all.length) return;
-    const pad = iconW / s;
+    const nodeS = unitCellsAt(n.y) * (ECH_K[n.f.ech] || 1), pad = nodeS * 2;
     if (n.x1 < vx0 - pad || n.x0 > vx1 + pad || n.y1 < vy0 - pad || n.y0 > vy1 + pad) { n.f._open = false; return; }
     const parts = [...n.sub.filter(q => q.all.length), ...n.leaves];
     if (parts.length === 1) { const q = parts[0]; if (q.all) visit(q); else leaf(q); return; }
-    // closest pair of parts, in screen pixels
+    // the parts' markers on screen: open when they are big enough to read and stand clear of each other
+    const partS = unitCellsAt(n.y) * (ECH_K[FORM_CHILD[n.f.ech]] || 1), partPx = partS * s;
     let sep = Infinity;
     for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
       const d = Math.hypot(parts[a].x - parts[b].x, parts[a].y - parts[b].y) * s; if (d < sep) sep = d;
     }
-    const open = sep >= iconW * (n.f._open ? FORM_CLOSE : FORM_OPEN);
+    const k = n.f._open ? FORM_CLOSE : FORM_OPEN;
+    const open = partPx >= FORM_READ_PX * k && sep >= Math.max(partPx, UNIT_MIN_PX) * 1.05 * k;
     n.f._open = open;
-    if (!open) { if (visible(n.all)) shown.push({ x: n.x, y: n.y, S: unitSize / s, node: n, leaves: n.all, m: formMarker(n) }); return; }
+    if (!open) { if (visible(n.all)) shown.push({ x: n.x, y: n.y, S: nodeS, node: n, leaves: n.all, m: formMarker(n) }); return; }
     for (const q of parts) { if (q.all) visit(q); else leaf(q); }
   };
   for (const n of roots) visit(n);
 }
 function hitShown(g) {
   for (let k = shown.length - 1; k >= 0; k--) {
-    const it = shown[k], h = it.S / 2, w = it.S * .75;
+    const it = shown[k], S = drawS(it.S), h = S / 2, w = S * .75;
     if (Math.abs(g.x - it.x) <= w && Math.abs(g.y - it.y) <= h * 1.2) return it;
   }
   return null;
@@ -4276,23 +4533,23 @@ function drawUnitsFast(c) {
   layoutUnits();
   const r = stage.getBoundingClientRect(), vx0 = -view.x / view.s, vy0 = -view.y / view.s, vx1 = (r.width - view.x) / view.s, vy1 = (r.height - view.y) / view.s;
   for (const it of shown) {
-    const u = it.unit || it.m, S = it.unit ? iconS(u) : it.S;
+    const u = it.unit || it.m, S = drawS(it.unit ? iconS(u) : it.S);
     // off screen: skipped (a marker is at most a few sizes wide)
     if (it.x + S * 3 < vx0 || it.x - S * 3 > vx1 || it.y + S * 3 < vy0 || it.y - S * 3 > vy1) continue;
     const sel = !!(selSet && (it.unit ? selSet.has(u) : it.leaves.every(v => selSet.has(v))));
-    // on the Earth markers keep their screen size, so the exact zoom is used; otherwise 1/3-octave steps
-    let q = geoStore || isHier(u) ? zoom : Math.min(Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3), 12);
-    q = Math.min(q, 700 / S);
-    const sp = unitSprite(u, S * q, sel);
+    // the sprite is drawn at one of six sizes per octave and scaled to the exact one, so zooming smoothly
+    // reuses a few cached pictures instead of painting new ones every frame
+    const px = Math.min(700, S * zoom), pq = Math.pow(2, Math.round(Math.log2(Math.max(px, 2)) * 6) / 6), q = pq / S;
+    const sp = unitSprite(u, pq, sel);
     c.drawImage(sp.c, it.x - sp.left / q, it.y - sp.top / q, sp.c.width / q, sp.c.height / q);
   }
 }
-function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * ZS() * (u.scale || 1), marks && targets().includes(u) && tool === 'units'); }
+function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, drawS(unitS(u)), marks && targets().includes(u) && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
   if (hierOn() && forms.length) { const it = hitShown(g); return it ? it.unit || it.leaves[0] : null; }
   for (let k = units.length - 1; k >= 0; k--) {
-    const u = units[k], S = unitSize * ZS() * (u.scale || 1), h = S / 2, w = S * .75;
+    const u = units[k], S = drawS(unitS(u)), h = S / 2, w = S * .75;
     if (!isVisible(u)) continue;
     if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u;
   }
@@ -4462,7 +4719,7 @@ function showGenUnits(g) {
   if (!us.length) { toast('У генерала ' + g.name + ' пока нет войск.'); return; }
   let b = [W, H, 0, 0];
   us.forEach(u => { b = [Math.min(b[0], u.x), Math.min(b[1], u.y), Math.max(b[2], u.x), Math.max(b[3], u.y)]; });
-  const pad = unitSize * ZS() * 3; showBox([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]);
+  const pad = unitCellsAt((b[1] + b[3]) / 2) * 3; showBox([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]);
 }
 function renderGenEditor() {
   const g = genById(selGen), ed = $('#genEditor');
@@ -4523,7 +4780,21 @@ const TYPE_POWER = {
   dragoon: 1.15, cav: 1.2, partisan: .8
 };
 const ECH_POWER = { '': 1, '•': .3, '•••': .45, 'I': .6, 'II': .8, 'III': 1, 'X': 1.2, 'XX': 1.5, 'XXX': 1.9, 'XXXX': 2.4, 'XXXXX': 3 };
-const unitS = u => unitSize * ZS() * (u.scale || 1);
+// A unit has a size on the ground. On the Earth unitSize is kilometres (36: a division marker about 36 km tall),
+// on a picture map it is cells of the map. Markers grow and shrink with the map exactly like the territory, so
+// zooming out never makes an army look bigger and never changes how far it moves or what it takes; only below
+// UNIT_MIN_PX on screen do markers stop shrinking, so that they stay visible over a whole continent.
+const UNIT_MIN_PX = 7;
+function unitCellsAt(y) {
+  if (!geoStore || !geo) return unitSize;
+  const my = geo.y0 + clamp(y, 0, H) * (geo.y1 - geo.y0) / H;
+  return unitSize * 1000 * W / ((geo.x1 - geo.x0) * 40075016 * Math.cos(latAtY(my) * Math.PI / 180));
+}
+const unitS = u => unitCellsAt(u.y) * (u.scale || 1);
+// marker sizes of formations, relative to a division
+const ECH_K = { XXXXX: 2.1, XXXX: 1.7, XXX: 1.35 };
+// what a marker of grid size S is drawn at: never smaller than UNIT_MIN_PX on screen
+const drawS = S => Math.max(S, UNIT_MIN_PX / view.s);
 const hpOf = u => u.hp === undefined ? 100 : u.hp;
 const immobile = u => unitDef(u).def[2] === 'tower';
 function unitPower(u) { const g = u.gen && genById(u.gen); return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1) * (u.oos && game.supply ? .6 : 1); }
@@ -4541,10 +4812,12 @@ function captureAlong(a, b, R, val) {
     const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H, Math.ceil(cy + R + 1));
     for (let y = y0; y < y1; y++) {
       const dy = y + .5 - cy, dy2 = dy * dy;
-      for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
-        const dx = x + .5 - cx, o = own[i];
-        if (allied(o, val) || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
-        own[i] = val; changed++;
+      if (dy2 > R2) continue;
+      const half = Math.sqrt(R2 - dy2), xa = Math.max(x0, Math.ceil(cx - half - .5)), xb = Math.min(x1, Math.floor(cx + half - .5) + 1);
+      for (let x = xa, i = y * W + xa; x < xb; x++, i++) {
+        const o = own[i];
+        if (o === val || (o === 0 ? protect : !atWar(o, val))) continue;
+        occTrack(i, o, val); own[i] = val; changed++;
         if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
       }
     }
@@ -4591,7 +4864,7 @@ function battleTick() {
     if (fought.has(u)) continue;
     // the nearest enemy within reach (contact, or the distance a unit advances from on its own)
     let best = null, bd = Infinity;
-    forNear(u, bodyS(u) * (autoAdvance ? 8 : 2), v => { if (!allied(v.owner, u.owner) && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
+    forNear(u, bodyS(u) * (autoAdvance ? 8 : 2), v => { if (atWar(v.owner, u.owner) && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best) continue;
     if (bd <= (bodyS(u) + bodyS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
     else if (autoAdvance && !immobile(u) && !u.order && bd <= bodyS(u) * 8) {
@@ -4613,10 +4886,10 @@ function battleTick() {
     toast('Разгромлены: ' + dead.map(u => (u.label || unitDef(u).def[1]) + ' (' + (countries[u.owner - 1] || {}).name + ')').join(', '));
     dead.forEach(u => logEvent('Разгромлен отряд ' + (u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ')' + (u.oos ? ' в окружении' : ''), u.owner));
   }
-  requestDraw();
+  requestDrawFast();
   const perSec = Math.max(1, Math.round(battleSpeed));
   ++battleTicks;
-  if (battleTicks % perSec === 0 || dead.length) { if (geoStore) commitWindow(); if (dead.length) renderCountries(); else updateCountryShares(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
+  if (battleTicks % perSec === 0 || dead.length) { if (geoStore && battleTicks % (perSec * 20) === 0) setTimeout(commitWindow, 0); if (dead.length) renderCountries(); else updateCountryShares(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
   else updateGameInfo();
   if (battleTicks % (perSec * 3) === 0) computePocketsSoon(() => { renderPockets(); logPockets(); });
   if (game.collapse) collapseTick();
@@ -4660,7 +4933,7 @@ function drawBattles(c) {
     if (done.has(key)) continue;
     done.add(key);
     const a = ia, b = ib;
-    const S = Math.min(ia.unit ? iconS(ia.unit) : ia.S, ib.unit ? iconS(ib.unit) : ib.S), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const S = drawS(Math.min(ia.unit ? iconS(ia.unit) : ia.S, ib.unit ? iconS(ib.unit) : ib.S)), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const col = rgb[win.owner] || [200, 60, 50];
     c.save();
     c.strokeStyle = 'rgba(200,40,30,.85)'; c.lineWidth = S * .07; c.setLineDash([S * .18, S * .12]);
@@ -4719,7 +4992,8 @@ function renderLog() {
 }
 
 // --- cities & victory points ---
-const cityR = c => unitSize * ZS() * .11 * (1 + Math.min(c.vp, 25) / 20);
+const CITY_PX = 36;            // cities are map labels: their size on screen is fixed
+const cityR = c => CITY_PX * ZS() * .11 * (1 + Math.min(c.vp, 25) / 20);
 const ownerEpoch = Math.random().toString(36).slice(2);
 function cityOwner(c) {
   if (!own) return 0;
@@ -4784,7 +5058,7 @@ function drawCities(c, marks) {
     if (crowd) {
       const sx = ct.x * view.s + view.x, sy = ct.y * view.s + view.y, rs = r * view.s * (ct.capital ? 1.6 : 1.1);
       if (sx < -80 || sy < -40 || sx > sw + 80 || sy > sh + 40) continue;
-      const fs = Math.max(r * 1.6, unitSize * ZS() * .3) * view.s, half = Math.max(rs, (ct.name.length + 3) * fs * .29);
+      const fs = Math.max(r * 1.6, CITY_PX * ZS() * .3) * view.s, half = Math.max(rs, (ct.name.length + 3) * fs * .29);
       const box = [sx - half, sy - rs, sx + half, sy + rs + fs * 1.3];
       if (ct !== selCity && placed.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
       placed.push(box);
@@ -4800,7 +5074,7 @@ function drawCities(c, marks) {
       c.lineWidth = r * .32; c.strokeStyle = dark; c.stroke();
       c.beginPath(); c.arc(ct.x, ct.y, r * .45, 0, Math.PI * 2); c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
     }
-    const fs = Math.max(r * 1.6, unitSize * ZS() * .3);
+    const fs = Math.max(r * 1.6, CITY_PX * ZS() * .3);
     c.font = `600 ${fs}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top';
     const label = ct.name + (ct.vp > 1 ? '  ' + ct.vp : '');
     const y = ct.y + r * (ct.capital ? 1.6 : 1.3);
@@ -4945,9 +5219,10 @@ const stopOrders = u => { delete u.order; delete u.route; delete u.roff; delete 
 function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } armIdleCursor(); }
 function enemyContact(u) {
   let hit = false;
-  forNear(u, bodyS(u) * 2, v => { if (!allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (bodyS(u) + bodyS(v)) / 2 * 1.9) { hit = true; return false; } });
+  forNear(u, bodyS(u) * 2, v => { if (atWar(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (bodyS(u) + bodyS(v)) / 2 * 1.9) { hit = true; return false; } });
   return hit;
 }
+let marchNoWar = 0, marchCommits = 0;
 function marchFrame(t) {
   marchRaf = 0;
   if (menuPaused) { marchLast = t; marchRaf = requestAnimationFrame(marchFrame); return; }
@@ -4958,7 +5233,7 @@ function marchFrame(t) {
     if (!u.order) continue;
     if (!game.orders || immobile(u)) { stopOrders(u); continue; }
     any = true;
-    let sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
+    let sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt * battleSpeed / 6;
     if (enemyContact(u)) {
       // an offensive: with battles on, the unit fights where it stands and goes on once the way is clear
       if (!u.fighting) { u.fighting = true; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — в бою', u.owner); }
@@ -4969,13 +5244,20 @@ function marchFrame(t) {
     // along the route: on to the next point, carrying over what is left of this frame's step
     for (let guard = 0; guard < 8 && u.order; guard++) {
       const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
+      const step = Math.min(sp, d), lo = cellOwner(u.x + dx / (d || 1) * step, u.y + dy / (d || 1) * step);
+      if (lo && !allied(lo, u.owner) && !atWar(lo, u.owner)) {
+        // no war, no way in: the troops stop at the border
+        stopOrders(u);
+        if (!marchNoWar || marchNoWar !== lo) { marchNoWar = lo; toast(ownerName(u.owner) + ' не воюет со страной ' + ownerName(lo) + ': войска встали у границы. Объявить войну — кнопка «Войны» вверху.'); }
+        break;
+      }
       if (d > sp) { moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp); break; }
       moveUnit(u, u.order.x, u.order.y); sp -= d;
       if (u.route && u.route.length) u.order = u.route.shift(); else stopOrders(u);
     }
   }
-  requestDraw();
-  if (t - marchBeat > 1000) { marchBeat = t; if (geoStore) commitWindow(); renderCountries(); checkCities(); renderScore(); }
+  requestDrawFast();
+  if (t - marchBeat > 1000) { marchBeat = t; if (geoStore && ++marchCommits % 20 === 0) setTimeout(commitWindow, 0); renderCountries(); checkCities(); renderScore(); }
   if (any) marchRaf = requestAnimationFrame(marchFrame);
   else { edited(); checkCities(); renderScore(); }
 }
@@ -4984,7 +5266,7 @@ function drawOrders(c) {
   for (const it of shown) {
     const list = it.unit ? [it.unit] : it.leaves, go = list.filter(u => u.order);
     if (!go.length) continue;
-    const u = it.unit || it.m, col = rgb[u.owner] || [80, 80, 80], S = it.unit ? iconS(u) : it.S;
+    const u = it.unit || it.m, col = rgb[u.owner] || [80, 80, 80], S = drawS(it.unit ? iconS(u) : it.S);
     // a closed formation: the route of its longest-going division, moved back to the formation's own place
     let rep = go[0];
     for (const v of go) if ((v.route ? v.route.length : 0) > (rep.route ? rep.route.length : 0)) rep = v;
@@ -5037,7 +5319,7 @@ function inSupply(u) {
   if (gx < 0 || gy < 0 || gx >= W || gy >= H) return true;
   const i = gy * W + gx;
   if (allied(own[i], u.owner)) return !(pocket[i] && !allied(pocket[i], u.owner));
-  const R = unitSize * ZS() * 5;
+  const R = unitCellsAt(u.y) * 5;
   for (let r = R / 3; r <= R + 1; r += R / 3) for (let k = 0; k < 16; k++) {
     const a = k * Math.PI / 8, x = Math.floor(u.x + Math.cos(a) * r), y = Math.floor(u.y + Math.sin(a) * r);
     if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -5071,16 +5353,17 @@ function aiStep(fought) {
   for (const u of units) {
     if (allied(u.owner, player) || fought.has(u) || u.order || immobile(u)) continue;
     let best = null, bd = bodyS(u) * 12;
-    forNear(u, bd, v => { if (!allied(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
+    forNear(u, bd, v => { if (atWar(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best && game.cities) {
       bd = Infinity;
-      for (const c of cities) if (!allied(cityOwner(c), u.owner)) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
+      for (const c of cities) if (atWar(cityOwner(c), u.owner)) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
     }
     if (!best) continue;
     const d = Math.hypot(best.x - u.x, best.y - u.y);
     if (d < bodyS(u) * .5) continue;
     const step = bodyS(u) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
-    if (protect && cellOwner(nx, ny) === 0) continue;
+    const lo = cellOwner(nx, ny);
+    if ((protect && lo === 0) || (lo && !allied(lo, u.owner) && !atWar(lo, u.owner))) continue;
     moveUnit(u, nx, ny);
   }
 }
@@ -5125,13 +5408,18 @@ function applySystems() {
 }
 
 // ---------- history ----------
-function snap() { exclaveLearn = false; return { vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms) }; }
+function snap() { exclaveLearn = false; if (geoStore) commitOcc(); return { wr: JSON.stringify(wars), oc: occ ? occ.slice() : null, os: geoStore ? new Map(occStore) : null, vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
 function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); forms = JSON.parse(e.fm || '[]'); selArrow = selCity = null;
   if (e.st && geoStore) { applyStoreLog(e.st); readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null; }
+  if (e.wr) { wars = JSON.parse(e.wr); recalcWars(); }
+  if (e.os) occStore = new Map(e.os);
+  if (e.oc && occ && e.oc.length === occ.length) { occ.set(e.oc); occWin0 = occ.slice(); }
+  occScan();
+  if ($('#diplo') && !$('#diplo').hidden) renderDiplo();
 }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
-function afterChange() { whereText = ''; updWhere(); recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
+function afterChange() { whereText = ''; updWhere(); setUnitSize(unitSize); if (typeof renderDiplo === 'function' && (!$('#diplo').hidden || !document.querySelector('[data-pane="war"]').hidden)) renderDiplo(); recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
 function undo() { if (!hist.length || drag) return; const e = hist.pop(), r = snap(); if (e.st) r.st = captureStore(e.st.keys()); redoStack.push(r); restore(e); afterChange(); }
 function redo() { if (!redoStack.length || drag) return; const e = redoStack.pop(), h = snap(); if (e.st) h.st = captureStore(e.st.keys()); hist.push(h); restore(e); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
@@ -5247,6 +5535,12 @@ function removeCountry(idx) {
   generals = generals.filter(g => g.owner !== idx); generals.forEach(g => { if (g.owner > idx) g.owner--; });
   units.forEach(u => { if (u.gen && !genById(u.gen)) delete u.gen; });
   if (player === idx) player = 1; else if (player > idx) player--;
+  const rn = x => x > idx ? x - 1 : x;
+  wars = wars.filter(w => w.all || (w.a !== idx && w.b !== idx)).map(w => w.all ? w : Object.assign({}, w, { a: rn(w.a), b: rn(w.b) }));
+  const remapOcc = v => v === OCC_LIB || !v ? v : v === idx ? 0 : rn(v);
+  for (let i = 0; i < occ.length; i++) if (occ[i]) occ[i] = own[i] ? remapOcc(occ[i]) : 0;
+  if (geoStore) { occWin0 = occ.slice(); for (const [k, t] of [...occStore]) { const nt = t.map(remapOcc); occStore.set(k, nt); } }
+  occScan();
   afterChange();
   toast('«' + name + '» удалена. Ctrl+Z вернёт её.');
 }
@@ -5311,8 +5605,8 @@ function drawSpawnGhost(c) {
   const o = spawnOwner(hover, ctrlDown), ct = countries[o - 1];
   if (!ct) return;
   const big = hierOn() && FORM_CHILD[unitEch];
-  const m = { era, type: unitType, owner: o, ech: unitEch, label: '' };
-  const Sp = Math.min(260, big ? unitSize : unitS(m) * view.s);
+  const m = { era, type: unitType, owner: o, ech: unitEch, label: '', x: hover.x, y: hover.y };
+  const Sp = Math.min(260, Math.max(UNIT_MIN_PX, unitS(m) * (big ? ECH_K[unitEch] || 1 : 1) * view.s));
   const sp = unitSprite(m, Sp * dpr, false), sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y;
   c.save();
   c.globalAlpha = .55;
@@ -5337,6 +5631,7 @@ function setTool(t) {
   $('#fRegion').hidden = !(t === 'fill' && geoStore);
   if (t === 'fill' && regionMode && geoStore) $('#fMode').hidden = true;
   $('#fProtect').hidden = !(t === 'warp' || t === 'lasso');
+  $('#fWarOnly').hidden = !(t === 'warp' || t === 'lasso');
   $('#fUnits').hidden = t !== 'units';
   renderSidePick();
   $('#fArrows').hidden = t !== 'arrows';
@@ -5514,7 +5809,7 @@ cv.addEventListener('pointermove', e => {
   } else if (drag.mode === 'unit') {
     const g = toGrid(p);
     for (const m of drag.group) moveUnit(m.v, g.x - m.ox, g.y - m.oy);
-    drag.moved = true; requestDraw();
+    drag.moved = true; requestDrawFast();
   } else if (drag.mode === 'box') {
     drag.b = toGrid(p); requestUi();
   } else if (drag.mode === 'region') {
@@ -5541,7 +5836,10 @@ function endPointer(e) {
   if (drag.mode === 'pan' && drag.mid && Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 5) { takeControlAt(toGrid(drag.p0)); drag = null; return; }
   if (drag.mode === 'pinch') { if (pointers.size === 0) { drag = null; viewChanged(); } return; }
   if (drag.mode === 'pan') viewChanged();
-  if (drag.mode === 'warp') { warpStep(); if (drag.wm !== 'smooth') cleanBox(drag.ub); $('#hint').textContent = HINTS.warp; }
+  if (drag.mode === 'warp') {
+    warpStep(); if (drag.wm !== 'smooth') cleanBox(drag.ub); $('#hint').textContent = HINTS.warp;
+    if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
+  }
   if (drag.mode === 'box') {
     const x0 = Math.min(drag.a.x, drag.b.x), x1 = Math.max(drag.a.x, drag.b.x), y0 = Math.min(drag.a.y, drag.b.y), y1 = Math.max(drag.a.y, drag.b.y);
     const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
@@ -5583,7 +5881,9 @@ function endPointer(e) {
     const { pts, capt } = drag;
     if (pts.length >= 3) {
       pushHist();
+      lassoBlk = null;
       const n = fillPolygon(pts, capt);
+      if (!n && lassoBlk) { hist.pop(); updUndo(); toast(noWarMsg(lassoBlk)); drag = null; setTool(tool); return; }
       if (n) { wasEdit = true; toast(countries[capt - 1].name + ' окружила и заняла область.'); }
       else { hist.pop(); updUndo(); toast('Внутри кольца нечего занимать.'); }
     }
@@ -5703,7 +6003,7 @@ function loadImageFile(file) {
   img.onerror = () => { URL.revokeObjectURL(url); toast('Не удалось открыть картинку.'); };
   img.src = url;
 }
-$('#fileMap').addEventListener('change', e => { loadImageFile(e.target.files[0]); e.target.value = ''; });
+$('#fileMap').addEventListener('change', e => { wars = []; loadImageFile(e.target.files[0]); e.target.value = ''; });
 $('#fileProj').addEventListener('change', e => { const f = e.target.files[0]; if (f) mapTitle = f.name.replace(/\.json$/i, ''); loadProjectFile(f); e.target.value = ''; });
 ['dragenter', 'dragover'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add('drop'); }));
 ['dragleave', 'drop'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove('drop'); }));
@@ -5806,6 +6106,7 @@ function loadSample() {
   mapTitle = 'Учебная карта';
   gameLog = []; gameDate = Date.UTC(1941, 5, 22, 4); selArrow = selCity = null;
   cities.forEach(c => { c.lastOwner = undefined; });
+  wars = [{ a: 1, b: 2, t: gameDate }]; occNew(); occAny = false; recalcWars();
   afterChange();
   saveImage();
   setTool('warp');
@@ -5950,6 +6251,7 @@ $('#btnPng').addEventListener('click', async () => {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d');
   if (geo) { toast('Собираю снимки для картинки…'); await exportGeoBase(x); }
+  if (overStale) { renderRect(0, 0, W, H); overStale = false; }
   const draw = () => { x.drawImage(over, 0, 0); drawCities(x, false); drawArrows(x, false); drawUnits(x, false); };
   draw();
   try { c.toBlob(b => download(b, 'karta.png'), 'image/png'); }
@@ -5962,7 +6264,8 @@ $('#btnPng').addEventListener('click', async () => {
 $('#btnProj').addEventListener('click', () => {
   if (!W) return;
   const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoBorders, geoStore, win,
-    forms, vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
+    forms, vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth,
+    wars, occ: geoStore ? undefined : rle(occ), occTiles: geoStore ? (commitOcc(), [...occStore].map(([k, t]) => [k, rle(t)])) : undefined };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -5988,8 +6291,9 @@ function loadProjectFile(file) {
           adoptTiles(new Map(d.tiles.map(([k, v]) => [k, typeof v === 'number' ? v : unrle(v, TS * TS)])));
           geoStore = true; win = d.win;
           readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
+          occStore = new Map((d.occTiles || []).map(([k, v]) => [k, unrle(v, TS * TS)])); loadOcc();
           clearTileDB().then(() => { store.forEach((t, k) => storeDirty.add(k)); scheduleTileSave(); });
-        }
+        } else if (d.occ) { occ.set(unrle(d.occ, W * H)); occScan(); }
         afterChange(); saveImage(); setTool('warp');
         toast('Проект открыт.');
       };
@@ -6021,13 +6325,14 @@ async function dbGet(key) {
 let saveT = 0, saveFn = null;
 // the last change still waiting to be saved is written when the page closes
 const flushSave = () => { if (saveFn) { clearTimeout(saveT); const f = saveFn; saveFn = null; f(); } };
-window.addEventListener('pagehide', flushSave);
+window.addEventListener('pagehide', () => { if (geoStore && own) { commitWindow(); scheduleSave(); } flushSave(); });
 function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(saveFn = () => {
     saveFn = null;
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, warpMode, mapTitle, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    if (geoStore && !battlesOn && !marchRaf) commitWindow();
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -6048,6 +6353,8 @@ async function restoreSaved() {
       adoptTiles(await loadTileDB());
       geoStore = true; win = st.win;
       readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
+      // the window as it was when saved, over the tiles (they may lag behind it during battles)
+      if (st.own.length === own.length) own.set(st.own);
       if (st.regionLevel) { regionLevel = st.regionLevel; $('#regionLevel').value = regionLevel; }
       if (st.regionMode) { regionMode = true; $('#regionMode').checked = true; $('#tglRegion').setAttribute('aria-pressed', true); $('#tglRegion').querySelector('b').textContent = 'вкл'; }
     }
@@ -6060,6 +6367,9 @@ async function restoreSaved() {
     if (typeof st.spawnSide === 'number') spawnSide = st.spawnSide;
     if (st.warpMode) setWarpMode(st.warpMode, true);
     mapTitle = st.mapTitle || '';
+    if (typeof st.warOnly === 'boolean') { warOnly = st.warOnly; $('#warOnly').checked = warOnly; }
+    if (st.geoStore && st.win) { occStore = new Map(st.occTiles || []); loadOcc(); if (st.occ && st.occ.length === occ.length) { occ.set(st.occ); occScan(); } }
+    else if (st.occ && st.occ.length === W * H) { occ.set(st.occ); occScan(); }
     units = st.units || []; forms = st.forms || [];
     loadGenerals(st.generals); player = st.player || 1;
     loadGame(st);
@@ -6077,11 +6387,111 @@ async function restoreSaved() {
 }
 
 var hudReady = false;
+// ---------- diplomacy: war is declared and peace is made from one panel ----------
+const warName = w => w.all ? 'Все против всех' : ownerName(w.a) + ' — ' + ownerName(w.b);
+const sideOf = x => { const c = countries[x - 1]; return c && c.side ? countries.map((q, k) => k + 1).filter(k => k === x || allied(k, x)) : [x]; };
+function declareWar(a, b) {
+  if (!countries[a - 1] || !countries[b - 1] || a === b) { toast('Выберите две разные страны.'); return false; }
+  if (allied(a, b)) { toast(ownerName(a) + ' и ' + ownerName(b) + ' — союзники: они на одной стороне.'); return false; }
+  if (atWar(a, b)) { toast(ownerName(a) + ' и ' + ownerName(b) + ' уже воюют.'); return false; }
+  pushHist();
+  wars.push({ a, b, t: gameDate });
+  recalcWars();
+  const withA = sideOf(a).filter(k => k !== a), withB = sideOf(b).filter(k => k !== b);
+  logEvent(ownerName(a) + ' объявила войну стране ' + ownerName(b) + (withA.length || withB.length ? ' (вместе с союзниками)' : ''), a);
+  toast('Война! ' + ownerName(a) + ' против ' + ownerName(b) + '. Теперь их граница двигается.');
+  afterWarChange();
+  return true;
+}
+// Peace: everything one side took from the other becomes its own land for good (the occupied shade turns into
+// the country's own colour), and the liberated shade goes back to the plain one.
+function makePeace(k) {
+  const w = wars[k];
+  if (!w) return;
+  if (geoStore) { commitWindow(); commitOcc(); }
+  pushHist();
+  wars.splice(k, 1);
+  const inA = x => w.all || x === w.a || allied(x, w.a), inB = x => w.all || x === w.b || allied(x, w.b);
+  const across = (holder, core) => holder !== core && ((inA(holder) && inB(core)) || (inB(holder) && inA(core)));
+  const settle = (v, o) => !v || v === o ? 0 : v === OCC_LIB ? (inA(o) || inB(o) ? 0 : v) : across(o, v) ? 0 : v;
+  let annexed = 0;
+  for (let i = 0; i < occ.length; i++) { const v = occ[i]; if (v) { const nv = settle(v, own[i]); if (nv !== v) { occ[i] = nv; if (v !== OCC_LIB) annexed++; } } }
+  if (geoStore && occStore.size) {
+    // the tiles outside the window: the owner of each occupied cell from the territory at the same level
+    for (const [key, t] of [...occStore]) {
+      const tx = key % 65536, ty = Math.floor(key / 65536) % 65536;
+      let ownT = null, nt = null;
+      for (let i = 0; i < t.length; i++) {
+        const v = t[i]; if (!v) continue;
+        if (!ownT) { ownT = tileBlock(OCC_L, tx, ty); nt = t.slice(); }
+        const o = typeof ownT === 'number' ? ownT : ownT[i], nv = settle(v, o);
+        if (nv !== v) nt[i] = nv;
+      }
+      if (nt) { if (nt.some(v => v)) occStore.set(key, nt); else occStore.delete(key); }
+    }
+    loadOcc();
+  }
+  occScan();
+  recalcWars();
+  logEvent('Мир: ' + warName(w) + (annexed ? '. Занятые земли отошли тем, кто их занял' : ''), w.a);
+  toast('Заключён мир: ' + warName(w) + '.');
+  afterWarChange();
+}
+function afterWarChange() {
+  addDirty(0, 0, W, H); vecVersion++;
+  for (const u of units) if (u.fighting) delete u.fighting;
+  edited(); renderDiplo(); renderHud(); requestDraw();
+}
+function renderDiplo() {
+  const names = countries.map((c, k) => [c.name, k + 1]).sort((p, q) => p[0].localeCompare(q[0], 'ru'));
+  for (const sel of [$('#dA'), $('#dB')]) {
+    const cur = +sel.value;
+    sel.textContent = '';
+    for (const [nm, k] of names) { const o = document.createElement('option'); o.value = k; o.textContent = nm; sel.append(o); }
+    if (countries[cur - 1]) sel.value = cur;
+  }
+  if (!countries[+$('#dA').value - 1] || !$('#dA').dataset.touched) $('#dA').value = player || 1;
+  const A = +$('#dA').value, canFight = k => k !== A && !allied(k, A) && !atWar(k, A);
+  // the target list says who is an ally and who is already at war; the default is someone one can fight
+  for (const o of $('#dB').options) { const k = +o.value; o.textContent = ownerName(k) + (k === A ? '' : allied(k, A) ? ' — союзник' : atWar(k, A) ? ' — уже война' : ''); o.disabled = !canFight(k); }
+  if (!canFight(+$('#dB').value)) { const o = names.find(n => canFight(n[1])); if (o) $('#dB').value = o[1]; }
+  for (const box of [$('#dList'), $('#warList')]) {
+    box.textContent = '';
+    if (!wars.length) { const li = document.createElement('li'); li.className = 'dnone'; li.textContent = 'Мир: никто ни с кем не воюет. Граница между странами не двигается, пока одна не объявит войну другой.'; box.append(li); continue; }
+    wars.forEach((w, k) => {
+      const li = document.createElement('li');
+      const sw = document.createElement('span'); sw.className = 'dsw';
+      if (!w.all) for (const x of [w.a, w.b]) { const i = document.createElement('i'); i.style.background = countries[x - 1] ? countries[x - 1].color : '#888'; sw.append(i); }
+      const t = document.createElement('span'); t.className = 'dt';
+      const b = document.createElement('b'); b.textContent = warName(w);
+      const sm = document.createElement('small');
+      const allies = w.all ? [] : [...sideOf(w.a), ...sideOf(w.b)].filter(x => x !== w.a && x !== w.b);
+      sm.textContent = (w.all ? 'каждая страна против всех, кто не на её стороне' : (w.t ? 'с ' + fmtDate(w.t).replace(/, \d\d:00$/, '') : '')) + (allies.length ? ' · с союзниками: ' + allies.map(ownerName).join(', ') : '');
+      t.append(b, sm);
+      const p = document.createElement('button'); p.textContent = 'Заключить мир'; p.addEventListener('click', () => makePeace(k));
+      li.append(sw, t, p); box.append(li);
+    });
+  }
+  const c = countries[player - 1] || countries[0];
+  if (c) {
+    const col = hex2rgb(c.color), sh = (f, k) => 'rgb(' + col.map(v => Math.round(f(v))).join(',') + ')';
+    $('#dLeg1').style.background = c.color; $('#dLeg2').style.background = sh(v => v + (255 - v) * .46); $('#dLeg3').style.background = sh(v => v * .74);
+  }
+}
+function openDiplo(on) { const d = $('#diplo'); d.hidden = on === undefined ? !d.hidden : !on; if (!d.hidden) renderDiplo(); }
+$('#hudWar').addEventListener('click', () => openDiplo());
+$('#diploClose').addEventListener('click', () => openDiplo(false));
+$('#dA').addEventListener('change', e => { e.target.dataset.touched = 1; renderDiplo(); });
+$('#dDeclare').addEventListener('click', () => declareWar(+$('#dA').value, +$('#dB').value));
+$('#warOpen').addEventListener('click', () => openDiplo(true));
+$('#warOnly').addEventListener('change', e => { warOnly = e.target.checked; scheduleSave(); toast(warOnly ? 'Граница двигается только между странами в войне.' : 'Граница двигается где угодно (редактор карты).'); });
+
 // ---------- interface: theme, panel tabs, HUD ----------
 const LS = { get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
 function setTheme(t) { document.documentElement.dataset.theme = t; LS.set('mezha-theme', t); }
 setTheme(LS.get('mezha-theme', 'dark'));
 function showTab(name) {
+  if (name === 'war') setTimeout(renderDiplo);
   document.querySelectorAll('.ptabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === name); b.setAttribute('aria-selected', b.dataset.tab === name); });
   document.querySelectorAll('#panel .pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
   LS.set('mezha-tab', name);
@@ -6154,6 +6564,10 @@ function renderHud() {
       $('#hudScore').title = 'Победные очки. ' + top.map(([v, k]) => countries[k].name + ': ' + v).join(', ');
     }
   }
+  const nw = wars.filter(w => !w.all).length + (wars.some(w => w.all) ? 1 : 0);
+  const wn = $('#hudWarN'), wsig = String(nw);
+  if (wn.dataset.n !== wsig) { wn.dataset.n = wsig; wn.textContent = ''; if (nw) { const w = document.createElement('span'); w.className = 'pw'; w.textContent = ' ' + plural(nw, 'война', 'войны', 'войн'); wn.append(String(nw), w); } else wn.textContent = 'Мир'; }
+  $('#hudWar').classList.toggle('on', nw > 0);
   const np = pockets.length;
   $('#hudPockets').hidden = !np;
   const pn = $('#hudPocketN'), sig = String(np);
@@ -6244,7 +6658,7 @@ document.querySelectorAll('#menu [data-back]').forEach(b => b.addEventListener('
 function freshWorld() {
   setBattles(false);
   units = []; forms = []; cities = []; arrows = []; generals = []; gameLog = []; selUnit = null; selUnits = []; selGen = null;
-  countries = []; exclaves = [];
+  countries = []; exclaves = []; wars = [];
 }
 $('#sbEarth').addEventListener('click', () => { freshWorld(); openEarth(); mapTitle = 'Чистая Земля'; renderLog(); renderGenerals(); closeMenu(); });
 $('#sbModern').addEventListener('click', () => startScenario('modern'));
@@ -6512,6 +6926,7 @@ function renderSettings() {
   mirrorCheck(bd, 'Прятать курсор, пока двигается граница', 'Мышь не мешает смотреть на линию фронта — ни при перетаскивании, ни когда её двигают войска.', '#hideCursor');
   select(bd, 'Круг захвата (O)', '#ringMode');
   mirrorCheck(bd, 'Не заходить на нейтральные земли и море', 'Граница и войска не занимают ничьи земли и не выходят в море.', '#protect');
+  mirrorCheck(bd, 'Двигать границу только между странами в войне', 'Пока страны не воюют, их общая граница стоит на месте. Снимите, чтобы свободно перекраивать карту как редактор.', '#warOnly');
   const mp = card('Карта');
   range(mp, 'Насыщенность заливки', '#alpha', '#alphaOut');
   range(mp, 'Толщина границы', '#bw', '#bwOut');
@@ -6543,7 +6958,7 @@ const USMIN = 8, USMAX = 240;
 function setUnitSize(v, save) {
   unitSize = clamp(Math.round(+v), USMIN, USMAX);
   $('#usize').value = Math.round(1000 * Math.log(unitSize / USMIN) / Math.log(USMAX / USMIN));
-  $('#usizeOut').textContent = unitSize + ' px';
+  $('#usizeOut').textContent = unitSize + (geoStore ? ' км' : ' px');
   document.querySelectorAll('#usizePresets button').forEach(b => b.classList.toggle('on', +b.dataset.size === unitSize));
   requestDraw();
   if (save) scheduleSave();
@@ -6564,7 +6979,7 @@ function setUnitsScale(list, f, save, u = list[list.length - 1]) {
 function resizeUnitAt(p, k) {
   const u = hitUnit(toGrid(p));
   if (u) { if (u !== selUnit) selectUnit(u); setUnitScale(u, (u.scale || 1) * k, true); toast('Размер отряда: ' + Math.round((u.scale || 1) * 100) + '%'); }
-  else { setUnitSize(unitSize * k, true); toast('Размер всех значков: ' + unitSize + ' px'); }
+  else { setUnitSize(unitSize * k, true); toast('Размер войск: ' + unitSize + (geoStore ? ' км на местности' : ' клеток карты')); }
 }
 function deleteUnit() {
   if (!selUnit) return;
@@ -6637,6 +7052,9 @@ $('#genDel').addEventListener('click', () => { const g = curGen(); if (g) remove
 $('#genClose').addEventListener('click', closeGen);
 new ResizeObserver(() => { stage.style.setProperty('--strip-h', $('#genStrip').offsetHeight + 'px'); if (!userView) fit(); }).observe($('#genStrip'));
 function loadGame(d) {
+  // made before wars existed: everyone keeps fighting everyone outside their side, as it was
+  wars = Array.isArray(d.wars) ? d.wars : [{ all: true }];
+  recalcWars();
   if (d.game) game = Object.assign({}, game, d.game);
   if (d.gameDate) gameDate = d.gameDate;
   if (d.hoursPerTick) hoursPerTick = d.hoursPerTick;
