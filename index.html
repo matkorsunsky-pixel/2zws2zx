@@ -523,7 +523,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>Войска:</b> щелчок по пустому месту ставит отряд, отряд можно перетащить, <b>Delete</b> удаляет выбранный</li>
       <li><b>Shift + щелчок</b> по отрядам или <b>Shift + рамка</b> выбирают несколько отрядов, <b>Ctrl+A</b> — все отряды выбранной страны</li>
       <li><b>Генералы</b> — полоса внизу карты: выберите, за кого играете, добавьте генерала, дайте имя и фото, назначьте его командиром отрядов</li>
-      <li><b>ПКМ</b> по карте с выбранными отрядами — приказ на марш (если включено в «Игре»)</li>
+      <li><b>ПКМ</b> по карте с выбранными отрядами — марш в точку; <b>протяните ПКМ</b> — нарисуйте маршрут наступления, отряды пойдут по нему, держа строй; <b>Shift + ПКМ</b> — добавить отрезок к маршруту</li>
       <li><b>O</b> — круг захвата: всегда / прятать при перетаскивании / не показывать</li>
       <li><b>R</b> — на карте Земли: заливка по регионам вкл/выкл</li>
       <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
@@ -631,7 +631,7 @@ const HINTS = {
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
-  units: 'Щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
+  units: 'Щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -1976,7 +1976,7 @@ function reloadWindow(tl, nx0, ny0, w, h) {
   commitWindow();
   const old = win, f = Math.pow(2, tl - old.L);
   const T = p => ({ x: (p.x + old.cx0) * f - nx0, y: (p.y + old.cy0) * f - ny0 });
-  for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); if (u.r) u.r *= f; }
+  for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); if (u.route) u.route = u.route.map(T); if (u.roff) u.roff = { x: u.roff.x * f, y: u.roff.y * f }; if (u.r) u.r *= f; }
   for (const c of cities) { const q = T(c); c.x = q.x; c.y = q.y; }
   for (const a of arrows) a.pts = a.pts.map(T);
   const s0 = view.s;
@@ -2959,6 +2959,7 @@ function drawUi() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawRegionHover(ctx);
   drawSpawnGhost(ctx);
+  drawRouteDraft(ctx);
   if (drag && drag.mode === 'box') {
     const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
     ctx.fillStyle = 'rgba(226,184,74,.15)'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
@@ -4322,16 +4323,30 @@ function hitArrow(g) {
 const SPEED = { armor: 1.6, mech: 1.4, motor: 1.4, tankmk: .9, cav: 1.3, horseshoe: 1.3, sabre: 1.3, dragoon: 1.2, helmet: 1.1, wheel: 1.3,
   heli: 2.2, plane: 3, biplane: 2.5, drone: 2.5, ship: 1.2, galley: 1, sub: 1, train: 1.5, art: .8, heavyart: .6, cannon: .7, catapult: .5, elephant: .9, hq: 1 };
 let marchRaf = 0, marchLast = 0, marchBeat = 0;
-function issueOrder(target) {
+function issueOrder(target, append) { issueRoute([target], append); }
+// Each unit follows the drawn line shifted by its place in the group, so the group keeps its shape:
+// the divisions of a front advance side by side, every one along its own copy of the line.
+function issueRoute(pts, append) {
   const list = targets().filter(u => !immobile(u));
   if (!list.length) return;
   pushHist();
+  const path = pts.length > 2 ? smoothLine(simplify(pts, 5 / view.s), 2) : pts;
   const cx = list.reduce((s, u) => s + u.x, 0) / list.length, cy = list.reduce((s, u) => s + u.y, 0) / list.length;
   const keep = list.every(isHier) ? 1 : .8;           // a formation keeps its line on the march
-  for (const u of list) u.order = { x: clamp(target.x + (u.x - cx) * keep, 0, W), y: clamp(target.y + (u.y - cy) * keep, 0, H) };
-  toast(list.length > 1 ? 'Отряды выступили: ' + list.length : 'Отряд выступил');
+  for (const u of list) {
+    const off = { x: (u.x - cx) * keep, y: (u.y - cy) * keep };
+    const wps = path.map(q => ({ x: clamp(q.x + off.x, 0, W), y: clamp(q.y + off.y, 0, H) }));
+    if (append && u.order) { u.route = (u.route || []).concat(wps); }
+    else { u.order = wps[0]; u.route = wps.slice(1); u.roff = off; }
+    if (!u.route.length) delete u.route;
+    delete u.fighting;
+  }
+  const many = list.length > 1;
+  toast(pts.length > 1 ? (many ? 'Наступление по маршруту: ' + list.length + ' отрядов' : 'Отряд пошёл по маршруту') + (append ? ' (добавлено к прежнему)' : '')
+    : (many ? 'Отряды выступили: ' + list.length : 'Отряд выступил'));
   startMarch();
 }
+const stopOrders = u => { delete u.order; delete u.route; delete u.roff; delete u.fighting; };
 function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } armIdleCursor(); }
 function enemyContact(u) {
   let hit = false;
@@ -4345,13 +4360,23 @@ function marchFrame(t) {
   let any = false;
   for (const u of units) {
     if (!u.order) continue;
-    if (!game.orders || immobile(u)) { delete u.order; continue; }
+    if (!game.orders || immobile(u)) { stopOrders(u); continue; }
     any = true;
-    const sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
-    const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
-    if (enemyContact(u)) { delete u.order; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — в бою', u.owner); continue; }
-    if (d <= sp) { moveUnit(u, u.order.x, u.order.y); delete u.order; continue; }
-    moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp);
+    let sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
+    if (enemyContact(u)) {
+      // an offensive: with battles on, the unit fights where it stands and goes on once the way is clear
+      if (!u.fighting) { u.fighting = true; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — в бою', u.owner); }
+      if (!battlesOn) stopOrders(u);
+      continue;
+    }
+    delete u.fighting;
+    // along the route: on to the next point, carrying over what is left of this frame's step
+    for (let guard = 0; guard < 8 && u.order; guard++) {
+      const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
+      if (d > sp) { moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp); break; }
+      moveUnit(u, u.order.x, u.order.y); sp -= d;
+      if (u.route && u.route.length) u.order = u.route.shift(); else stopOrders(u);
+    }
   }
   requestDraw();
   if (t - marchBeat > 1000) { marchBeat = t; if (geoStore) commitWindow(); renderCountries(); checkCities(); renderScore(); }
@@ -4363,12 +4388,51 @@ function drawOrders(c) {
   for (const it of shown) {
     const list = it.unit ? [it.unit] : it.leaves, go = list.filter(u => u.order);
     if (!go.length) continue;
-    const u = it.unit || it.m, ox = go.reduce((s, v) => s + v.order.x, 0) / go.length, oy = go.reduce((s, v) => s + v.order.y, 0) / go.length;
-    const col = rgb[u.owner] || [80, 80, 80], S = it.unit ? iconS(u) : it.S;
-    c.strokeStyle = `rgba(${col[0] * .5 | 0},${col[1] * .5 | 0},${col[2] * .5 | 0},.85)`; c.lineWidth = S * .06;
-    c.setLineDash([S * .2, S * .14]); c.beginPath(); c.moveTo(it.x, it.y); c.lineTo(ox, oy); c.stroke(); c.setLineDash([]);
-    c.beginPath(); c.arc(ox, oy, S * .14, 0, Math.PI * 2); c.fillStyle = c.strokeStyle; c.fill();
+    const u = it.unit || it.m, col = rgb[u.owner] || [80, 80, 80], S = it.unit ? iconS(u) : it.S;
+    // a closed formation: the route of its longest-going division, moved back to the formation's own place
+    let rep = go[0];
+    for (const v of go) if ((v.route ? v.route.length : 0) > (rep.route ? rep.route.length : 0)) rep = v;
+    let sx = 0, sy = 0;
+    if (!it.unit && rep.roff) {
+      let mx = 0, my = 0, n = 0;
+      for (const v of go) if (v.roff) { mx += v.roff.x; my += v.roff.y; n++; }
+      sx = (n ? mx / n : 0) - rep.roff.x; sy = (n ? my / n : 0) - rep.roff.y;
+    }
+    const pts = [{ x: it.x, y: it.y }, ...[rep.order, ...(rep.route || [])].map(q => ({ x: q.x + sx, y: q.y + sy }))];
+    const ink = `rgba(${col[0] * .5 | 0},${col[1] * .5 | 0},${col[2] * .5 | 0},.85)`;
+    c.lineJoin = c.lineCap = 'round';
+    c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = S * .12;
+    c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke();
+    c.strokeStyle = ink; c.lineWidth = S * .06; c.setLineDash([S * .2, S * .14]);
+    c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke(); c.setLineDash([]);
+    const a = pts[pts.length - 1], b = pts[Math.max(0, pts.length - 2)], ang = Math.atan2(a.y - b.y, a.x - b.x), h = S * .32;
+    c.fillStyle = ink; c.beginPath(); c.moveTo(a.x, a.y);
+    c.lineTo(a.x - Math.cos(ang - .45) * h, a.y - Math.sin(ang - .45) * h); c.lineTo(a.x - Math.cos(ang + .45) * h, a.y - Math.sin(ang + .45) * h); c.closePath(); c.fill();
   }
+}
+// the route being drawn with the right button: a broad arrow in the colours of the troops
+function drawRouteDraft(c) {
+  if (!drag || drag.mode !== 'route' || drag.pts.length < 2) return;
+  const col = rgb[drag.owner] || [80, 80, 80], pts = smoothLine(drag.pts, 1).map(q => ({ x: q.x * view.s + view.x, y: q.y * view.s + view.y }));
+  c.save(); c.lineJoin = c.lineCap = 'round';
+  c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 11;
+  c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke();
+  c.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},.95)`; c.lineWidth = 6;
+  c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke();
+  const a = pts[pts.length - 1];
+  let b = pts[0];
+  for (let k = pts.length - 2; k >= 0; k--) if (Math.hypot(a.x - pts[k].x, a.y - pts[k].y) > 14) { b = pts[k]; break; }
+  const ang = Math.atan2(a.y - b.y, a.x - b.x), h = 22;
+  c.beginPath(); c.moveTo(a.x + Math.cos(ang) * 6, a.y + Math.sin(ang) * 6);
+  c.lineTo(a.x - Math.cos(ang - .5) * h, a.y - Math.sin(ang - .5) * h); c.lineTo(a.x - Math.cos(ang + .5) * h, a.y - Math.sin(ang + .5) * h); c.closePath();
+  c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill(); c.lineWidth = 2.5; c.strokeStyle = '#fff'; c.stroke();
+  const n = targets().filter(u => !immobile(u)).length;
+  c.font = `600 12px ${FONT_UI}`; c.textAlign = 'left'; c.textBaseline = 'middle';
+  const label = (drag.append ? '+ ' : '') + 'Наступление: ' + n + (n === 1 ? ' отряд' : ' отр.');
+  const tw = c.measureText(label).width + 14;
+  c.fillStyle = 'rgba(255,255,255,.94)'; c.beginPath(); c.roundRect(a.x + 14, a.y - 11, tw, 22, 11); c.fill();
+  c.fillStyle = '#1b2028'; c.fillText(label, a.x + 21, a.y + .5);
+  c.restore();
 }
 
 // --- supply ---
@@ -4717,7 +4781,9 @@ cv.addEventListener('pointerdown', e => {
   }
   if (pointers.size > 2) return;
   if (e.button === 2 && tool === 'units' && game.orders && W && targets().length && !spaceDown) {
-    issueOrder(toGrid(p));
+    // as in Hearts of Iron: a click sends the troops straight there, a drag draws the way they are to go
+    const g0 = toGrid(p);
+    drag = { mode: 'route', pts: [g0], sx: p.x, sy: p.y, append: e.shiftKey, owner: targets()[0].owner, len: 0 };
     return;
   }
   if (e.button === 1 || e.button === 2 || tool === 'pan' || spaceDown || !W) {
@@ -4850,6 +4916,9 @@ cv.addEventListener('pointermove', e => {
     drag.b = toGrid(p); requestUi();
   } else if (drag.mode === 'region') {
     const g = toGrid(p); drag.b = { x: clamp(g.x, 0, W), y: clamp(g.y, 0, H) }; requestUi();
+  } else if (drag.mode === 'route') {
+    const g = toGrid(p), l = drag.pts[drag.pts.length - 1], d = Math.hypot(g.x - l.x, g.y - l.y) * view.s;
+    if (d >= 4) { drag.pts.push(g); drag.len += d; requestUi(); }
   } else if (drag.mode === 'arrow') {
     const g = toGrid(p), l = drag.pts[drag.pts.length - 1];
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 4) { drag.pts.push(g); requestUi(); }
@@ -4881,6 +4950,11 @@ function endPointer(e) {
     const { a, b } = drag; drag = null; requestUi();
     if (Math.abs(b.x - a.x) * view.s < 10 || Math.abs(b.y - a.y) * view.s < 10) { toast('Зажмите ЛКМ и протяните рамку вокруг города или района.'); return; }
     geoRefineRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y));
+    return;
+  }
+  if (drag.mode === 'route') {
+    const { pts, len, append } = drag; drag = null; requestUi();
+    if (len < 14) issueOrder(pts[0], append); else issueRoute(pts, append);
     return;
   }
   if (drag.mode === 'arrow') {
@@ -5536,7 +5610,7 @@ $('#cityName').addEventListener('input', e => { if (!selCity) return; if (!cityN
 $('#cityVp').addEventListener('input', e => { if (!selCity) return; selCity.vp = +e.target.value; $('#cityVpOut').textContent = selCity.vp; renderScore(); requestDraw(); scheduleSave(); });
 $('#cityCap').addEventListener('change', e => { if (!selCity) return; pushHist(); selCity.capital = e.target.checked; requestDraw(); scheduleSave(); });
 $('#cityDel').addEventListener('click', deleteCity);
-$('#unitStop').addEventListener('click', () => { targets().forEach(u => delete u.order); renderUnitPanel(); requestDraw(); });
+$('#unitStop').addEventListener('click', () => { targets().forEach(stopOrders); renderUnitPanel(); requestDraw(); });
 $('#btnEarth').addEventListener('click', openEarth);
 $('#geoRefine').addEventListener('click', geoRefine);
 $('#geoRegionBtn').addEventListener('click', () => { setTool('region'); toast('Зажмите ЛКМ и протяните рамку вокруг города или района.'); });
