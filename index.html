@@ -822,7 +822,7 @@ body:not(.nopanel) .status > #hint { display: none; }
           <li><b>,</b> и <b>.</b> (Б и Ю) — предыдущая и следующая страна, <b>Shift + , .</b> — сразу взять её под управление</li>
           <li>Страны в списке перетаскиваются за <b>⋮⋮</b>, разделы слева сворачиваются щелчком по заголовку, <b>Shift + щелчок</b> оставляет открытым только этот раздел</li>
           <li><b>Войны</b> — кнопка вверху: объявить войну одной стране другой или заключить мир. Пока страны не воюют, их граница стоит, а войска не дерутся и не заходят на чужую землю</li>
-          <li>Цвета земли: <b>свой</b> — своя земля, <b>светлее</b> — занятая в войне, <b>темнее</b> — освобождённая. После мира занятое становится своим</li>
+          <li>Цвета земли: <b>свой</b> — своя земля, <b>ярче</b> — занятая в войне, <b>темнее</b> — освобождённая. После мира занятое становится своим</li>
           <li><b>Размер войск</b> задаётся в километрах на местности: значки растут и уменьшаются вместе с картой</li>
           <li><b>Esc</b> — меню (игра встаёт на паузу), <b>H</b> — спрятать или показать панель</li>
           <li><b>W</b> — режим границы: резина → натиск → сгладить</li>
@@ -883,7 +883,7 @@ body:not(.nopanel) .status > #hint { display: none; }
     </div>
     <p class="hint">Союзники (страны одной стороны) вступают в войну вместе. Пока страны не воюют, их граница не двигается, войска не дерутся и не заходят на чужую землю.</p>
     <ul class="dlist" id="dList"></ul>
-    <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне</span><span><i id="dLeg3"></i>освобождённая</span></div>
+    <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне (ярче)</span><span><i id="dLeg3"></i>освобождённая (темнее)</span></div>
     <p class="hint">После мира занятые земли становятся землёй того, кто их занял, а освобождённые — снова обычными.</p>
   </div>
   <div class="mapctl" id="mapCtl">
@@ -1005,7 +1005,7 @@ body:not(.nopanel) .status > #hint { display: none; }
         <li>Инструмент <b>Войска (7)</b>: щелчок по карте ставит отряд. По своей земле — свой, по чужой — вражеский.</li>
         <li>Выделите свои отряды рамкой (<b>Shift</b> + протянуть) и <b>протяните ПКМ</b> — они пойдут в наступление по нарисованному пути.</li>
         <li>Нажмите <b>P</b> или ▶ вверху — пойдут бои, время и календарь. Скорость — <b>+</b> и <b>−</b>.</li>
-        <li>Воюют только страны в войне: кнопка <b>«Войны»</b> вверху объявляет войну и заключает мир. Занятая земля светлее цвета страны, освобождённая — темнее.</li>
+        <li>Воюют только страны в войне: кнопка <b>«Войны»</b> вверху объявляет войну и заключает мир. Занятая земля — яркий оттенок цвета страны, освобождённая — темнее.</li>
         <li>Окружите врага — образуется <b>котёл</b>. Через несколько дней боёв он сдаётся, отряды внутри попадают в плен.</li>
       </ol></div>
       <div class="setcard"><h4>Граница</h4><ul>
@@ -1145,8 +1145,8 @@ function histMax() { return clamp(Math.floor(160e6 / Math.max(1, W * H)), 5, 60)
 
 function recolor() {
   rgb = [null, ...countries.map(c => hex2rgb(c.color))];
-  occRgb = rgb.map(c => c && c.map(v => Math.round(v + (255 - v) * .46)));
-  libRgb = rgb.map(c => c && [Math.round(c[0] * .74), Math.round(c[1] * .74), Math.round(c[2] * .74)]);
+  occRgb = rgb.map(c => c && occShade(c));
+  libRgb = rgb.map(c => c && libShade(c));
   if (typeof recalcWars === 'function') recalcWars();
   addDirty(0, 0, W, H);
 }
@@ -1441,35 +1441,10 @@ function drawVectorMap(c) {
     if (vec && vec.win[0] < rect[2] && vec.win[2] > rect[0] && vec.win[1] < rect[3] && vec.win[3] > rect[1] && vecAsync(...rect)) { /* drawn stale */ }
     else { vec = buildVectors(...rect); vec.t = performance.now(); vec.serial = ++vecSerial; }
   }
-  // a border being dragged: the area around the drag is traced right now (a small piece, a few milliseconds),
-  // so the front follows the hand every frame instead of waiting for the full retrace in the background
-  if (drag && drag.mode === 'warp' && drag.ub) {
-    const u = drag.ub, m = 4, p = [Math.max(need[0], u[0] - m), Math.max(need[1], u[1] - m), Math.min(need[2], u[2] + m), Math.min(need[3], u[3] + m)];
-    if (p[2] > p[0] && p[3] > p[1] && (p[2] - p[0]) * (p[3] - p[1]) < 700000 && (!vecPatch || vecPatch.version !== vecVersion || vecPatch.win.join() !== p.join())) vecPatch = buildVectors(...p);
-  }
-  if (vecPatch && (vecPatch.W !== W || vecPatch.H !== H || (vec.version >= vecPatch.version && !(drag && drag.mode === 'warp')))) vecPatch = null;
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
-  if (vecPatch) {
-    // fills of both sets go opaque onto a canvas of their own first and on the map with the fill's transparency
-    // after: where the two meet, the same colour meets itself and no seam shows
-    if (fillCv.width !== mapCv.width || fillCv.height !== mapCv.height) { fillCv.width = mapCv.width; fillCv.height = mapCv.height; }
-    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, fillCv.width, fillCv.height); fctx.setTransform(c.getTransform());
-    drawVecSet(fctx, vec, null, 'fills'); drawVecSet(fctx, vecPatch, null, 'fills', true);
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = alpha; c.drawImage(fillCv, 0, 0); c.restore();
-    drawVecSet(c, vec, vecPatch.win, 'lines'); drawVecSet(c, vecPatch, null, 'lines');
-  } else drawVecSet(c, vec, null);
-  // the moving front glows where the hand is
-  if (drag && drag.mode === 'warp' && drag.p && borderW > 0) {
-    c.save(); c.beginPath(); c.arc(drag.p.x, drag.p.y, BR() * 1.25, 0, Math.PI * 2); c.clip();
-    c.lineJoin = 'round'; c.lineCap = 'round';
-    const lw = Math.max(5 / view.s, BR() * .06);
-    for (const v of vecPatch ? [vecPatch] : [vec]) { c.lineWidth = lw; c.strokeStyle = 'rgba(255,196,72,.45)'; c.stroke(v.fronts); }
-    c.restore();
-  }
+  drawVecSet(c, vec, null);
 }
-let vecPatch = null;
-const fillCv = document.createElement('canvas'), fctx = fillCv.getContext('2d');
 // one set of outlines: fills, coasts, borders, fronts, old borders; `hole` keeps out the area another set covers;
 // `part` draws only the fills (opaque) or only the hatching and lines
 function drawVecSet(c, vec, hole, part, opaque) {
@@ -2436,7 +2411,7 @@ function allocGrid(w, h) {
   oimg = octx.createImageData(W, H);
   own = new Uint8Array(W * H); own0 = new Uint8Array(W * H); pocket = new Uint8Array(W * H);
   occNew();
-  pockets = []; exclaves = []; vec = null; vecPatch = null; dirty = [];
+  pockets = []; exclaves = []; vec = null; dirty = [];
 }
 let settleT = 0;
 function viewChanged() { if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
@@ -3452,8 +3427,25 @@ function commitOcc() {
   }
   if (any) { for (let y = r0; y <= Math.min(H - 1, r1); y++) occWin0.set(occ.subarray(y * W, y * W + W), y * W); for (const k of copied) { const t = occStore.get(k); if (!t.some(v => v)) occStore.delete(k); } }
 }
-// the three shades of each country: its own land, land it occupies (lighter), land it has liberated (deeper)
+// the three shades of each country: its own land; land it occupies — the same hue made vivid, much more
+// saturated and a little lighter; land it has liberated — the same colour, clearly darker
 let occRgb = [null], libRgb = [null];
+function rgb2hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hsl2rgb([h, s, l]) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+// grey countries have no hue to make vivid: they get lighter instead
+const occShade = c => { const [h, s, l] = rgb2hsl(c); return s < .12 ? hsl2rgb([h, s, Math.min(.82, l + .22)]) : hsl2rgb([h, Math.min(1, s * 1.6 + .25), clamp(l * 1.08 + .04, .42, .62)]); };
+const libShade = c => { const [h, s, l] = rgb2hsl(c); return hsl2rgb([h, Math.min(1, s * 1.05), l * .62]); };
 
 // countries in the same alliance never fight each other
 const allied = (a, b) => {
@@ -3570,7 +3562,7 @@ function drawMap() {
   const vecMode = geoStore || view.s >= VEC_ZOOM;
   // territory changed under the curves: retrace them in the background; the layer below is kept until then
   if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff) vecAsync(...vec.win);
-  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, drag && drag.mode === 'warp' ? 'd' + vecVersion : vecPatch ? 'p' : '', vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
+  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   if (layerSig !== sigNow()) {
     const m = mctx;
     m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
@@ -3742,11 +3734,10 @@ function warpTo(p0, q) {
       const r2 = (dx * dx + dy * dy) / R2;
       const o0 = own0[i];
       if (r2 >= 1) { own[i] = o0; occ[i] = occ0[i]; continue; }
-      // the front bends like a rope pulled at one point: the middle of the ring follows the cursor fully and the
-      // pull fades out to the rim along a smootherstep, so the bulge has no corners and no flat top
+      // flat-topped falloff: the whole core of the ring moves together, the rim blends out
       const r = Math.sqrt(r2);
       let w = 1;
-      if (r > .2) { const t = (r - .2) / .8; w = 1 - t * t * t * (t * (t * 6 - 15) + 10); }
+      if (r > .35) { const t = (r - .35) / .65; w = 1 - t * t * (3 - 2 * t); }
       const sx = clamp(Math.floor(x + .5 - ddx * w), 0, W - 1);
       const sy = clamp(Math.floor(y + .5 - ddy * w), 0, H - 1);
       const s = own0[sy * W + sx];
@@ -6603,8 +6594,8 @@ function renderDiplo() {
   }
   const c = countries[player - 1] || countries[0];
   if (c) {
-    const col = hex2rgb(c.color), sh = (f, k) => 'rgb(' + col.map(v => Math.round(f(v))).join(',') + ')';
-    $('#dLeg1').style.background = c.color; $('#dLeg2').style.background = sh(v => v + (255 - v) * .46); $('#dLeg3').style.background = sh(v => v * .74);
+    const col = hex2rgb(c.color);
+    $('#dLeg1').style.background = c.color; $('#dLeg2').style.background = 'rgb(' + occShade(col) + ')'; $('#dLeg3').style.background = 'rgb(' + libShade(col) + ')';
   }
 }
 function openDiplo(on) { const d = $('#diplo'); d.hidden = on === undefined ? !d.hidden : !on; if (!d.hidden) renderDiplo(); }
