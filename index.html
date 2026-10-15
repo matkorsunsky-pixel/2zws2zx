@@ -3721,23 +3721,58 @@ function stamp(a, b, val) {
 
 // Rubber-sheet drag of the ownership map: cells near the cursor are pulled from
 // where they were when the drag started, with a smooth falloff to the edge of the ring.
+// Which way the front runs at a point: the direction to the other side (normal) and along the line (tangent),
+// from the cells of other countries around it. Null deep inside one country, where there is no front to grab.
+function frontAxis(g, R) {
+  const gx = Math.floor(g.x), gy = Math.floor(g.y);
+  if (gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
+  const o = own[gy * W + gx];
+  let nx = 0, ny = 0, n = 0;
+  const step = Math.max(1, R / 12);
+  for (let yy = -R; yy <= R; yy += step) for (let xx = -R; xx <= R; xx += step) {
+    const d2 = xx * xx + yy * yy; if (d2 > R * R || !d2) continue;
+    const x = Math.floor(g.x + xx), y = Math.floor(g.y + yy);
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const q = own[y * W + x];
+    if (q && q !== o) { const d = Math.sqrt(d2); nx += xx / d; ny += yy / d; n++; }
+  }
+  const m = Math.hypot(nx, ny);
+  if (!n || m < n * .15) return null;
+  nx /= m; ny /= m;
+  return { nx, ny, tx: -ny, ty: nx };
+}
 function warpTo(p0, q) {
-  const R = BR(), R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y;
-  const nb = [Math.max(0, Math.floor(q.x - R - 1)), Math.max(0, Math.floor(q.y - R - 1)),
-              Math.min(W, Math.ceil(q.x + R + 2)), Math.min(H, Math.ceil(q.y + R + 2))];
+  const R = BR(), R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y, fa = drag.fa;
+  // grabbed on a front, the pull spreads along the front line (a stretch of the front advances together and bends
+  // in a long smooth arc, as front lines move on animated war maps) and is even across it, so the land behind the
+  // line fills in instead of being squeezed; grabbed anywhere else it is the round rubber sheet
+  const RB = fa ? R * 1.5 : R;
+  const nb = [Math.max(0, Math.floor(q.x - RB - 1)), Math.max(0, Math.floor(q.y - RB - 1)),
+              Math.min(W, Math.ceil(q.x + RB + 2)), Math.min(H, Math.ceil(q.y + RB + 2))];
   const wb = drag.box ? [Math.min(nb[0], drag.box[0]), Math.min(nb[1], drag.box[1]), Math.max(nb[2], drag.box[2]), Math.max(nb[3], drag.box[3])] : nb;
   for (let y = wb[1]; y < wb[3]; y++) {
     const dy = y + .5 - q.y;
     let i = y * W + wb[0];
     for (let x = wb[0]; x < wb[2]; x++, i++) {
       const dx = x + .5 - q.x;
-      const r2 = (dx * dx + dy * dy) / R2;
       const o0 = own0[i];
-      if (r2 >= 1) { own[i] = o0; occ[i] = occ0[i]; continue; }
-      // flat-topped falloff: the whole core of the ring moves together, the rim blends out
-      const r = Math.sqrt(r2);
-      let w = 1;
-      if (r > .35) { const t = (r - .35) / .65; w = 1 - t * t * (3 - 2 * t); }
+      let w;
+      if (fa) {
+        // along the front: the middle stretch (as wide as the circle) moves as one straight piece of line,
+        // then the pull fades out over the same distance again on each side; across: even, then fading
+        const A = Math.abs(dx * fa.tx + dy * fa.ty) / R, C = Math.abs(dx * fa.nx + dy * fa.ny) / R;
+        if (A >= 1.45 || C >= 1.15) { own[i] = o0; occ[i] = occ0[i]; continue; }
+        const ta = A <= .45 ? 0 : (A - .45) / 1, tc = C <= .6 ? 0 : (C - .6) / .55;
+        w = (1 - ta * ta * (3 - 2 * ta)) * (1 - tc * tc * (3 - 2 * tc));
+        if (w < .015) { own[i] = o0; occ[i] = occ0[i]; continue; }
+      } else {
+        const r2 = (dx * dx + dy * dy) / R2;
+        if (r2 >= 1) { own[i] = o0; occ[i] = occ0[i]; continue; }
+        // flat-topped falloff: the whole core of the ring moves together, the rim blends out
+        const r = Math.sqrt(r2);
+        w = 1;
+        if (r > .35) { const t = (r - .35) / .65; w = 1 - t * t * (3 - 2 * t); }
+      }
       const sx = clamp(Math.floor(x + .5 - ddx * w), 0, W - 1);
       const sy = clamp(Math.floor(y + .5 - ddy * w), 0, H - 1);
       const s = own0[sy * W + sx];
@@ -5803,7 +5838,7 @@ cv.addEventListener('pointerdown', e => {
     const o = inside ? own[gy * W + gx] : 0;
     if (warpMode === 'push' && !o) { toast('Натиск начинают с земли наступающей страны.'); return; }
     pushHist(); own0.set(own);
-    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now() };
+    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null };
     if (hideCursor) cv.style.cursor = 'none';
     $('#hint').textContent = warpMode === 'smooth' ? 'Сглаживаете линию фронта.' : o ? (warpMode === 'push' ? 'Наступает: ' : 'Тянете в пользу: ') + countries[o - 1].name : HINTS.warp;
     if (warpMode !== 'rubber') warpStep();
@@ -6633,7 +6668,7 @@ function renderToolHead(t) {
 }
 // the border tool's three ways of moving a front
 const WARP_HINT = {
-  rubber: 'Зажмите кнопку у границы и тяните: территория едет за курсором, как резина. Выигрывает сторона, с которой вы начали.',
+  rubber: 'Возьмитесь за линию фронта и тяните: участок фронта движется целиком и выгибается плавной дугой, земля за ним заполняется — как на анимированных картах войн. Ширина участка — радиус круга.',
   push: 'Начните на земле наступающей страны и ведите круг: всё, по чему он прошёл, занимает она. Земля в тылу не растягивается.',
   smooth: 'Водите кругом по линии фронта: рваные края выпрямляются, щели, занозы и одиночные клетки исчезают. Берега и море не меняются.'
 };
