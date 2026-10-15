@@ -319,6 +319,10 @@ main { container-type: size; container-name: stage; }
   display: flex; align-items: center; gap: 5px; max-width: calc(100% - 24px); overflow-x: auto;
   padding: 5px 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 4px 18px rgb(0 0 0 / .12);
 }
+.sidepick .umode { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); margin-right: 4px; }
+.sidepick .umode button { gap: 5px; font-weight: 600; padding: 5px 10px; }
+.sidepick .umode button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sidepick .umode kbd { font: 600 9.5px var(--f-mono); opacity: .6; margin-left: 2px; }
 .sidepick .lbl { font-size: 12px; color: var(--muted); padding: 0 4px 0 6px; white-space: nowrap; }
 .sidepick button { display: flex; align-items: center; gap: 6px; padding: 5px 9px; font-size: 12.5px; white-space: nowrap; border-color: transparent; background: transparent; }
 .sidepick button:hover { background: var(--bg); }
@@ -481,6 +485,11 @@ body:not(.nopanel) .status > #hint { display: none; }
 .cchip:hover { background: rgb(255 255 255 / .1); border-color: rgb(255 255 255 / .2); }
 .cchip.on { border-color: var(--m-gold); background: rgb(227 171 69 / .14); color: #fff; font-weight: 600; }
 .cside select { width: 100%; max-width: 380px; background: #10151b; color: #ece8df; border: 1px solid var(--m-line); border-radius: 8px; padding: 8px; font: 13px var(--f-ui); }
+.ctroops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ctroops button { flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border-radius: 11px; text-align: left; background: rgb(255 255 255 / .04); border: 1px solid var(--m-line); color: #ece8df; }
+.ctroops button b { font-size: 14px; } .ctroops button small { color: var(--m-muted); font-size: 12px; line-height: 1.4; }
+.ctroops button:hover { background: rgb(255 255 255 / .08); border-color: rgb(255 255 255 / .2); }
+.ctroops button.on { border-color: var(--m-gold); background: rgb(227 171 69 / .12); } .ctroops button.on b { color: var(--m-gold); }
 .cgo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
 .cgo span { color: var(--m-muted); font-size: 13px; }
 .cgo span b { color: #fff; }
@@ -736,7 +745,8 @@ body:not(.nopanel) .status > #hint { display: none; }
           <label for="warSel" class="sub"><b>Войны и конфликты</b></label>
           <select id="warSel" aria-label="Выберите войну"></select>
           <p class="hint" id="warInfo"></p>
-          <button id="warGo" class="primary">Открыть сценарий</button>
+          <label class="check"><input type="checkbox" id="warTroops" checked><span>С войсками, уже расставленными на фронте</span></label>
+      <button id="warGo" class="primary">Открыть сценарий</button>
           <p class="hint">Открывает карту Земли, раскрашенную по воюющим странам и союзам, с ключевыми городами, датой и известными полководцами. Границы 1904, 1914, 1919, 1939 годов взяты с исторических карт, линия фронта СВО — с карты DeepState, Корея 1950 года делится по 38-й параллели; остальные сценарии собраны из современных стран и областей. Побережья и границы точные на любом приближении. Текущая карта будет заменена: если она нужна, сначала сохраните проект.</p>
         </div>
         <div class="subpanel" id="geoPanel" hidden>
@@ -809,6 +819,7 @@ body:not(.nopanel) .status > #hint { display: none; }
           <li><b>Размер войск</b> задаётся в километрах на местности: значки растут и уменьшаются вместе с картой</li>
           <li><b>Esc</b> — меню (игра встаёт на паузу), <b>H</b> — спрятать или показать панель</li>
           <li><b>W</b> — режим границы: резина → натиск → сгладить</li>
+          <li><b>Войска</b>: плашка над картой — <b>Q</b> «Ставить» (щелчок ставит отряд) и <b>E</b> «Двигать» (щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут)</li>
           <li><b>+</b> и <b>−</b> — скорость боёв (5 ступеней, как в HOI4)</li>
           <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
         </ul>
@@ -953,6 +964,10 @@ body:not(.nopanel) .status > #hint { display: none; }
         <div><h3 id="campName"></h3><div class="cdate" id="campDate"></div></div>
         <p id="campInfo"></p>
         <div class="csides" id="campSides"></div>
+        <div class="ctroops" id="campTroopsBox" role="radiogroup" aria-label="Войска">
+          <button data-tr="1" role="radio"><b>Войска расставлены</b><small>Дивизии обеих сторон уже стоят вдоль линии фронта — сразу в бой</small></button>
+          <button data-tr="0" role="radio"><b>Без войск</b><small>Только карта, страны и города — войска расставляете сами</small></button>
+        </div>
         <div class="cgo"><button class="bigbtn" id="campGo">В бой</button><span id="campAs"></span></div>
       </div>
     </div>
@@ -1022,7 +1037,7 @@ const HINTS = {
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
-  units: 'Щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
+  units: 'Плашка над картой: «Ставить» (Q) или «Двигать» (E). Ставить: щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -1350,7 +1365,7 @@ function vecPaths(outs) {
 const vecIters = () => geoStore && !vsrc ? 24 : 6;
 function buildVectors(x0, y0, x1, y1) {
   const outs = traceOutlines(labelRegion(x0, y0, x1, y1), x1 - x0, y1 - y0, x0, y0, vecIters());
-  return Object.assign({ win: [x0, y0, x1, y1], version: vecVersion, t: performance.now() }, vecPaths(outs));
+  return Object.assign({ win: [x0, y0, x1, y1], version: vecVersion, t: performance.now(), W, H }, vecPaths(outs));
 }
 // The same tracing in a background thread, so a moving front never stalls a frame: the frame draws the last
 // outlines while the next ones are being traced. Falls back to tracing in place where workers are not allowed.
@@ -1418,21 +1433,55 @@ function drawVectorMap(c) {
     if (vec && vec.win[0] < rect[2] && vec.win[2] > rect[0] && vec.win[1] < rect[3] && vec.win[3] > rect[1] && vecAsync(...rect)) { /* drawn stale */ }
     else { vec = buildVectors(...rect); vec.t = performance.now(); vec.serial = ++vecSerial; }
   }
+  // a border being dragged: the area around the drag is traced right now (a small piece, a few milliseconds),
+  // so the front follows the hand every frame instead of waiting for the full retrace in the background
+  if (drag && drag.mode === 'warp' && drag.ub) {
+    const u = drag.ub, m = 4, p = [Math.max(need[0], u[0] - m), Math.max(need[1], u[1] - m), Math.min(need[2], u[2] + m), Math.min(need[3], u[3] + m)];
+    if (p[2] > p[0] && p[3] > p[1] && (p[2] - p[0]) * (p[3] - p[1]) < 700000 && (!vecPatch || vecPatch.version !== vecVersion || vecPatch.win.join() !== p.join())) vecPatch = buildVectors(...p);
+  }
+  if (vecPatch && (vecPatch.W !== W || vecPatch.H !== H || (vec.version >= vecPatch.version && !(drag && drag.mode === 'warp')))) vecPatch = null;
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
+  if (vecPatch) {
+    // fills of both sets go opaque onto a canvas of their own first and on the map with the fill's transparency
+    // after: where the two meet, the same colour meets itself and no seam shows
+    if (fillCv.width !== mapCv.width || fillCv.height !== mapCv.height) { fillCv.width = mapCv.width; fillCv.height = mapCv.height; }
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, fillCv.width, fillCv.height); fctx.setTransform(c.getTransform());
+    drawVecSet(fctx, vec, null, 'fills'); drawVecSet(fctx, vecPatch, null, 'fills', true);
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = alpha; c.drawImage(fillCv, 0, 0); c.restore();
+    drawVecSet(c, vec, vecPatch.win, 'lines'); drawVecSet(c, vecPatch, null, 'lines');
+  } else drawVecSet(c, vec, null);
+  // the moving front glows where the hand is
+  if (drag && drag.mode === 'warp' && drag.p && borderW > 0) {
+    c.save(); c.beginPath(); c.arc(drag.p.x, drag.p.y, BR() * 1.25, 0, Math.PI * 2); c.clip();
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    const lw = Math.max(5 / view.s, BR() * .06);
+    for (const v of vecPatch ? [vecPatch] : [vec]) { c.lineWidth = lw; c.strokeStyle = 'rgba(255,196,72,.45)'; c.stroke(v.fronts); }
+    c.restore();
+  }
+}
+let vecPatch = null;
+const fillCv = document.createElement('canvas'), fctx = fillCv.getContext('2d');
+// one set of outlines: fills, coasts, borders, fronts, old borders; `hole` keeps out the area another set covers;
+// `part` draws only the fills (opaque) or only the hatching and lines
+function drawVecSet(c, vec, hole, part, opaque) {
   c.save();
   const w = vec.win;
-  c.beginPath(); c.rect(w[0], w[1], w[2] - w[0], w[3] - w[1]); c.clip();
+  c.beginPath(); c.rect(w[0], w[1], w[2] - w[0], w[3] - w[1]);
+  if (hole) { c.rect(hole[0], hole[1], hole[2] - hole[0], hole[3] - hole[1]); c.clip('evenodd'); } else c.clip();
   // window edges inside the map are artificial: keep them out of sight
-  const a = alpha;
+  const a = part === 'fills' ? 1 : alpha;
   for (const [L, path] of vec.fills) {
     const o = L & 255, st = (L >> 16) & 255;
-    const col = (st === 0 ? rgb[o] : st === OCC_LIB ? libRgb[o] : occRgb[o]) || rgb[o] || [128, 128, 128];
-    c.globalAlpha = a; c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill(path);
+    if (part !== 'lines') {
+      const col = (st === 0 ? rgb[o] : st === OCC_LIB ? libRgb[o] : occRgb[o]) || rgb[o] || [128, 128, 128];
+      c.globalAlpha = a; c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill(path);
+    }
     const enc = (L >> 8) & 255;
-    if (enc && rgb[enc]) { c.globalAlpha = Math.max(a, 200 / 255); c.fillStyle = hatchPattern(c, rgb[enc]); c.fill(path); }
+    if (part !== 'fills' && enc && rgb[enc]) { c.globalAlpha = Math.max(alpha, 200 / 255); c.fillStyle = hatchPattern(c, rgb[enc]); c.fill(path); }
   }
   c.globalAlpha = 1;
+  if (part === 'fills') { c.restore(); return; }
   c.lineJoin = 'round'; c.lineCap = 'round';
   if (borderW > 0) {
     // matches the raster line where the smooth mode takes over, then thickens gently with zoom
@@ -2379,7 +2428,7 @@ function allocGrid(w, h) {
   oimg = octx.createImageData(W, H);
   own = new Uint8Array(W * H); own0 = new Uint8Array(W * H); pocket = new Uint8Array(W * H);
   occNew();
-  pockets = []; exclaves = []; vec = null; dirty = [];
+  pockets = []; exclaves = []; vec = null; vecPatch = null; dirty = [];
 }
 let settleT = 0;
 function viewChanged() { if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
@@ -3455,7 +3504,7 @@ async function applyWar(id) {
     refreshWindow();
     // scenario contents
     const n = worldCells(win.L);
-    units = []; selUnit = null; selUnits = []; arrows = [];
+    units = []; forms = []; selUnit = null; selUnits = []; arrows = [];
     cities = w.cities.map(([name, lat, lon, vp, cap]) => ({ x: lonToX(lon) * n - win.cx0, y: latToY(lat) * n - win.cy0, name, vp, capital: !!cap }));
     generals = (w.generals || []).map(([o, name, rank, skill], k) => ({ id: k + 1, name, owner: o + 1, photo: '', rank, skill }));
     genSeq = generals.length + 1; selGen = null;
@@ -3513,7 +3562,7 @@ function drawMap() {
   const vecMode = geoStore || view.s >= VEC_ZOOM;
   // territory changed under the curves: retrace them in the background; the layer below is kept until then
   if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff) vecAsync(...vec.win);
-  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
+  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, drag && drag.mode === 'warp' ? 'd' + vecVersion : vecPatch ? 'p' : '', vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   if (layerSig !== sigNow()) {
     const m = mctx;
     m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
@@ -3685,10 +3734,11 @@ function warpTo(p0, q) {
       const r2 = (dx * dx + dy * dy) / R2;
       const o0 = own0[i];
       if (r2 >= 1) { own[i] = o0; occ[i] = occ0[i]; continue; }
-      // flat-topped falloff: the whole core of the ring moves together, the rim blends out
+      // the front bends like a rope pulled at one point: the middle of the ring follows the cursor fully and the
+      // pull fades out to the rim along a smootherstep, so the bulge has no corners and no flat top
       const r = Math.sqrt(r2);
       let w = 1;
-      if (r > .35) { const t = (r - .35) / .65; w = 1 - t * t * (3 - 2 * t); }
+      if (r > .2) { const t = (r - .2) / .8; w = 1 - t * t * t * (t * (t * 6 - 15) + 10); }
       const sx = clamp(Math.floor(x + .5 - ddx * w), 0, W - 1);
       const sy = clamp(Math.floor(y + .5 - ddy * w), 0, H - 1);
       const s = own0[sy * W + sx];
@@ -4130,8 +4180,8 @@ function collapseTick() {
       if (inside.includes(selUnit)) selUnit = selUnits[selUnits.length - 1] || null;
     }
     const nm = pocketName(pk), who = (pk.coal || [pk.enc]).map(ownerName).join(', ');
-    logEvent(nm + ': котёл ликвидирован. ' + who + (inside.length ? ' — в плену ' + inside.length + ' ' + plural(inside.length, 'отряд', 'отряда', 'отрядов') + ' страны ' + ownerName(pk.owner) : ' — земля занята'), pk.enc);
-    toast(nm + ' сдался' + (inside.length ? ': в плен попали ' + inside.length + ' ' + plural(inside.length, 'отряд', 'отряда', 'отрядов') : '') + '.');
+    if (game.pocketNote) logEvent(nm + ': котёл ликвидирован. ' + who + (inside.length ? ' — в плену ' + inside.length + ' ' + plural(inside.length, 'отряд', 'отряда', 'отрядов') + ' страны ' + ownerName(pk.owner) : ' — земля занята'), pk.enc);
+    if (game.pocketNote) toast(nm + ' сдался' + (inside.length ? ': в плен попали ' + inside.length + ' ' + plural(inside.length, 'отряд', 'отряда', 'отрядов') : '') + '.');
     pockets = pockets.filter(q => q !== pk);
     renderPockets(); renderCountries(); renderUnitPanel();
     return;                    // one surrender per turn is enough news
@@ -4558,6 +4608,7 @@ function hitUnit(g) {
 function unitsChanged() { pruneForms(); renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
 function selectUnit(u) { setSel(u ? [u] : [], u); }
 function setSel(list, primary) {
+  if (tool === 'units' && unitMode === 'move') setTimeout(renderSidePick);
   selUnits = list;
   const u = selUnit = primary !== undefined ? primary : (list[list.length - 1] || null);
   if (u) { const fm = list.length > 1 && hierOn() && formOf(list); era = u.era; unitType = u.type; unitEch = fm ? fm.f.ech : u.ech || ''; $('#era').value = era; }
@@ -4957,10 +5008,11 @@ const GAME_SYSTEMS = [
   ['fog', 'Туман войны', 'Войска противника видны только рядом с вашими отрядами и землями.'],
   ['ai', 'ИИ противника', 'Во время боёв чужие отряды сами наступают на ваши войска и города.'],
   ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.'],
+  ['pocketNote', 'Уведомления о котлах', 'Сообщения и записи в хронике, когда замыкается кольцо и когда котёл сдаётся. Выключите — котлы всё так же считаются, подсвечиваются и сдаются, но молча.'],
   ['collapse', 'Ликвидация котлов', 'Пока идут бои, окружённый котёл держится три дня и ещё по полтора дня на каждый отряд внутри, потом сдаётся: земля отходит окружившим, отряды попадают в плен.'],
   ['hier', 'Соединения: фронт → армии → корпуса → дивизии', 'Выберите обозначение «Фронт», «Армия» или «Корпус» и щёлкните по карте: соединение встанет одним значком вдоль ближайшей границы. Приближайте — оно делится на армии, корпуса, дивизии; отдаляйте — собирается обратно. Воюют и двигают границу дивизии.']
 ];
-let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: false, log: true, hier: true, collapse: true };
+let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: false, log: true, hier: true, collapse: true, pocketNote: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 let selArrow = null, selCity = null, arrowWidth = 9;
@@ -5371,6 +5423,7 @@ function aiStep(fought) {
 // --- pockets in the chronicle ---
 let pocketSig = new Map();
 function logPockets() {
+  if (!game.pocketNote) { pocketSig = new Map(); return; }
   const now = new Map();
   for (const p of pockets) if (p.size >= 60) { const k = p.owner + '>' + p.enc; now.set(k, (now.get(k) || 0) + 1); }
   for (const [k, n] of now) if (n > (pocketSig.get(k) || 0)) { const [o, e] = k.split('>').map(Number); logEvent(ownerName(e) + ' окружила войска и земли страны ' + ownerName(o) + ': образовался котёл', e); }
@@ -5550,6 +5603,15 @@ function removeCountry(idx) {
 // «По земле»: a click places troops of whoever owns the land under it, so both sides of a front are filled
 // without switching anything; a chip of a country places only that country's troops. Ctrl does the other one.
 let spawnSide = 0, ctrlDown = false;
+// the troops tool works in one of two modes, switched on the bar over the map (Q / E):
+// place — a click on the land puts a unit there; move — clicks and frames select, a drag moves, the right button orders
+let unitMode = 'place';
+function setUnitMode(m, quiet) {
+  unitMode = m === 'move' ? 'move' : 'place';
+  renderSidePick(); requestUi();
+  if (tool === 'units') { cv.style.cursor = toolCursor(); $('#hint').textContent = HINTS.units; renderToolHead('units'); }
+  if (!quiet) { toast(unitMode === 'move' ? 'Двигать войска: выделите их щелчком или рамкой, тяните или отдайте приказ ПКМ' : 'Ставить войска: щелчок по карте ставит отряд'); scheduleSave(); }
+}
 function spawnOwner(g, ctrl) {
   const land = cellOwner(g.x, g.y), fixed = spawnSide && countries[spawnSide - 1] ? spawnSide : 0;
   if (fixed) return ctrl ? land || fixed : fixed;
@@ -5575,6 +5637,26 @@ function renderSidePick() {
   box.hidden = !show;
   if (!show) return;
   box.textContent = '';
+  // the two modes of the tool come first
+  const seg = document.createElement('div'); seg.className = 'umode'; seg.setAttribute('role', 'radiogroup');
+  for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['move', 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>']]) {
+    const b = document.createElement('button'); b.className = unitMode === m ? 'on' : ''; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitMode === m); b.dataset.um = m;
+    b.title = (m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут') + ' (' + key + ')';
+    b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>';
+    b.append(name); const kb = document.createElement('kbd'); kb.textContent = key; b.append(kb);
+    b.addEventListener('click', () => setUnitMode(m));
+    seg.append(b);
+  }
+  box.append(seg);
+  if (unitMode === 'move') {
+    const n = targets().length;
+    const t = document.createElement('span'); t.className = 'lbl'; t.textContent = n ? 'Выбрано: ' + n + ' · ПКМ — приказ, протянуть ПКМ — маршрут' : 'Выделите войска щелчком или рамкой'; box.append(t);
+    const all = document.createElement('button'); all.textContent = 'Все свои'; all.title = 'Выделить все отряды вашей страны (Ctrl+A)';
+    all.addEventListener('click', () => { const mine = units.filter(u => u.owner === (player || active)); setSel(mine); renderSidePick(); toast('Выбраны все отряды: ' + ownerName(player || active) + ' (' + mine.length + ')'); });
+    box.append(all);
+    if (n) { const st = document.createElement('button'); st.textContent = 'Стоп'; st.title = 'Отменить приказы выбранных отрядов'; st.addEventListener('click', () => { targets().forEach(stopOrders); renderUnitPanel(); requestDraw(); }); box.append(st); }
+    return;
+  }
   const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = 'Ставить за:'; box.append(lbl);
   const chip = (i, name, color, title) => {
     const b = document.createElement('button');
@@ -5600,7 +5682,7 @@ function renderSidePick() {
 }
 // a see-through marker under the cursor: what a click would place, in whose colours
 function drawSpawnGhost(c) {
-  if (tool !== 'units' || !hover || drag || spaceDown || !showUnits || !countries.length) return;
+  if (tool !== 'units' || unitMode !== 'place' || !hover || drag || spaceDown || !showUnits || !countries.length) return;
   if (hitUnit(hover)) return;
   const o = spawnOwner(hover, ctrlDown), ct = countries[o - 1];
   if (!ct) return;
@@ -5731,6 +5813,8 @@ cv.addEventListener('pointerdown', e => {
       units.splice(units.indexOf(u), 1); units.push(u);   // bring to front
       drag = { mode: 'unit', u, group: targets().map(v => ({ v, ox: g.x - v.x, oy: g.y - v.y })), moved: false };
       if (hideCursor && unitsPushBorder) cv.style.cursor = 'none';
+    } else if (unitMode === 'move') {
+      drag = { mode: 'box', a: g, b: g, replace: true };
     } else {
       if (!active) { toast('Сначала добавьте страну'); return; }
       if (!inside) return;
@@ -5783,7 +5867,7 @@ cv.addEventListener('pointermove', e => {
   hover = W ? toGrid(p) : null;
   updWhere();
   if (!drag) {
-    if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? 'move' : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
+    if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? 'move' : unitMode === 'move' ? 'default' : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
     updateRegionHover();
     requestUi(); return;
   }
@@ -5828,7 +5912,7 @@ cv.addEventListener('pointermove', e => {
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
   }
 });
-const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' || tool === 'cities' ? 'copy' : 'crosshair';
+const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' ? (unitMode === 'move' ? 'default' : 'copy') : tool === 'cities' ? 'copy' : 'crosshair';
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
@@ -5842,8 +5926,11 @@ function endPointer(e) {
   }
   if (drag.mode === 'box') {
     const x0 = Math.min(drag.a.x, drag.b.x), x1 = Math.max(drag.a.x, drag.b.x), y0 = Math.min(drag.a.y, drag.b.y), y1 = Math.max(drag.a.y, drag.b.y);
-    const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
+    const inBox = units.filter(u => u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1 && isVisible(u));
+    const replace = drag.replace, tiny = Math.max(x1 - x0, y1 - y0) * view.s < 5;
     drag = null; requestUi();
+    // move mode: a frame selects what is in it, a plain click on empty land clears the selection
+    if (replace) { if (tiny) setSel([]); else { setSel(inBox); if (inBox.length) toast('Выбрано отрядов: ' + inBox.length); } renderSidePick(); return; }
     if (inBox.length) { const cur = targets(); setSel(cur.concat(inBox.filter(u => !cur.includes(u)))); toast('Выбрано отрядов: ' + targets().length); }
     return;
   }
@@ -5947,6 +6034,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
   if (e.code === 'Escape') { if (!drag) openMenu(true); return; }
   if (e.code === 'KeyH') { setPanel(document.body.classList.contains('nopanel')); return; }
+  if (e.code === 'KeyQ' || e.code === 'KeyE') { if (tool !== 'units') setTool('units'); setUnitMode(e.code === 'KeyE' ? 'move' : 'place'); return; }
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
@@ -6332,7 +6420,7 @@ function scheduleSave() {
     saveFn = null;
     if (!own) return;
     if (geoStore && !battlesOn && !marchRaf) commitWindow();
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, warpMode, mapTitle, wars, warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -6365,6 +6453,7 @@ async function restoreSaved() {
     exclaves = st.exclaves || [];
     if (typeof st.hideCursor === 'boolean') { hideCursor = st.hideCursor; $('#hideCursor').checked = hideCursor; }
     if (typeof st.spawnSide === 'number') spawnSide = st.spawnSide;
+    if (st.unitMode) unitMode = st.unitMode;
     if (st.warpMode) setWarpMode(st.warpMode, true);
     mapTitle = st.mapTitle || '';
     if (typeof st.warOnly === 'boolean') { warOnly = st.warOnly; $('#warOnly').checked = warOnly; }
@@ -6729,6 +6818,9 @@ function renderCampDetail() {
     sel.value = campPlayer; sel.addEventListener('change', () => { campPlayer = +sel.value; renderCampDetail(); });
     const lab = document.createElement('div'); lab.className = 'cside'; const sm = document.createElement('small'); sm.textContent = 'Любая страна мира'; lab.append(sm, sel); box.append(lab);
   }
+  const hasWar = scenarioWars(w).length > 0;
+  $('#campTroopsBox').hidden = !hasWar;
+  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const pc = w.countries[campPlayer - 1];
   $('#campAs').innerHTML = ''; $('#campAs').append('Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
   drawCampPreview(w);
@@ -6813,17 +6905,93 @@ function scenarioPreview(w) {
   x.fillStyle = g; x.fillRect(0, 0, OW, OH);
   return can;
 }
+// Troops for a scenario: divisions of both sides along every front between countries at war, one on each side of
+// the line about every 1.7 division widths, a few metres inside their own land; then grouped along the front into
+// corps of three, armies of three corps and fronts of three armies, and given the scenario's commanders.
+function deployFronts() {
+  if (!own || !W) return 0;
+  const S = unitCellsAt(H / 2), types = ERAS[era] ? ERAS[era].units.map(u => u[0]) : ['inf'];
+  const pick = (...keys) => keys.find(k => types.includes(k)) || types[0];
+  const INF = types[0], ARM = pick('tank', 'mech', 'knights', 'cuir', 'dragoon', 'cav', 'chariot'), ART = pick('art', 'hart', 'rocket', 'siege', 'archers');
+  // 1. cells on a front, sampled a few per division width
+  const g = Math.max(1, Math.floor(S / 3)), pts = [];
+  for (let y = g; y < H - g; y += g) for (let x = g; x < W - g; x += g) {
+    const o = own[y * W + x]; if (!o) continue;
+    for (const [dx, dy] of [[g, 0], [0, g]]) { const q = own[(y + dy) * W + x + dx]; if (q && q !== o && atWar(o, q)) { pts.push([x + dx / 2, y + dy / 2, Math.min(o, q), Math.max(o, q)]); break; } }
+  }
+  if (!pts.length) return 0;
+  // 2. spread out: no two points of the same front closer than the spacing (wider if the fronts are very long)
+  let spacing = S * 1.7;
+  const MAXU = 420;
+  const thin = sp => {
+    const cell = sp, grid = new Map(), out = [];
+    for (const p of pts) {
+      const kx = Math.floor(p[0] / cell), ky = Math.floor(p[1] / cell);
+      let ok = true;
+      for (let a = -1; a <= 1 && ok; a++) for (let b = -1; b <= 1 && ok; b++) for (const q of grid.get((kx + a) + ',' + (ky + b)) || []) if (Math.hypot(q[0] - p[0], q[1] - p[1]) < sp) { ok = false; break; }
+      if (!ok) continue;
+      out.push(p); const k = kx + ',' + ky; (grid.get(k) || grid.set(k, []).get(k)).push(p);
+    }
+    return out;
+  };
+  let kept = thin(spacing);
+  while (kept.length * 2 > MAXU) { spacing *= 1.25; kept = thin(spacing); }
+  // 3. one division on each side of the line, set back into its own land
+  const placed = new Map();          // owner -> divisions
+  let k = 0;
+  for (const [x, y, a, b] of kept) {
+    for (const o of [a, b]) {
+      // which way is own land: the average direction to own cells around the point
+      let vx = 0, vy = 0;
+      for (let t = 0; t < 16; t++) { const ang = t / 16 * Math.PI * 2, px = x + Math.cos(ang) * S, py = y + Math.sin(ang) * S; if (cellOwner(px, py) === o) { vx += Math.cos(ang); vy += Math.sin(ang); } }
+      const d = Math.hypot(vx, vy); if (!d) continue;
+      const ux = x + vx / d * S * .85, uy = y + vy / d * S * .85;
+      if (cellOwner(ux, uy) !== o) continue;
+      const type = k % 5 === 2 ? ARM : k % 7 === 4 ? ART : INF; k++;
+      const u = { x: ux, y: uy, era, type, owner: o, ech: 'XX', label: '' };
+      units.push(u); (placed.get(o) || placed.set(o, []).get(o)).push(u);
+    }
+  }
+  // 4. formations along the front, and the scenario's generals in command of armies
+  for (const [o, list] of placed) {
+    const order = [], left = list.slice();
+    let cur = left.reduce((m, u) => u.x + u.y < m.x + m.y ? u : m, left[0]);
+    while (left.length) { left.splice(left.indexOf(cur), 1); order.push(cur); let best = null, bd = Infinity; for (const u of left) { const dd = Math.hypot(u.x - cur.x, u.y - cur.y); if (dd < bd) { bd = dd; best = u; } } cur = best; }
+    let nDiv = units.filter(u => u.owner === o && u.ech === 'XX' && isHier(u)).length;
+    order.forEach(u => { u.label = formLabel(++nDiv, 'XX'); });
+    if (!game.hier || order.length < 2) continue;
+    const mk = ech => { const f = { id: genSeqForm(), parent: 0, ech, owner: o, era, type: INF, label: formLabel(formNumber(o, ech), ech) }; forms.push(f); return f; };
+    const chunk = (a, n) => { const out = []; for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; };
+    const corps = chunk(order, 3).map(g3 => { const f = mk('XXX'); g3.forEach(u => { u.f = f.id; }); f.divs = g3; return f; });
+    let armies = corps.length > 1 ? chunk(corps, 3).map(g3 => { const f = mk('XXXX'); g3.forEach(c => { c.parent = f.id; }); f.divs = g3.flatMap(c => c.divs); return f; }) : corps;
+    if (armies.length > 3) chunk(armies, 3).forEach(g3 => { const f = mk('XXXXX'); g3.forEach(a => { a.parent = f.id; }); });
+    const gens = generals.filter(gn => gn.owner === o);
+    armies.forEach((a, i) => { const gn = gens[i]; if (gn) a.divs.forEach(u => { u.gen = gn.id; }); });
+    for (const f of forms) delete f.divs;
+  }
+  unitsChanged();
+  return units.length;
+}
+let campTroops = LS.get('mezha-troops', '1') === '1';
 async function startScenario(id, pl) {
   const btn = $('#campGo'); btn.disabled = true; btn.textContent = 'Готовлю карту…';
   try {
     $('#warSel').value = id; renderWarPanel();
     await applyWar(id);
     if (pl && countries[pl - 1]) takeControl(pl);
+    if (campTroops && wars.length) {
+      // the theatre at its own detail first, so the troops stand on the borders as they are drawn
+      btn.textContent = 'Расставляю войска…';
+      clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
+      const n = deployFronts();
+      if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '. Плашка «Двигать» (E) — выделять и отдавать приказы.');
+    }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
   } finally { btn.disabled = false; btn.textContent = 'В бой'; }
   closeMenu(); renderHud(); scheduleSave();
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer));
+document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === '1'; LS.set('mezha-troops', campTroops ? '1' : '0'); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
 let menuBgDone = false;
@@ -7138,7 +7306,10 @@ $('#hideCursor').addEventListener('change', e => { hideCursor = e.target.checked
   $('#unfoldAll').addEventListener('click', () => all(false));
 })();
 $('#warSel').addEventListener('change', renderWarPanel);
-$('#warGo').addEventListener('click', () => applyWar($('#warSel').value));
+$('#warGo').addEventListener('click', async () => {
+  await applyWar($('#warSel').value);
+  if ($('#warTroops').checked && wars.length) { clearTimeout(settleT); maybeReload(); const n = deployFronts(); if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '.'); }
+});
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
 $('#bspeed').addEventListener('input', e => {
