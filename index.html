@@ -97,12 +97,24 @@ select { font: 13px var(--f-ui); color: var(--ink); background: var(--chip); bor
 
 #countries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .country {
-  display: grid; grid-template-columns: 26px 1fr auto 26px; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: 12px 26px minmax(0, 1fr) auto 26px; gap: 6px; align-items: center;
   padding: 5px 6px; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
 }
 .country:hover { background: var(--bg); }
 .country.on { border-color: var(--accent); background: var(--accent-soft); }
 .country .sw { width: 26px; height: 26px; border-radius: 6px; overflow: hidden; position: relative; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2); }
+.country .grip { cursor: grab; color: var(--muted); font-size: 12px; letter-spacing: -3px; line-height: 26px; user-select: none; touch-action: none; }
+.country.dragging { opacity: .45; }
+.country.dropA { box-shadow: inset 0 2px 0 var(--accent); }
+.country.dropB { box-shadow: inset 0 -2px 0 var(--accent); }
+.country.me .cname { font-weight: 700; }
+section > h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+section > h2::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: -3px 2px 0 1px; transition: transform .15s; }
+section.shut > h2::before { transform: rotate(-45deg); margin-top: 0; }
+section.shut > :not(h2) { display: none !important; }
+section > h2:hover { color: var(--ink); }
+.foldall { display: flex; gap: 6px; }
+.foldall button { flex: 1; padding: 5px 8px; font-size: 12px; }
 .country .sw input { position: absolute; inset: -6px; width: 40px; height: 40px; border: 0; padding: 0; cursor: pointer; background: none; }
 .country .cname { min-width: 0; font: 500 13px var(--f-ui); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 4px 5px; }
 .country .cname:hover, .country .cname:focus { border-color: var(--line); background: var(--chip); }
@@ -243,6 +255,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
   <button id="btnGetApp" class="primary getapp">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
     Скачать программу на ПК</button>
+  <div class="foldall"><button id="foldAll" title="Свернуть все разделы">Свернуть всё</button><button id="unfoldAll" title="Развернуть все разделы">Развернуть всё</button></div>
 
   <section>
     <h2>Карта</h2>
@@ -333,6 +346,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <option value="drag" selected>Прятать, пока тяну или рисую</option>
         <option value="never">Не показывать</option>
       </select>
+      <label class="check" style="grid-column: span 2"><input type="checkbox" id="hideCursor" checked><span>Прятать курсор мыши, пока тяну границу или рисую</span></label>
     </div>
     <div class="field" id="fTol" hidden>
       <label for="tol">Допуск по цвету</label><output id="tolOut">40</output>
@@ -427,7 +441,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
     <h2>Страны</h2>
     <ul id="countries"></ul>
     <div class="row"><button id="btnAdd">+ Добавить страну</button></div>
-    <p class="hint">Щелчок по строке выбирает страну для кисти и заливки. Alt + щелчок по карте выбирает страну под курсором.</p>
+    <p class="hint">Щелчок по строке выбирает страну для кисти и заливки. Щелчок колёсиком мыши — по строке или по стране на карте — забирает страну под ваше управление: вы рисуете и играете за неё. За ⋮⋮ строку можно перетащить выше или ниже. Alt + щелчок по карте выбирает страну под курсором, клавиши <b>,</b> и <b>.</b> (Б и Ю) — предыдущую и следующую страну, с Shift — сразу берут её под управление.</p>
   </section>
 
   <section>
@@ -499,6 +513,9 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>R</b> — на карте Земли: заливка по регионам вкл/выкл</li>
       <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
       <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
+      <li><b>Щелчок колёсиком</b> по стране на карте или в списке — играть за неё и рисовать её цветом</li>
+      <li><b>,</b> и <b>.</b> (Б и Ю) — предыдущая и следующая страна, <b>Shift + , .</b> — сразу взять её под управление</li>
+      <li>Страны в списке перетаскиваются за <b>⋮⋮</b>, разделы слева сворачиваются щелчком по заголовку, <b>Shift + щелчок</b> оставляет открытым только этот раздел</li>
       <li><b>Ctrl+Z</b> — отменить, <b>Ctrl+Shift+Z</b> — вернуть</li>
     </ul>
   </section>
@@ -620,6 +637,7 @@ let tool = 'warp';
 const sizes = { warp: 90, brush: 25, eraser: 25 };   // each tool keeps its own radius
 const SIZE_LABEL = { warp: 'Радиус захвата границы', brush: 'Размер кисти', eraser: 'Размер ластика' };
 const SMIN = 2, SMAX = 600;
+let hideCursor = true;              // no mouse arrow over the moving border
 let ringMode = 'drag';             // brush / grab circle: always, hidden while dragging, or never
 let brush = 90, tol = 40, fillMode = 'owner', protect = true;
 let alpha = 0.5, borderW = 2;
@@ -3095,7 +3113,7 @@ function renderGenerals() {
   const sel = $('#playerSel');
   const keep = sel.value;
   sel.textContent = '';
-  countries.forEach((c, k) => { const o = document.createElement('option'); o.value = k + 1; o.textContent = c.name; sel.append(o); });
+  countries.map((c, k) => k).sort((a, b) => (countries[a].ord ?? a) - (countries[b].ord ?? b)).forEach(k => { const o = document.createElement('option'); o.value = k + 1; o.textContent = countries[k].name; sel.append(o); });
   if (!countries[player - 1]) player = countries.length ? 1 : 0;
   sel.value = player || keep;
   const col = countries[player - 1] ? countries[player - 1].color : '#888';
@@ -3710,11 +3728,35 @@ function renderCountries() {
   const ul = $('#countries');
   ul.textContent = '';
   const { n, tot } = own ? areas() : { n: [], tot: 0 };
-  countries.forEach((c, k) => {
+  // the list has its own order, so moving a row never touches the map
+  const order = countries.map((c, k) => k).sort((a, b) => (countries[a].ord ?? a) - (countries[b].ord ?? b));
+  order.forEach(k => {
+    const c = countries[k];
     const idx = k + 1;
     const li = document.createElement('li');
-    li.className = 'country' + (idx === active ? ' on' : '');
+    li.className = 'country' + (idx === active ? ' on' : '') + (idx === player ? ' me' : '');
     li.dataset.i = idx;
+    const grip = document.createElement('span'); grip.className = 'grip'; grip.textContent = '⋮⋮'; grip.title = 'Перетащите, чтобы поднять или опустить страну';
+    grip.addEventListener('pointerdown', () => { li.draggable = true; });
+    li.addEventListener('dragstart', ev => { li.classList.add('dragging'); ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(idx)); });
+    li.addEventListener('dragend', () => { li.draggable = false; li.classList.remove('dragging'); document.querySelectorAll('.country').forEach(x => x.classList.remove('dropA', 'dropB')); });
+    li.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      const r = li.getBoundingClientRect(), below = ev.clientY > r.top + r.height / 2;
+      li.classList.toggle('dropB', below); li.classList.toggle('dropA', !below);
+    });
+    li.addEventListener('dragleave', () => li.classList.remove('dropA', 'dropB'));
+    li.addEventListener('drop', ev => {
+      ev.preventDefault();
+      const from = +ev.dataTransfer.getData('text/plain'), r = li.getBoundingClientRect(), below = ev.clientY > r.top + r.height / 2;
+      if (!from || from === idx) return renderCountries();
+      const list = order.map(q => q + 1).filter(q => q !== from);
+      list.splice(list.indexOf(idx) + (below ? 1 : 0), 0, from);
+      list.forEach((q, pos) => { countries[q - 1].ord = pos; });
+      renderCountries(); renderGenerals(); scheduleSave(); flushSave();
+    });
+    li.addEventListener('auxclick', ev => { if (ev.button === 1) { ev.preventDefault(); takeControl(idx); } });
+    li.addEventListener('mousedown', ev => { if (ev.button === 1) ev.preventDefault(); });
     if (c.side) li.title = 'Сторона: ' + c.side;
     const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = c.color;
     const ci = document.createElement('input'); ci.type = 'color'; ci.value = c.color; ci.id = 'color-' + idx; ci.setAttribute('aria-label', 'Цвет: ' + c.name);
@@ -3728,10 +3770,21 @@ function renderCountries() {
     ar.title = Math.round(n[idx] || 0).toLocaleString('ru') + ' клеток';
     const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.setAttribute('aria-label', 'Удалить ' + c.name);
     del.addEventListener('click', ev => { ev.stopPropagation(); removeCountry(idx); });
-    li.append(sw, nm, ar, del);
+    li.append(grip, sw, nm, ar, del);
     li.addEventListener('click', ev => { if (ev.target === nm || ev.target === ci) { setActive(idx, false); return; } setActive(idx); });
     ul.append(li);
   });
+}
+// a click with the mouse wheel: that country is now yours, for drawing and for playing
+function takeControl(idx) {
+  if (!countries[idx - 1]) return;
+  player = idx; closeGen(); setActive(idx); renderGenerals(); renderScore(); scheduleSave(); requestDraw();
+  toast('Вы играете за: ' + countries[idx - 1].name);
+}
+function takeControlAt(g) {
+  const gx = Math.floor(g.x), gy = Math.floor(g.y);
+  const o = gx >= 0 && gy >= 0 && gx < W && gy < H ? own[gy * W + gx] : 0;
+  if (o) takeControl(o); else toast('Здесь ничья земля — щёлкните колёсиком по стране.');
 }
 function setActive(idx, rerender = true) {
   active = idx;
@@ -3743,7 +3796,7 @@ function addCountry(name, color) {
   if (countries.length >= 250) { toast('Слишком много стран'); return; }
   if (own) pushHist();
   const k = countries.length;
-  countries.push({ name: name || ('Страна ' + (k + 1)), color: color || PALETTE[k % PALETTE.length] });
+  countries.push({ name: name || ('Страна ' + (k + 1)), color: color || PALETTE[k % PALETTE.length], ord: countries.reduce((m, c, q) => Math.max(m, (c.ord ?? q) + 1), 0) });
   active = countries.length;
   afterChange();
 }
@@ -3787,8 +3840,7 @@ function setTool(t) {
   if (t === 'arrows') renderArrowPanel();
   if (t === 'units') renderUnitPanel();
   $('#hint').textContent = HINTS[t];
-  cv.style.cursor = t === 'pan' ? 'grab' : t === 'fill' ? 'cell' : t === 'lasso' ? 'alias' : t === 'units' ? 'copy' : t === 'cities' ? 'copy' : 'crosshair';
-  if (t === 'region') cv.style.cursor = 'crosshair';
+  cv.style.cursor = toolCursor();
   requestDraw();
 }
 // slider is logarithmic so small radii stay precise and big ones are still reachable
@@ -3805,6 +3857,7 @@ function bumpBrush(dir) { setBrush(dir > 0 ? Math.max(brush + 1, brush * 1.2) : 
 
 // ---------- pointer input ----------
 cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });   // no browser autoscroll on a wheel click
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   const p = pos(e);
@@ -3823,8 +3876,9 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   if (e.button === 1 || e.button === 2 || tool === 'pan' || spaceDown || !W) {
-    drag = { mode: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y };
+    drag = { mode: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y, mid: e.button === 1, cx: e.clientX, cy: e.clientY, p0: p };
     cv.style.cursor = 'grabbing';
+    if (e.button === 1) e.preventDefault();
     return;
   }
   if (e.button !== 0) return;
@@ -3838,6 +3892,7 @@ cv.addEventListener('pointerdown', e => {
   if (tool === 'warp') {
     pushHist(); own0.set(own);
     drag = { mode: 'warp', p0: g, p: g, box: null, changed: false };
+    if (hideCursor) cv.style.cursor = 'none';
     const o = inside ? own[gy * W + gx] : 0;
     $('#hint').textContent = o ? 'Тянете в пользу: ' + countries[o - 1].name : HINTS.warp;
   } else if (tool === 'brush' || tool === 'eraser') {
@@ -3845,6 +3900,7 @@ cv.addEventListener('pointerdown', e => {
     pushHist();
     const val = tool === 'brush' ? active : 0;
     drag = { mode: 'paint', last: g, val };
+    if (hideCursor) cv.style.cursor = 'none';
     stamp(g, g, val);
   } else if (tool === 'fill' && regionMode && geoStore) {
     regionFill(g);
@@ -3950,9 +4006,12 @@ cv.addEventListener('pointermove', e => {
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
   }
 });
+const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' || tool === 'cities' ? 'copy' : 'crosshair';
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
+  if (drag.mode === 'pan' || drag.mode === 'warp' || drag.mode === 'paint') cv.style.cursor = spaceDown ? 'grab' : toolCursor();
+  if (drag.mode === 'pan' && drag.mid && Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 5) { takeControlAt(toGrid(drag.p0)); drag = null; return; }
   if (drag.mode === 'pinch') { if (pointers.size === 0) { drag = null; viewChanged(); } return; }
   if (drag.mode === 'pan') viewChanged();
   if (drag.mode === 'warp') { warpStep(); $('#hint').textContent = HINTS.warp; }
@@ -4045,6 +4104,14 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
   if (e.code === 'KeyP') { setBattles(!battlesOn); return; }
+  if (e.code === 'Comma' || e.code === 'Period') {
+    // previous / next country in the order of the list
+    const order = countries.map((c, k) => k + 1).sort((a, b) => (countries[a - 1].ord ?? a) - (countries[b - 1].ord ?? b));
+    if (!order.length) return;
+    const pos = order.indexOf(active), next = order[(pos + (e.code === 'Period' ? 1 : order.length - 1)) % order.length];
+    if (e.shiftKey) takeControl(next); else { setActive(next); toast('Выбрана: ' + countries[next - 1].name); }
+    return;
+  }
   if (e.code === 'KeyO') { setRingMode({ always: 'drag', drag: 'never', never: 'always' }[ringMode]); return; }
   if (e.code === 'KeyR' && geoStore) { setRegionMode(!regionMode); return; }
   if (tool === 'units' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
@@ -4295,12 +4362,16 @@ async function dbGet(key) {
   const db = await idb();
   return new Promise((res, rej) => { const rq = db.transaction('p').objectStore('p').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); });
 }
-let saveT = 0;
+let saveT = 0, saveFn = null;
+// the last change still waiting to be saved is written when the page closes
+const flushSave = () => { if (saveFn) { clearTimeout(saveT); const f = saveFn; saveFn = null; f(); } };
+window.addEventListener('pagehide', flushSave);
 function scheduleSave() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => {
+  saveT = setTimeout(saveFn = () => {
+    saveFn = null;
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, exclaves, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, exclaves, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -4328,6 +4399,7 @@ async function restoreSaved() {
     if (st.sizes) Object.assign(sizes, st.sizes);
     if (st.ringMode) { ringMode = st.ringMode; $('#ringMode').value = ringMode; }
     exclaves = st.exclaves || [];
+    if (typeof st.hideCursor === 'boolean') { hideCursor = st.hideCursor; $('#hideCursor').checked = hideCursor; }
     units = st.units || [];
     loadGenerals(st.generals); player = st.player || 1;
     loadGame(st);
@@ -4505,6 +4577,33 @@ function setRingMode(m) {
   toast({ always: 'Круг захвата: показывать всегда', drag: 'Круг захвата: прятать, пока тяну или рисую', never: 'Круг захвата: не показывать' }[m]);
 }
 $('#ringMode').addEventListener('change', e => setRingMode(e.target.value));
+$('#hideCursor').addEventListener('change', e => { hideCursor = e.target.checked; scheduleSave(); });
+// sections of the side panel fold away by their heading; which ones are folded is kept for this browser
+(() => {
+  const secs = [...document.querySelectorAll('aside section')], key = 'mezha-folded';
+  let folded = [];
+  try { folded = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
+  const name = s => s.querySelector('h2').textContent.trim();
+  const keep = () => { try { localStorage.setItem(key, JSON.stringify(secs.filter(s => s.classList.contains('shut')).map(name))); } catch (e) {} };
+  secs.forEach(s => {
+    const h = s.querySelector('h2');
+    if (!h) return;
+    h.tabIndex = 0; h.setAttribute('role', 'button');
+    const set = shut => { s.classList.toggle('shut', shut); h.setAttribute('aria-expanded', !shut); };
+    set(folded.includes(name(s)));
+    const flip = ev => {
+      // Shift + click: open only this one and fold all the others
+      if (ev.shiftKey) { secs.forEach(o => { o.classList.toggle('shut', o !== s); o.querySelector('h2').setAttribute('aria-expanded', o === s); }); }
+      else set(!s.classList.contains('shut'));
+      keep();
+    };
+    h.addEventListener('click', flip);
+    h.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); flip(ev); } });
+  });
+  const all = shut => { secs.forEach(s => { s.classList.toggle('shut', shut); s.querySelector('h2').setAttribute('aria-expanded', !shut); }); keep(); };
+  $('#foldAll').addEventListener('click', () => all(true));
+  $('#unfoldAll').addEventListener('click', () => all(false));
+})();
 $('#warSel').addEventListener('change', renderWarPanel);
 $('#warGo').addEventListener('click', () => applyWar($('#warSel').value));
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
