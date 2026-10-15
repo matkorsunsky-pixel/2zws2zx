@@ -703,7 +703,7 @@ body:not(.nopanel) .status > #hint { display: none; }
       <section>
         <h2>Войны и мир</h2>
         <ul class="dlist" id="warList"></ul>
-        <div class="row"><button id="warOpen" class="primary">Объявить войну…</button></div>
+        <div class="row"><button id="warOpen" class="primary">Объявить войну…</button><button id="deployBtn" title="Дивизии обеих сторон встанут вдоль всех линий фронта на карте">Расставить войска по фронту</button></div>
       </section>
       <section>
         <h2>Игра</h2>
@@ -884,6 +884,7 @@ body:not(.nopanel) .status > #hint { display: none; }
     </div>
     <p class="hint">Союзники (страны одной стороны) вступают в войну вместе. Пока страны не воюют, их граница не двигается, войска не дерутся и не заходят на чужую землю.</p>
     <ul class="dlist" id="dList"></ul>
+    <button id="dDeploy">Расставить войска вдоль линий фронта</button>
     <div class="dleg"><span><i id="dLeg1"></i>своя земля</span><span><i id="dLeg2"></i>занятая в войне (яркий цвет)</span><span><i id="dLeg3"></i>отбитая обратно — снова свой цвет</span></div>
     <p class="hint">После мира занятые земли становятся землёй того, кто их занял, а освобождённые — снова обычными.</p>
   </div>
@@ -6773,6 +6774,8 @@ $('#diploClose').addEventListener('click', () => openDiplo(false));
 $('#dA').addEventListener('change', e => { e.target.dataset.touched = 1; renderDiplo(); });
 $('#dDeclare').addEventListener('click', () => declareWar(+$('#dA').value, +$('#dB').value));
 $('#warOpen').addEventListener('click', () => openDiplo(true));
+$('#deployBtn').addEventListener('click', () => deployNow());
+$('#dDeploy').addEventListener('click', () => deployNow());
 $('#warOnly').addEventListener('change', e => { warOnly = e.target.checked; scheduleSave(); toast(warOnly ? 'Граница двигается только между странами в войне.' : 'Граница двигается где угодно (редактор карты).'); });
 
 // ---------- interface: theme, panel tabs, HUD ----------
@@ -7110,6 +7113,9 @@ function scenarioPreview(w) {
 // corps of three, armies of three corps and fronts of three armies, and given the scenario's commanders.
 function deployFronts() {
   if (!own || !W) return 0;
+  // the troops' size follows the fronts: with a size set for street fighting a whole theatre would get a few
+  // specks, so it grows until the fronts take a sensible number of divisions (and shrinks if they would be too few)
+  const sized = deploySize();
   const S = unitCellsAt(H / 2), types = ERAS[era] ? ERAS[era].units.map(u => u[0]) : ['inf'];
   const pick = (...keys) => keys.find(k => types.includes(k)) || types[0];
   const INF = types[0], ARM = pick('tank', 'mech', 'knights', 'cuir', 'dragoon', 'cav', 'chariot'), ART = pick('art', 'hart', 'rocket', 'siege', 'archers');
@@ -7170,7 +7176,36 @@ function deployFronts() {
     for (const f of forms) delete f.divs;
   }
   unitsChanged();
+  if (sized) toast('Размер войск подстроен под линию фронта: ' + fmtUnitSize(unitSize) + '. Изменить — «Размер войск на карте».');
   return units.length;
+}
+// troops on the fronts of the map as it is now, at any moment of a game
+function deployNow() {
+  if (!wars.length) { toast('Сейчас никто не воюет: сначала объявите войну — тогда появится линия фронта.'); return; }
+  pushHist();
+  const before = units.length, n = deployFronts() - before;
+  if (n > 0) toast('На линию фронта встали ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '. Плашка «Двигать» (E) — приказы.');
+  else { hist.pop(); updUndo(); toast('На видимой части карты нет линии фронта между воюющими странами.'); }
+}
+// the size of troops for which the fronts of the window take about 40–200 divisions a side in all
+function deploySize() {
+  let len = 0;
+  const g = 2;
+  for (let y = g; y < H - g; y += g) for (let x = g; x < W - g; x += g) {
+    const o = own[y * W + x]; if (!o) continue;
+    const q = own[y * W + x + g], r = own[(y + g) * W + x];
+    if ((q && q !== o && atWar(o, q)) || (r && r !== o && atWar(o, r))) len += g;
+  }
+  if (!len) return false;
+  const was = unitSize;
+  // divisions along all fronts, one per 1.7 sizes on each side: about 120 in all, but never so small that the
+  // markers stand closed into armies at the scenario's zoom (22 px) nor so big that they hide the map (70 px)
+  const per = unitCellsAt(H / 2) / unitSize;              // grid cells per unit of the setting
+  const perPx = 1 / (per * view.s), lo = 22 * perPx, hi = 70 * perPx;
+  const count = sz => len / (sz * per * 1.7) * 2;
+  if (count(unitSize) >= 40 && count(unitSize) <= 200 && unitSize >= lo && unitSize <= hi) return false;
+  setUnitSize(clamp(len / (60 * per * 1.7), lo, hi), true);
+  return unitSize !== was;
 }
 let campTroops = LS.get('mezha-troops', '1') === '1';
 async function startScenario(id, pl) {
