@@ -753,18 +753,27 @@ const VEC_ZOOM = 1.6;
 let vecVersion = 0;                   // bumped on every change to territory or colours
 let vec = null;
 const DXV = [1, 0, -1, 0], DYV = [0, 1, 0, -1];
-function buildVectors(x0, y0, x1, y1) {
-  const ww = x1 - x0, wh = y1 - y0, VW = ww + 1;
-  const lab = new Int32Array(ww * wh);
+// the working grid of a rectangle as outline labels: owner, plus the encircler in the high bits inside a pocket
+function labelRegion(x0, y0, x1, y1) {
+  const ww = x1 - x0, wh = y1 - y0, pk = showPockets && pockets.length;
+  // plain owners fit a byte and are copied row by row; inside pockets the encircler rides in the high byte
+  const lab = pk ? new Uint16Array(ww * wh) : new Uint8Array(ww * wh);
   for (let y = 0; y < wh; y++) {
     let i = (y0 + y) * W + x0, j = y * ww;
+    if (!pk) { lab.set(own.subarray(i, i + ww), j); continue; }
     for (let x = 0; x < ww; x++, i++, j++) {
       const o = own[i];
       if (!o) continue;
-      const pk = showPockets ? pocket[i] : 0;
-      lab[j] = pk && pk !== o ? o + (pk << 8) : o;
+      const q = pocket[i];
+      lab[j] = q && q !== o ? o + (q << 8) : o;
     }
   }
+  return lab;
+}
+// Outlines of every owner in a label grid, smoothed: plain arrays, so this also runs in a background thread.
+// Each outline is { L, px, py, pt }: its points and, per segment, the label on the other side (-1 = edge of the grid).
+function traceOutlines(lab, ww, wh, ox, oy, iters) {
+  const DXV = [1, 0, -1, 0], DYV = [0, 1, 0, -1], VW = ww + 1;
   // 1. boundary edges, each cell walked clockwise so outlines close up
   let cap = 8192, n = 0;
   let ex = new Int32Array(cap), ey = new Int32Array(cap), ed = new Uint8Array(cap), el = new Int32Array(cap), en = new Int32Array(cap), nx = new Int32Array(cap);
@@ -788,8 +797,7 @@ function buildVectors(x0, y0, x1, y1) {
     if (y === 0 && L > 0) add(x, 0, 0, L, -1);
   }
   // 2. chain edges into closed outlines; at a diagonal touch prefer the right turn
-  const used = new Uint8Array(n);
-  const fills = new Map(), coasts = new Map(), fronts = new Path2D(), borders = new Path2D();
+  const used = new Uint8Array(n), outs = [];
   const sx = [], sy = [], sd = [], sn = [];
   for (let e0 = 0; e0 < n; e0++) {
     if (used[e0]) continue;
@@ -809,9 +817,71 @@ function buildVectors(x0, y0, x1, y1) {
       if (best < 0) break;
       e = best;
     }
-    addOutline(L, sx, sy, sd, sn, x0, y0, fills, coasts, fronts, borders);
+    const m = sx.length;
+    if (m < 4) continue;
+    // merge straight runs that face the same neighbour
+    let s = 0;
+    while (s < m && sd[s] === sd[(s - 1 + m) % m] && sn[s] === sn[(s - 1 + m) % m]) s++;
+    if (s === m) s = 0;
+    const cx = [], cy = [], cd = [], cn = [], cl = [];
+    for (let k = 0; k < m; k++) {
+      const i = (s + k) % m, last = cd.length - 1;
+      if (last >= 0 && cd[last] === sd[i] && cn[last] === sn[i]) cl[last]++;
+      else { cx.push(sx[i]); cy.push(sy[i]); cd.push(sd[i]); cn.push(sn[i]); cl.push(1); }
+    }
+    // turn the corners of each run into control points: long runs keep their straight middle
+    let px = [], py = [], pt = [];
+    const pin = [];
+    for (let k = 0; k < cx.length; k++) {
+      const d = cd[k], len = cl[k], bx = cx[k] + ox, by = cy[k] + oy;
+      // long straight runs and the edges of the traced window are real shape, not staircase: they stay where they are
+      const keep = len >= 8 || cn[k] < 0 ? 1 : 0;
+      if (len >= 4) {
+        px.push(bx + DXV[d], bx + DXV[d] * (len - 1)); py.push(by + DYV[d], by + DYV[d] * (len - 1)); pt.push(cn[k], cn[k]); pin.push(keep, keep);
+      } else { px.push(bx + DXV[d] * len / 2); py.push(by + DYV[d] * len / 2); pt.push(cn[k]); pin.push(keep); }
+    }
+    // even out the staircase along each stretch facing one neighbour; the points where the neighbour
+    // changes stay put, so the two countries on either side of a line get exactly the same curve
+    const q0 = px.length;
+    if (q0 >= 6) {
+      const fixed = new Uint8Array(q0);
+      for (let k = 0; k < q0; k++) {
+        const a = (k - 1 + q0) % q0, c = (k + 1) % q0;
+        if (pt[a] !== pt[k] || pin[k] || Math.abs(px[a] - px[k]) + Math.abs(py[a] - py[k]) > 6 || Math.abs(px[c] - px[k]) + Math.abs(py[c] - py[k]) > 6) fixed[k] = 1;
+      }
+      let ax = Float64Array.from(px), ay = Float64Array.from(py), bx = new Float64Array(q0), by = new Float64Array(q0);
+      for (let it = 0; it < iters; it++) {
+        for (let k = 0; k < q0; k++) {
+          if (fixed[k]) { bx[k] = ax[k]; by[k] = ay[k]; continue; }
+          const a = (k - 1 + q0) % q0, c = (k + 1) % q0;
+          bx[k] = ax[k] * .5 + (ax[a] + ax[c]) * .25; by[k] = ay[k] * .5 + (ay[a] + ay[c]) * .25;
+        }
+        const tx = ax; ax = bx; bx = tx; const ty = ay; ay = by; by = ty;
+      }
+      px = Array.from(ax); py = Array.from(ay);
+    }
+    // two rounds of corner cutting (Chaikin) round off what is left
+    for (let it = 0; it < 2; it++) {
+      const qx = [], qy = [], qt = [], q = px.length;
+      for (let k = 0; k < q; k++) {
+        const a = (k + 1) % q;
+        qx.push(px[k] * .75 + px[a] * .25, px[k] * .25 + px[a] * .75);
+        qy.push(py[k] * .75 + py[a] * .25, py[k] * .25 + py[a] * .75);
+        qt.push(pt[k], pt[k]);
+      }
+      px = qx; py = qy; pt = qt;
+    }
+    // points closer than a third of a cell to the last one kept add nothing on screen (a cell is about a pixel)
+    const q = px.length, ox_ = [], oy_ = [], ot_ = [];
+    let lx = Infinity, ly = Infinity;
+    for (let k = 0; k < q; k++) {
+      const a = (k - 1 + q) % q;
+      if (k && pt[a] === pt[k] && Math.abs(px[k] - lx) + Math.abs(py[k] - ly) < .35) continue;
+      ox_.push(px[k]); oy_.push(py[k]); ot_.push(pt[k]); lx = px[k]; ly = py[k];
+    }
+    outs.push({ L, px: Float32Array.from(ox_), py: Float32Array.from(oy_), pt: Int32Array.from(ot_) });
   }
-  return { win: [x0, y0, x1, y1], version: vecVersion, fills, coasts, fronts, borders };
+  return outs;
 }
 // a front runs between two enemies; a border between friends or between countries outside the war
 function isFront(a, b) {
@@ -819,81 +889,60 @@ function isFront(a, b) {
   const x = countries[a - 1], y = countries[b - 1];
   return !countries.some(c => c.side) || !!(x && y && x.side && y.side);
 }
-function addOutline(L, sx, sy, sd, sn, ox, oy, fills, coasts, fronts, borders) {
-  const m = sx.length;
-  if (m < 4) return;
-  // merge straight runs that face the same neighbour
-  let s = 0;
-  while (s < m && sd[s] === sd[(s - 1 + m) % m] && sn[s] === sn[(s - 1 + m) % m]) s++;
-  if (s === m) s = 0;
-  const cx = [], cy = [], cd = [], cn = [], cl = [];
-  for (let k = 0; k < m; k++) {
-    const i = (s + k) % m, last = cd.length - 1;
-    if (last >= 0 && cd[last] === sd[i] && cn[last] === sn[i]) cl[last]++;
-    else { cx.push(sx[i]); cy.push(sy[i]); cd.push(sd[i]); cn.push(sn[i]); cl.push(1); }
-  }
-  // turn the corners of each run into control points: long runs keep their straight middle
-  let px = [], py = [], pt = [], pin = [];
-  for (let k = 0; k < cx.length; k++) {
-    const d = cd[k], len = cl[k], bx = cx[k] + ox, by = cy[k] + oy;
-    // long straight runs and the edges of the traced window are real shape, not staircase: they stay where they are
-    const keep = len >= 8 || cn[k] < 0 ? 1 : 0;
-    if (len >= 4) {
-      px.push(bx + DXV[d], bx + DXV[d] * (len - 1)); py.push(by + DYV[d], by + DYV[d] * (len - 1)); pt.push(cn[k], cn[k]); pin.push(keep, keep);
-    } else { px.push(bx + DXV[d] * len / 2); py.push(by + DYV[d] * len / 2); pt.push(cn[k]); pin.push(keep); }
-  }
-  // even out the staircase along each stretch facing one neighbour; the points where the neighbour
-  // changes stay put, so the two countries on either side of a line get exactly the same curve
-  {
-    const q = px.length, fixed = new Uint8Array(q);
+// outlines to the paths drawn each frame: fills per label, coasts per owner, fronts and borders
+function vecPaths(outs) {
+  const fills = new Map(), coasts = new Map(), fronts = new Path2D(), borders = new Path2D();
+  for (const { L, px, py, pt } of outs) {
+    let f = fills.get(L);
+    if (!f) { f = new Path2D(); fills.set(L, f); }
+    const q = px.length;
+    f.moveTo(px[0], py[0]);
+    for (let k = 1; k < q; k++) f.lineTo(px[k], py[k]);
+    f.closePath();
+    // border lines: a front is drawn once, from the side with the smaller id; map and window edges get none
+    const o = L & 255;
+    let coast = coasts.get(o), prev = null;
     for (let k = 0; k < q; k++) {
-      const a = (k - 1 + q) % q, c = (k + 1) % q;
-      if (pt[a] !== pt[k] || pin[k] || Math.abs(px[a] - px[k]) + Math.abs(py[a] - py[k]) > 6 || Math.abs(px[c] - px[k]) + Math.abs(py[c] - py[k]) > 6) fixed[k] = 1;
-    }
-    if (q >= 6) {
-      let ax = Float64Array.from(px), ay = Float64Array.from(py), bx = new Float64Array(q), by = new Float64Array(q);
-      // exact scenario outlines only need the last pixel steps taken off; enlarged coarse cells need more
-      const iters = geoStore && !vsrc ? 24 : 6;
-      for (let it = 0; it < iters; it++) {
-        for (let k = 0; k < q; k++) {
-          if (fixed[k]) { bx[k] = ax[k]; by[k] = ay[k]; continue; }
-          const a = (k - 1 + q) % q, c = (k + 1) % q;
-          bx[k] = ax[k] * .5 + (ax[a] + ax[c]) * .25; by[k] = ay[k] * .5 + (ay[a] + ay[c]) * .25;
-        }
-        const tx = ax; ax = bx; bx = tx; const ty = ay; ay = by; by = ty;
-      }
-      px = Array.from(ax); py = Array.from(ay);
+      const nb = pt[k], a = (k + 1) % q;
+      let path = null;
+      if (nb === 0) { if (!coast) { coast = new Path2D(); coasts.set(o, coast); } path = coast; }
+      else if (nb > 0 && (nb & 255) !== o && L < nb) path = isFront(o, nb & 255) ? fronts : borders;
+      if (path) { if (path !== prev) path.moveTo(px[k], py[k]); path.lineTo(px[a], py[a]); }
+      prev = path;
     }
   }
-  // two rounds of corner cutting (Chaikin) round off what is left
-  for (let it = 0; it < 2; it++) {
-    const qx = [], qy = [], qt = [], q = px.length;
-    for (let k = 0; k < q; k++) {
-      const a = (k + 1) % q;
-      qx.push(px[k] * .75 + px[a] * .25, px[k] * .25 + px[a] * .75);
-      qy.push(py[k] * .75 + py[a] * .25, py[k] * .25 + py[a] * .75);
-      qt.push(pt[k], pt[k]);
+  return { fills, coasts, fronts, borders };
+}
+// exact scenario outlines only need the last pixel steps taken off; enlarged coarse cells need more
+const vecIters = () => geoStore && !vsrc ? 24 : 6;
+function buildVectors(x0, y0, x1, y1) {
+  const outs = traceOutlines(labelRegion(x0, y0, x1, y1), x1 - x0, y1 - y0, x0, y0, vecIters());
+  return Object.assign({ win: [x0, y0, x1, y1], version: vecVersion, t: performance.now() }, vecPaths(outs));
+}
+// The same tracing in a background thread, so a moving front never stalls a frame: the frame draws the last
+// outlines while the next ones are being traced. Falls back to tracing in place where workers are not allowed.
+let vecWorker = null, vecJob = null, vecWorkerOff = false;
+function vecAsync(x0, y0, x1, y1) {
+  if (vecWorkerOff) return false;
+  if (vecJob) return true;
+  try {
+    if (!vecWorker) {
+      const src = traceOutlines.toString() + '\nonmessage = e => { const d = e.data, outs = traceOutlines(d.lab, d.ww, d.wh, d.ox, d.oy, d.iters);' +
+        ' postMessage({ id: d.id, outs }, outs.flatMap(o => [o.px.buffer, o.py.buffer, o.pt.buffer])); };';
+      vecWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      vecWorker.onmessage = e => {
+        const job = vecJob; vecJob = null;
+        if (!job || e.data.id !== job.id || job.W !== W || job.H !== H || job.win !== win) { requestDraw(); return; }
+        vec = Object.assign({ win: job.rect, version: job.version, t: performance.now() }, vecPaths(e.data.outs));
+        requestDraw();
+      };
+      vecWorker.onerror = () => { vecWorkerOff = true; vecJob = null; requestDraw(); };
     }
-    px = qx; py = qy; pt = qt;
-  }
-  let f = fills.get(L);
-  if (!f) { f = new Path2D(); fills.set(L, f); }
-  const q = px.length;
-  f.moveTo(px[0], py[0]);
-  for (let k = 1; k < q; k++) f.lineTo(px[k], py[k]);
-  f.closePath();
-  // border lines: a front is drawn once, from the side with the smaller id; map and window edges get none
-  const o = L & 255;
-  let coast = coasts.get(o);
-  let prev = null;
-  for (let k = 0; k < q; k++) {
-    const nb = pt[k], a = (k + 1) % q;
-    let path = null;
-    if (nb === 0) { if (!coast) { coast = new Path2D(); coasts.set(o, coast); } path = coast; }
-    else if (nb > 0 && (nb & 255) !== o && L < nb) path = isFront(o, nb & 255) ? fronts : borders;
-    if (path) { if (path !== prev) path.moveTo(px[k], py[k]); path.lineTo(px[a], py[a]); }
-    prev = path;
-  }
+    const lab = labelRegion(x0, y0, x1, y1);
+    vecJob = { id: Math.random(), rect: [x0, y0, x1, y1], version: vecVersion, W, H, win };
+    vecWorker.postMessage({ id: vecJob.id, lab, ww: x1 - x0, wh: y1 - y0, ox: x0, oy: y0, iters: vecIters() }, [lab.buffer]);
+    return true;
+  } catch (e) { vecWorkerOff = true; vecJob = null; return false; }
 }
 const hatchCache = new Map();
 function hatchPattern(c, col) {
@@ -915,12 +964,17 @@ function drawVectorMap(c) {
   const pad = 3;
   const need = [Math.max(0, Math.floor(vx0) - pad), Math.max(0, Math.floor(vy0) - pad), Math.min(W, Math.ceil(vx1) + pad), Math.min(H, Math.ceil(vy1) + pad)];
   if (need[2] <= need[0] || need[3] <= need[1]) return;
-  if (!vec || vec.version !== vecVersion || need[0] < vec.win[0] || need[1] < vec.win[1] || need[2] > vec.win[2] || need[3] > vec.win[3]) {
+  const outside = !vec || need[0] < vec.win[0] || need[1] < vec.win[1] || need[2] > vec.win[2] || need[3] > vec.win[3];
+  // the territory changed under outlines that still cover the screen: they are retraced in the background
+  // and drawn as they are until then (one or two frames)
+  if (vec && !outside && vec.version !== vecVersion && vecAsync(...vec.win)) { /* drawn stale this frame */ }
+  else if (outside || vec.version !== vecVersion) {
     // after a pan, build a bit wider than the screen so small pans reuse it;
     // while the territory is being edited, trace only what is visible
     const k = vec && vec.version !== vecVersion ? .02 : .25;
     const mx = Math.ceil((need[2] - need[0]) * k) + 4, my = Math.ceil((need[3] - need[1]) * k) + 4;
     vec = buildVectors(Math.max(0, need[0] - mx), Math.max(0, need[1] - my), Math.min(W, need[2] + mx), Math.min(H, need[3] + my));
+    vec.t = performance.now();
   }
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
@@ -1227,11 +1281,14 @@ function drawBorderOverlay() {
   ctx.restore();
 }
 // names of the countries of the map, written across the widest part of each one, like on a strategy map
-let terrLab = null, terrLabKey = '';
+let terrLab = null, terrLabKey = '', terrLabT = 0;
 function territoryLabels() {
-  const key = vecVersion + '|' + (win ? win.L + ',' + win.cx0 + ',' + win.cy0 : '') + '|' + W + 'x' + H + '|' + countries.map(c => c.name).join(',');
+  const base = (win ? win.L + ',' + win.cx0 + ',' + win.cy0 : '') + '|' + W + 'x' + H + '|' + countries.map(c => c.name).join(',');
+  const key = vecVersion + '|' + base;
   if (terrLab && key === terrLabKey) return terrLab;
-  terrLabKey = key;
+  // in battle the names move at most once a second
+  if (terrLab && (battlesOn || marchRaf) && terrLabKey.slice(terrLabKey.indexOf('|') + 1) === base && performance.now() - terrLabT < 1000) return terrLab;
+  terrLabKey = key; terrLabT = performance.now();
   const B = Math.max(4, Math.round(Math.sqrt(W * H / 40000))), bw = Math.ceil(W / B), bh = Math.ceil(H / B);
   const blk = new Uint8Array(bw * bh), dist = new Int32Array(bw * bh).fill(-1), q = new Int32Array(bw * bh);
   for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
@@ -1723,11 +1780,19 @@ function storeWrite(L, cx0, cy0, w, h, msk, src, val) {
 }
 function commitWindow() {
   if (!geoStore || !win || !own || !winOwn0) return false;
+  // where anything changed: whole rows compared four cells at a time, then the columns of those rows
+  const n4 = own.length >> 2, a32 = new Uint32Array(own.buffer, own.byteOffset, n4), b32 = new Uint32Array(winOwn0.buffer, winOwn0.byteOffset, n4);
+  let first = -1, last = -1;
+  for (let i = 0; i < n4; i++) if (a32[i] !== b32[i]) { first = i; break; }
+  for (let i = own.length - 1; i >= n4 * 4; i--) if (own[i] !== winOwn0[i]) { last = i; if (first < 0) first = i >> 2; break; }
+  if (first < 0) return false;
+  if (last < 0) for (let i = n4 - 1; i >= 0; i--) if (a32[i] !== b32[i]) { last = i * 4 + 3; break; }
+  let by0 = Math.floor(first * 4 / W), by1 = Math.floor(last / W), bx0 = W, bx1 = -1;
+  for (let y = by0; y <= by1; y++) for (let x = 0, i = y * W; x < W; x++, i++) if (own[i] !== winOwn0[i]) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; }
+  if (bx1 < 0) return false;
   // dragging a border can leave a lone cell of the old owner behind; up close it would grow into a blot
-  let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
-  for (let i = 0; i < own.length; i++) if (own[i] !== winOwn0[i]) { const x = i % W, y = (i / W) | 0; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
   // (and threads one cell wide: the old border the drag swept over)
-  if (bx1 >= 0) for (let pass = 0; pass < 2; pass++) for (let y = Math.max(1, by0 - 3); y < Math.min(H - 1, by1 + 4); y++) for (let x = Math.max(1, bx0 - 3); x < Math.min(W - 1, bx1 + 4); x++) {
+  for (let pass = 0; pass < 2; pass++) for (let y = Math.max(1, by0 - 3); y < Math.min(H - 1, by1 + 4); y++) for (let x = Math.max(1, bx0 - 3); x < Math.min(W - 1, bx1 + 4); x++) {
     const i = y * W + x, c = own[i];
     if (!c) continue;
     const a = own[i - 1], b = own[i + 1], u = own[i - W], d = own[i + W];
@@ -1736,19 +1801,26 @@ function commitWindow() {
     else if (a && a === b && a !== c && own[i] === c && winOwn0[i] === c && (u === c || d === c)) own[i] = a;
     else if (u && u === d && u !== c && winOwn0[i] === c && (a === c || b === c)) own[i] = u;
   }
-  const msk = new Uint8Array(W * H);
+  // only the changed block is written: its cells, plus (on a scenario) two cells around every change, stored
+  // exactly as on screen, since the outlines there may hold threads of the old border finer than these cells
+  const D = vsrc ? 2 : 0;
+  const x0 = Math.max(0, bx0 - 3 - D), y0 = Math.max(0, by0 - 3 - D), x1 = Math.min(W, bx1 + 4 + D), y1 = Math.min(H, by1 + 4 + D), w = x1 - x0, h = y1 - y0;
+  const msk = new Uint8Array(w * h), src = new Uint8Array(w * h);
   let k = 0;
-  for (let i = 0; i < msk.length; i++) if (own[i] !== winOwn0[i]) { msk[i] = 1; k++; }
-  // on a scenario the cells around a change are stored too, exactly as on screen: there the outlines may hold
-  // threads of the old border finer than these cells, which must not show through when you zoom in
-  if (k && vsrc) {
-    const d = new Uint8Array(W * H), D = 2;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (msk[y * W + x]) for (let yy = Math.max(0, y - D); yy <= Math.min(H - 1, y + D); yy++) d.fill(1, yy * W + Math.max(0, x - D), yy * W + Math.min(W, x + D + 1));
+  for (let y = 0; y < h; y++) {
+    const r = (y0 + y) * W + x0;
+    src.set(own.subarray(r, r + w), y * w);
+    for (let x = 0; x < w; x++) if (own[r + x] !== winOwn0[r + x]) { msk[y * w + x] = 1; k++; }
+  }
+  if (!k) return false;
+  if (D) {
+    const d = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (msk[y * w + x]) for (let yy = Math.max(0, y - D); yy <= Math.min(h - 1, y + D); yy++) d.fill(1, yy * w + Math.max(0, x - D), yy * w + Math.min(w, x + D + 1));
     msk.set(d);
   }
-  const r = k ? storeWrite(win.L, win.cx0, win.cy0, W, H, msk, own, 0) : false;
-  winOwn0.set(own);
-  return r;
+  const res = storeWrite(win.L, win.cx0 + x0, win.cy0 + y0, w, h, msk, src, 0);
+  for (let y = y0; y < y1; y++) winOwn0.set(own.subarray(y * W + x0, y * W + x1), y * W + x0);
+  return res;
 }
 function captureStore(keys) { const m = new Map(); for (const k of keys) { const t = store.get(k); m.set(k, t === undefined ? undefined : typeof t === 'number' ? t : t.slice()); } return m; }
 function applyStoreLog(st) {
@@ -1810,9 +1882,7 @@ function readGrid(l, cx0, cy0, w, h, dst) {
 }
 // territory shares measured on the whole planet (level 3), weighted by real area
 let storeAreaCache = null, storeAreaStamp = 0;
-function storeAreas() {
-  const now = performance.now();
-  if (storeAreaCache && storeAreaStamp && now - storeAreaStamp < 1500) return storeAreaCache;
+function* storeAreaWork() {
   const l = 3, n = worldCells(l), cnt = new Float64Array(countries.length + 1), row = new Uint8Array(n * TS);
   for (let ty = 0; ty < (1 << l); ty++) {
     readGrid(l, 0, ty * TS, n, TS, row);
@@ -1820,9 +1890,33 @@ function storeAreas() {
       const lat = latAtY((ty * TS + y + .5) / n) * Math.PI / 180, w = Math.cos(lat) * Math.cos(lat), r = y * n;
       for (let x = 0; x < n; x++) { const o = row[r + x]; if (o && o < cnt.length) cnt[o] += w; }
     }
+    yield;
   }
   let tot = 0; for (let k = 1; k < cnt.length; k++) tot += cnt[k];
-  storeAreaCache = { n: cnt, tot }; storeAreaStamp = now;
+  return { n: cnt, tot };
+}
+let storeAreaJob = null;
+function storeAreas() {
+  const now = performance.now(), busy = battlesOn || marchRaf;
+  if (storeAreaCache && storeAreaStamp && now - storeAreaStamp < (busy ? 15000 : 1500)) return storeAreaCache;
+  if (busy && storeAreaCache && storeAreaCache.n.length === countries.length + 1) {
+    // in battle the old shares stay on while the new ones are counted a slice at a time
+    if (!storeAreaJob) {
+      const job = storeAreaJob = storeAreaWork();
+      const slice = () => {
+        if (storeAreaJob !== job) return;
+        const r = job.next();
+        if (r.done) { storeAreaJob = null; storeAreaCache = r.value; storeAreaStamp = performance.now(); return; }
+        setTimeout(slice, 0);
+      };
+      setTimeout(slice, 0);
+    }
+    return storeAreaCache;
+  }
+  storeAreaJob = null;
+  const g = storeAreaWork();
+  let r; while (!(r = g.next()).done);
+  storeAreaCache = r.value; storeAreaStamp = now;
   return storeAreaCache;
 }
 
@@ -1864,7 +1958,7 @@ function reloadWindow(tl, nx0, ny0, w, h) {
   commitWindow();
   const old = win, f = Math.pow(2, tl - old.L);
   const T = p => ({ x: (p.x + old.cx0) * f - nx0, y: (p.y + old.cy0) * f - ny0 });
-  for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); }
+  for (const u of units) { const q = T(u); u.x = q.x; u.y = q.y; if (u.order) u.order = T(u.order); if (u.r) u.r *= f; }
   for (const c of cities) { const q = T(c); c.x = q.x; c.y = q.y; }
   for (const a of arrows) a.pts = a.pts.map(T);
   const s0 = view.s;
@@ -3039,25 +3133,25 @@ function fillPolygon(pts, val) {
 
 // Finds pockets: pieces of a country cut off from its largest piece and bordered
 // by exactly one other country (sea and neutral land around them do not break the ring).
-function computePockets() {
-  if (!own) return;
+function* pocketWork(src) {
   // 1. cut every row into runs of one owner (neutral cells are not runs)
   let cap = Math.max(1024, H * 8), n = 0;
   let rs = new Int32Array(cap), re = new Int32Array(cap), ro = new Uint8Array(cap);
   const rowStart = new Int32Array(H + 1);
   let dx0 = W, dy0 = H, dx1 = -1, dy1 = -1;
   for (let y = 0; y < H; y++) {
+    if ((y & 127) === 127) yield;
     rowStart[y] = n;
     const base = y * W;
     let x = 0;
     while (x < W) {
-      const o = own[base + x];
+      const o = src[base + x];
       if (!o) {
         if (pocket[base + x]) { pocket[base + x] = 0; if (x < dx0) dx0 = x; if (x > dx1) dx1 = x; if (y < dy0) dy0 = y; if (y > dy1) dy1 = y; }
         x++; continue;
       }
       const s0 = x;
-      while (x < W && own[base + x] === o) x++;
+      while (x < W && src[base + x] === o) x++;
       if (n === cap) {
         cap *= 2;
         const a = new Int32Array(cap); a.set(rs); rs = a;
@@ -3080,45 +3174,55 @@ function computePockets() {
       if (re[i] < re[j]) i++; else j++;
     }
   };
-  for (let y = 1; y < H; y++) overlaps(y, (i, j) => { if (ro[i] === ro[j]) { const a = find(i), b = find(j); if (a !== b) parent[a] = b; } });
+  for (let y = 1; y < H; y++) { if ((y & 255) === 255) yield; overlaps(y, (i, j) => { if (ro[i] === ro[j]) { const a = find(i), b = find(j); if (a !== b) parent[a] = b; } }); }
   // 3. per component: size, bounding box, map edge, and which other countries it touches
   const root = new Int32Array(n), size = new Float64Array(n), enc = new Int32Array(n), edge = new Uint8Array(n);
   const bx0 = new Int32Array(n).fill(W), by0 = new Int32Array(n).fill(H), bx1 = new Int32Array(n), by1 = new Int32Array(n);
-  for (let y = 0; y < H; y++) for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
+  for (let y = 0; y < H; y++) {
+    if ((y & 255) === 255) yield;
+    for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
     const r = root[k] = find(k);
     size[r] += re[k] - rs[k];
     if (rs[k] < bx0[r]) bx0[r] = rs[k]; if (re[k] > bx1[r]) bx1[r] = re[k]; if (y < by0[r]) by0[r] = y; if (y + 1 > by1[r]) by1[r] = y + 1;
     if (rs[k] === 0 || re[k] === W || y === 0 || y === H - 1) edge[r] = 1;
+    }
   }
   // only enemies close a ring: a piece that touches an ally is still connected to friendly land
   const touch = (r, own_, o) => { if (allied(own_, o)) { enc[r] = -1; return; } if (!enc[r]) enc[r] = o; else if (enc[r] !== o) enc[r] = -1; };
   for (let y = 0; y < H; y++) {
+    if ((y & 255) === 255) yield;
     for (let k = rowStart[y]; k + 1 < rowStart[y + 1]; k++) if (re[k] === rs[k + 1] && ro[k] !== ro[k + 1]) { touch(root[k], ro[k], ro[k + 1]); touch(root[k + 1], ro[k + 1], ro[k]); }
     if (y > 0) overlaps(y, (i, j) => { if (ro[i] !== ro[j]) { touch(root[i], ro[i], ro[j]); touch(root[j], ro[j], ro[i]); } });
-  }
-  // on the Earth a piece with a long sea coast and a short land front is held from the sea (Alaska),
-  // while one pressed against the shore by a long front is still a pocket (Courland, Dunkirk)
-  let sea = null, foe = null;
-  if (geoStore) {
-    sea = new Float64Array(n); foe = new Float64Array(n);
-    for (let y = 0; y < H; y++) {
-      const base = y * W;
-      for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
-        const r = root[k], a = rs[k], b = re[k], o = ro[k];
-        if (a > 0) { const q = own[base + a - 1]; if (!q) sea[r]++; else if (!allied(o, q)) foe[r]++; }
-        if (b < W) { const q = own[base + b]; if (!q) sea[r]++; else if (!allied(o, q)) foe[r]++; }
-        for (let yy = y - 1; yy <= y + 1; yy += 2) {
-          if (yy < 0 || yy >= H) continue;
-          const bb = yy * W;
-          for (let x = a; x < b; x++) { const q = own[bb + x]; if (!q) sea[r]++; else if (q !== o && !allied(o, q)) foe[r]++; }
-        }
-      }
-    }
   }
   const comps = [];
   for (let k = 0; k < n; k++) if (root[k] === k) comps.push({ id: k, owner: ro[k], size: size[k], enc: enc[k] > 0 ? enc[k] : 0, edge: !!edge[k], box: [bx0[k], by0[k], bx1[k], by1[k]] });
   const main = {};
   for (const c of comps) if (!main[c.owner] || c.size > main[c.owner].size) main[c.owner] = c;
+  // on the Earth a piece with a long sea coast and a short land front is held from the sea (Alaska),
+  // while one pressed against the shore by a long front is still a pocket (Courland, Dunkirk)
+  let sea = null, foe = null;
+  // (counted only for pieces that could be pockets at all, which are few)
+  const cand = new Uint8Array(n);
+  let anyCand = false;
+  for (const c of comps) if (c !== main[c.owner] && c.enc && !c.edge) { cand[c.id] = 1; anyCand = true; }
+  if (geoStore && anyCand) {
+    sea = new Float64Array(n); foe = new Float64Array(n);
+    for (let y = 0; y < H; y++) {
+      if ((y & 255) === 255) yield;
+      const base = y * W;
+      for (let k = rowStart[y]; k < rowStart[y + 1]; k++) {
+        const r = root[k], a = rs[k], b = re[k], o = ro[k];
+        if (!cand[r]) continue;
+        if (a > 0) { const q = src[base + a - 1]; if (!q) sea[r]++; else if (!allied(o, q)) foe[r]++; }
+        if (b < W) { const q = src[base + b]; if (!q) sea[r]++; else if (!allied(o, q)) foe[r]++; }
+        for (let yy = y - 1; yy <= y + 1; yy += 2) {
+          if (yy < 0 || yy >= H) continue;
+          const bb = yy * W;
+          for (let x = a; x < b; x++) { const q = src[bb + x]; if (!q) sea[r]++; else if (q !== o && !allied(o, q)) foe[r]++; }
+        }
+      }
+    }
+  }
   pockets = comps.filter(c => c !== main[c.owner] && c.enc && !c.edge && !(sea && sea[c.id] > foe[c.id] * 2.5));
   // a ring drawn deep inside enemy land is itself cut off, but it is the encircler, not the pocket
   const inside = (a, b) => a.box[0] >= b.box[0] && a.box[1] >= b.box[1] && a.box[2] <= b.box[2] && a.box[3] <= b.box[3];
@@ -3150,6 +3254,28 @@ function computePockets() {
   runData = { rs, re, root, rowStart };
   pockets.sort((a, b) => b.size - a.size);
   if (dx1 >= 0) addDirty(dx0, dy0, dx1 + 1, dy1 + 1);
+}
+// pockets of the working grid, now (after an edit)
+function computePockets() {
+  if (!own) return;
+  pocketJob = null;
+  const g = pocketWork(own);
+  while (!g.next().done);
+}
+// the same in slices of a few milliseconds between frames, on a copy of the grid: used while battles run,
+// where a full pass over millions of cells in one go would cost a visible jerk
+let pocketJob = null;
+function computePocketsSoon(after) {
+  if (!own || pocketJob) return;
+  const job = pocketJob = { g: pocketWork(own.slice()), W, H, win };
+  const slice = () => {
+    if (pocketJob !== job) return;
+    if (job.W !== W || job.H !== H || job.win !== win) { pocketJob = null; return; }
+    const t0 = performance.now();
+    while (performance.now() - t0 < 4) if (job.g.next().done) { pocketJob = null; if (after) after(); requestDraw(); return; }
+    setTimeout(slice, 0);
+  };
+  setTimeout(slice, 0);
 }
 let runData = null;
 function takePocket(pk) {
@@ -3371,23 +3497,189 @@ function unitSprite(u, P, sel) {
   spriteCache.set(key, sp);
   return sp;
 }
+// ---------- formations: a front splits into armies, corps and divisions as you zoom in ----------
+// A front, army or corps placed on the map is a tree: 3 armies of 3 corps of 3 divisions, laid out along the
+// front line. Only divisions exist on the battlefield (they fight, march and push the border); the higher
+// levels are drawn in their place when their members are too close on screen to be told apart.
+// The rule: a formation opens into its parts as soon as the parts can be drawn side by side without their
+// markers overlapping, and closes again when they come a little closer than that (the gap keeps it from blinking).
+let forms = [];                       // { id, parent, ech, owner, era, type, label }
+let shown = [];                       // what the last frame drew: { x, y, S, unit } or { x, y, S, node, leaves }
+const FORM_CHILD = { XXXXX: 'XXXX', XXXX: 'XXX', XXX: 'XX' };
+const FORM_WORD = { XXXXX: ['фронт', 'й'], XXXX: ['армия', 'я'], XXX: ['корпус', 'й'], XX: ['дивизия', 'я'] };
+const FORM_SPLIT = 3, FORM_OPEN = 1.12, FORM_CLOSE = .9;
+const hierOn = () => !!game.hier;
+const isHier = u => u.f !== undefined;
+// marker height: hierarchy markers keep their size on screen on every map, so zooming is what opens them
+const iconS = u => isHier(u) ? unitSize / view.s * (u.scale || 1) : unitS(u);
+// size of a unit on the battlefield: divisions of a formation have their own, fixed on the map
+const bodyS = u => u.r ? u.r * 2 : unitS(u);
+// where the line of a new formation should run: along the border nearest to the click
+function frontTangent(g, R) {
+  const o = cellOwner(g.x, g.y);
+  let nx = 0, ny = 0;
+  for (let k = 0; k < 48; k++) {
+    const a = k / 48 * Math.PI * 2;
+    for (let r = R / 4; r <= R; r += R / 4) {
+      const x = g.x + Math.cos(a) * r, y = g.y + Math.sin(a) * r, q = cellOwner(x, y);
+      if (q && q !== o) { nx += Math.cos(a) / r; ny += Math.sin(a) / r; break; }
+    }
+  }
+  const d = Math.hypot(nx, ny);
+  return d ? { x: -ny / d, y: nx / d } : { x: 1, y: 0 };
+}
+function formNumber(owner, ech) {
+  return ech === 'XX' ? units.filter(u => u.owner === owner && u.ech === 'XX' && isHier(u)).length + 1 : forms.filter(f => f.owner === owner && f.ech === ech).length + 1;
+}
+const formLabel = (n, ech) => n + '-' + FORM_WORD[ech][1] + ' ' + FORM_WORD[ech][0];
+// place a whole formation; spacing is chosen so it shows as one marker at the zoom it was placed at
+function spawnFormation(g, ech, owner) {
+  const icon = unitSize / view.s * 1.5, t = frontTangent(g, icon * 3);
+  const made = [];
+  let d1 = icon * .8;
+  const make = (ech_, x, y, sp, parent) => {
+    if (ech_ === 'XX') {
+      const u = { x: clamp(x, 0, W), y: clamp(y, 0, H), era, type: unitType, owner, ech: 'XX', label: formLabel(formNumber(owner, 'XX'), 'XX'), f: parent, r: Math.max(sp, d1 / 9) * .45 };
+      units.push(u); made.push(u); return;
+    }
+    const f = { id: genSeqForm(), parent, ech: ech_, owner, era, type: unitType, label: formLabel(formNumber(owner, ech_), ech_) };
+    forms.push(f);
+    for (let k = 0; k < FORM_SPLIT; k++) { const o = (k - (FORM_SPLIT - 1) / 2) * sp; make(FORM_CHILD[ech_], x + t.x * o, y + t.y * o, sp / FORM_SPLIT, f.id); }
+  };
+  make(ech, g.x, g.y, d1, 0);
+  return made;
+}
+let formSeq = 1;
+function rootForm(u) { const byId = new Map(forms.map(f => [f.id, f])); let f = byId.get(u.f); while (f && byId.get(f.parent)) f = byId.get(f.parent); return f || { label: '' }; }
+// the formation exactly made of these divisions, if there is one
+function formOf(list) {
+  if (!list.length || !list.every(isHier)) return null;
+  const byId = new Map(forms.map(f => [f.id, f])), set = new Set(list);
+  let f = byId.get(list[0].f);
+  while (f) {
+    const inF = u => { let q = byId.get(u.f); while (q) { if (q.id === f.id) return true; q = byId.get(q.parent); } return false; };
+    const members = units.filter(inF);
+    if (members.length === list.length && members.every(u => set.has(u))) return { f, n: members.length };
+    if (members.length > list.length) return null;
+    f = byId.get(f.parent);
+  }
+  return null;
+}
+function genSeqForm() { formSeq = Math.max(formSeq, ...forms.map(f => f.id + 1), 1); return formSeq++; }
+// drop formations left without divisions
+function pruneForms() {
+  if (!forms.length) return;
+  const live = new Set();
+  const byId = new Map(forms.map(f => [f.id, f]));
+  for (const u of units) if (isHier(u)) { let f = byId.get(u.f); while (f && !live.has(f.id)) { live.add(f.id); f = byId.get(f.parent); } }
+  if (live.size !== forms.length) forms = forms.filter(f => live.has(f.id));
+}
+// the tree with every node's centre, extent and members, rebuilt each frame (a few microseconds per division)
+function formTree() {
+  const nodes = new Map();
+  for (const f of forms) nodes.set(f.id, { f, sub: [], leaves: [], all: [], x: 0, y: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+  const loose = [];
+  for (const u of units) { const n = isHier(u) && nodes.get(u.f); if (n) n.leaves.push(u); else loose.push(u); }
+  const roots = [];
+  for (const n of nodes.values()) { const p = n.f.parent && nodes.get(n.f.parent); if (p) p.sub.push(n); else roots.push(n); }
+  const sum = n => {
+    for (const s of n.sub) { sum(s); for (const u of s.all) n.all.push(u); }
+    for (const u of n.leaves) n.all.push(u);
+    let sx = 0, sy = 0;
+    for (const u of n.all) { sx += u.x; sy += u.y; if (u.x < n.x0) n.x0 = u.x; if (u.x > n.x1) n.x1 = u.x; if (u.y < n.y0) n.y0 = u.y; if (u.y > n.y1) n.y1 = u.y; }
+    if (n.all.length) { n.x = sx / n.all.length; n.y = sy / n.all.length; }
+  };
+  for (const r of roots) sum(r);
+  return { roots, loose };
+}
+// a stand-in unit for drawing a closed formation with the usual marker code
+function formMarker(n) {
+  const f = n.f, m = f._m || (f._m = {});
+  let hp = 0, oos = 0, ord = 0;
+  for (const u of n.all) { hp += hpOf(u); if (u.oos) oos++; if (u.order) ord++; }
+  Object.assign(m, { x: n.x, y: n.y, era: f.era, type: f.type, owner: f.owner, ech: f.ech, label: f.label, f: f.id, scale: 1 });
+  m.hp = Math.round(hp / n.all.length); if (m.hp >= 100) delete m.hp;
+  if (oos * 2 > n.all.length) m.oos = true; else delete m.oos;
+  return m;
+}
+// decide what is drawn: each formation either as one marker or opened into its parts (recursively)
+function layoutUnits() {
+  shown = [];
+  const r = stage.getBoundingClientRect(), s = view.s;
+  const vx0 = -view.x / s, vy0 = -view.y / s, vx1 = (r.width - view.x) / s, vy1 = (r.height - view.y) / s;
+  const fog = game.fog && player;
+  const visible = list => !fog || list.some(isVisible);
+  const leaf = u => { if (isVisible(u)) shown.push({ x: u.x, y: u.y, S: iconS(u), unit: u }); };
+  if (!hierOn() || !forms.length) { for (const u of units) leaf(u); return; }
+  const { roots, loose } = formTree();
+  for (const u of loose) leaf(u);
+  const iconW = unitSize * 1.5;                                  // marker width on screen, pixels
+  const visit = n => {
+    if (!n.all.length) return;
+    const pad = iconW / s;
+    if (n.x1 < vx0 - pad || n.x0 > vx1 + pad || n.y1 < vy0 - pad || n.y0 > vy1 + pad) { n.f._open = false; return; }
+    const parts = [...n.sub.filter(q => q.all.length), ...n.leaves];
+    if (parts.length === 1) { const q = parts[0]; if (q.all) visit(q); else leaf(q); return; }
+    // closest pair of parts, in screen pixels
+    let sep = Infinity;
+    for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
+      const d = Math.hypot(parts[a].x - parts[b].x, parts[a].y - parts[b].y) * s; if (d < sep) sep = d;
+    }
+    const open = sep >= iconW * (n.f._open ? FORM_CLOSE : FORM_OPEN);
+    n.f._open = open;
+    if (!open) { if (visible(n.all)) shown.push({ x: n.x, y: n.y, S: unitSize / s, node: n, leaves: n.all, m: formMarker(n) }); return; }
+    for (const q of parts) { if (q.all) visit(q); else leaf(q); }
+  };
+  for (const n of roots) visit(n);
+}
+function hitShown(g) {
+  for (let k = shown.length - 1; k >= 0; k--) {
+    const it = shown[k], h = it.S / 2, w = it.S * .75;
+    if (Math.abs(g.x - it.x) <= w && Math.abs(g.y - it.y) <= h * 1.2) return it;
+  }
+  return null;
+}
+// --- neighbours on the battlefield, found through a grid of buckets instead of checking every pair ---
+let bgrid = null;
+function buildBattleGrid() {
+  let cs = 1;
+  for (const u of units) { const b = bodyS(u); if (b > cs) cs = b; }
+  cs *= 2;
+  const m = new Map();
+  for (const u of units) { const k = Math.floor(u.x / cs) * 65536 + Math.floor(u.y / cs); let a = m.get(k); if (!a) m.set(k, a = []); a.push(u); }
+  bgrid = { cs, m, n: units.length };
+}
+function forNear(u, R, fn) {
+  if (!bgrid || bgrid.n !== units.length) buildBattleGrid();
+  const cs = bgrid.cs, x0 = Math.floor((u.x - R) / cs), x1 = Math.floor((u.x + R) / cs), y0 = Math.floor((u.y - R) / cs), y1 = Math.floor((u.y + R) / cs);
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) { for (const v of units) if (v !== u && fn(v) === false) return; return; }
+  for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) {
+    const a = bgrid.m.get(gx * 65536 + gy);
+    if (a) for (const v of a) if (v !== u && fn(v) === false) return;
+  }
+}
 function drawUnitsFast(c) {
   if (!showUnits || !units.length) return;
   const zoom = view.s * dpr;
   const selSet = tool === 'units' ? new Set(selUnits.length ? selUnits : selUnit ? [selUnit] : []) : null;
-  for (const u of units) {
-    if (!isVisible(u)) continue;
-    const S = unitSize * ZS() * (u.scale || 1);
+  layoutUnits();
+  const r = stage.getBoundingClientRect(), vx0 = -view.x / view.s, vy0 = -view.y / view.s, vx1 = (r.width - view.x) / view.s, vy1 = (r.height - view.y) / view.s;
+  for (const it of shown) {
+    const u = it.unit || it.m, S = it.unit ? iconS(u) : it.S;
+    // off screen: skipped (a marker is at most a few sizes wide)
+    if (it.x + S * 3 < vx0 || it.x - S * 3 > vx1 || it.y + S * 3 < vy0 || it.y - S * 3 > vy1) continue;
+    const sel = !!(selSet && (it.unit ? selSet.has(u) : it.leaves.every(v => selSet.has(v))));
     // on the Earth markers keep their screen size, so the exact zoom is used; otherwise 1/3-octave steps
-    let q = geoStore ? zoom : Math.min(Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3), 12);
+    let q = geoStore || isHier(u) ? zoom : Math.min(Math.pow(2, Math.round(Math.log2(zoom) * 3) / 3), 12);
     q = Math.min(q, 700 / S);
-    const sp = unitSprite(u, S * q, !!(selSet && selSet.has(u)));
-    c.drawImage(sp.c, u.x - sp.left / q, u.y - sp.top / q, sp.c.width / q, sp.c.height / q);
+    const sp = unitSprite(u, S * q, sel);
+    c.drawImage(sp.c, it.x - sp.left / q, it.y - sp.top / q, sp.c.width / q, sp.c.height / q);
   }
 }
 function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, unitSize * ZS() * (u.scale || 1), marks && targets().includes(u) && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
+  if (hierOn() && forms.length) { const it = hitShown(g); return it ? it.unit || it.leaves[0] : null; }
   for (let k = units.length - 1; k >= 0; k--) {
     const u = units[k], S = unitSize * ZS() * (u.scale || 1), h = S / 2, w = S * .75;
     if (!isVisible(u)) continue;
@@ -3395,12 +3687,12 @@ function hitUnit(g) {
   }
   return null;
 }
-function unitsChanged() { renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
+function unitsChanged() { pruneForms(); renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
 function selectUnit(u) { setSel(u ? [u] : [], u); }
 function setSel(list, primary) {
   selUnits = list;
   const u = selUnit = primary !== undefined ? primary : (list[list.length - 1] || null);
-  if (u) { era = u.era; unitType = u.type; unitEch = u.ech || ''; $('#era').value = era; }
+  if (u) { const fm = list.length > 1 && hierOn() && formOf(list); era = u.era; unitType = u.type; unitEch = fm ? fm.f.ech : u.ech || ''; $('#era').value = era; }
   renderUnitPanel(); renderGenEditor(); requestDraw();
 }
 let paletteKey = '';
@@ -3441,13 +3733,17 @@ function renderUnitPanel() {
     const gens = new Set(list.map(u => u.gen || ''));
     ug.value = gens.size === 1 ? [...gens][0] : '';
     ug.disabled = !oneOwner;
-    if (many) {
+    const fm = many && formOf(list);
+    if (fm) {
+      $('#unitSelName').textContent = fm.f.label + (c ? ' · ' + c.name : '');
+      $('#unitStats').textContent = fm.n + ' дивизий · общая сила ' + list.reduce((t, u) => t + unitPower(u), 0).toFixed(1) + ' · среднее состояние ' + Math.round(list.reduce((t, u) => t + hpOf(u), 0) / list.length) + '% · перетащите значок, чтобы двинуть всё соединение, ПКМ — приказ на марш';
+    } else if (many) {
       $('#unitSelName').textContent = 'Выбрано отрядов: ' + list.length + (oneOwner && c ? ' · ' + c.name : '');
       $('#unitStats').textContent = 'Общая сила ' + list.reduce((t, u) => t + unitPower(u), 0).toFixed(2) + ' · Shift + щелчок убирает отряд из выбора, Esc снимает выбор';
     } else
     $('#unitStats').textContent = 'Сила ' + unitPower(selUnit).toFixed(2) + ' · состояние ' + Math.round(hpOf(selUnit)) + '%' + (selUnit.oos && game.supply ? ' · без снабжения' : '') + (selUnit.order ? ' · на марше' : '');
     $('#unitLabel').value = selUnit.label || '';
-    $('#unitEch').value = selUnit.ech || '';
+    $('#unitEch').value = unitEch;
     const sc = Math.round((selUnit.scale || 1) * 100);
     $('#uscale').value = sc; $('#uscaleOut').textContent = sc + '%';
     $('#unitOwnerBtn').hidden = !active || list.every(u => u.owner === active);
@@ -3621,7 +3917,7 @@ const hpOf = u => u.hp === undefined ? 100 : u.hp;
 const immobile = u => unitDef(u).def[2] === 'tower';
 function unitPower(u) { const g = u.gen && genById(u.gen); return (TYPE_POWER[unitDef(u).def[2]] || 1) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1) * (u.oos && game.supply ? .6 : 1); }
 function cellOwner(x, y) { const gx = Math.floor(x), gy = Math.floor(y); return gx < 0 || gy < 0 || gx >= W || gy >= H ? 0 : own[gy * W + gx]; }
-const pushRadius = u => Math.max(3, unitS(u) * .9 * pushK);
+const pushRadius = u => Math.max(3, bodyS(u) * .9 * pushK);
 
 // Takes over enemy cells along a unit's path. Neutral land and sea stay untouched while protection is on.
 function captureAlong(a, b, R, val) {
@@ -3651,7 +3947,7 @@ function moveUnit(u, nx, ny) {
   if (unitsPushBorder) captureAlong(from, u, pushRadius(u), u.owner);
 }
 function fight(a, b) {
-  const near = u => units.filter(v => v !== u && allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) < unitS(u) * 3).length;
+  const near = u => { let n = 0; const R = bodyS(u) * 3; forNear(u, R, v => { if (allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) < R) n++; }); return n; };
   const roll = u => unitPower(u) * (1 + .15 * Math.min(near(u), 4)) * (allied(cellOwner(u.x, u.y), u.owner) ? 1.2 : 1) * (.55 + Math.random() * .9);
   const pa = roll(a), pb = roll(b);
   const win = pa >= pb ? a : b, lose = win === a ? b : a;
@@ -3659,7 +3955,7 @@ function fight(a, b) {
   lose.hp = hpOf(lose) - (1.5 + 6 * (ratio - .5));
   win.hp = hpOf(win) - (.8 + 1.5 * (1 - ratio));
   let dx = lose.x - win.x, dy = lose.y - win.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
-  const step = Math.min(unitS(win), unitS(lose)) * .1;
+  const step = Math.min(bodyS(win), bodyS(lose)) * .1;
   let retreated = false;
   if (!immobile(lose)) {
     const tx = lose.x + dx * step, ty = lose.y + dy * step;
@@ -3667,7 +3963,7 @@ function fight(a, b) {
     else { lose.x = clamp(tx, 0, W); lose.y = clamp(ty, 0, H); retreated = true; }
   }
   if (!immobile(win)) {
-    const gap = (unitS(win) + unitS(lose)) / 2 * 1.05;
+    const gap = (bodyS(win) + bodyS(lose)) / 2 * 1.05;
     const nd = Math.hypot(lose.x - win.x, lose.y - win.y);
     const adv = Math.min(step, nd - gap);
     if (adv > 0 || retreated) moveUnit(win, win.x + dx * Math.max(adv, 0), win.y + dy * Math.max(adv, 0));
@@ -3679,14 +3975,16 @@ function battleTick() {
   if (!own || !units.length) return;
   engaged = [];
   const fought = new Set();
+  buildBattleGrid();
   for (const u of units.slice()) {
     if (fought.has(u)) continue;
+    // the nearest enemy within reach (contact, or the distance a unit advances from on its own)
     let best = null, bd = Infinity;
-    for (const v of units) if (!allied(v.owner, u.owner) && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    forNear(u, bodyS(u) * (autoAdvance ? 8 : 2), v => { if (!allied(v.owner, u.owner) && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best) continue;
-    if (bd <= (unitS(u) + unitS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
-    else if (autoAdvance && !immobile(u) && !u.order && bd <= unitS(u) * 8) {
-      const k = unitS(u) * .06 / bd;
+    if (bd <= (bodyS(u) + bodyS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
+    else if (autoAdvance && !immobile(u) && !u.order && bd <= bodyS(u) * 8) {
+      const k = bodyS(u) * .06 / bd;
       moveUnit(u, u.x + (best.x - u.x) * k, u.y + (best.y - u.y) * k);
     }
   }
@@ -3698,7 +3996,7 @@ function battleTick() {
   if (game.calendar) gameDate += hoursPerTick * 3600e3;
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
-    units = units.filter(u => hpOf(u) > 0);
+    units = units.filter(u => hpOf(u) > 0); pruneForms();
     selUnits = selUnits.filter(u => !dead.includes(u));
     if (dead.includes(selUnit)) selUnit = selUnits[selUnits.length - 1] || null;
     toast('Разгромлены: ' + dead.map(u => (u.label || unitDef(u).def[1]) + ' (' + (countries[u.owner - 1] || {}).name + ')').join(', '));
@@ -3707,9 +4005,9 @@ function battleTick() {
   requestDraw();
   const perSec = Math.max(1, Math.round(battleSpeed));
   ++battleTicks;
-  if (battleTicks % perSec === 0 || dead.length) { if (geoStore) commitWindow(); renderCountries(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
+  if (battleTicks % perSec === 0 || dead.length) { if (geoStore) commitWindow(); if (dead.length) renderCountries(); else updateCountryShares(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); }
   else updateGameInfo();
-  if (battleTicks % (perSec * 3) === 0) { computePockets(); renderPockets(); logPockets(); }
+  if (battleTicks % (perSec * 3) === 0) computePocketsSoon(() => { renderPockets(); logPockets(); });
 }
 function setBattles(on) {
   if (on === battlesOn) return;
@@ -3719,6 +4017,7 @@ function setBattles(on) {
     if (!units.length) { battlesOn = false; toast('Сначала расставьте войска двух сторон.'); return; }
     pushHist();
     battleTimer = setInterval(battleTick, 1000 / battleSpeed);
+    armIdleCursor();
     toast('Бои начались. Ctrl+Z вернёт карту к моменту начала боёв.');
     logEvent('Начались боевые действия');
   } else {
@@ -3737,9 +4036,18 @@ function syncToggles() {
 }
 function drawBattles(c) {
   if (!battlesOn || !showUnits) return;
-  for (const [a, b, win] of engaged) {
-    if (!isVisible(a) && !isVisible(b)) continue;
-    const S = Math.min(unitS(a), unitS(b)), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  // a fight inside closed formations is drawn once, between the markers that stand for them
+  const at = new Map(), idx = new Map();
+  shown.forEach((it, k) => { idx.set(it, k); if (it.unit) at.set(it.unit, it); else for (const u of it.leaves) at.set(u, it); });
+  const done = new Set();
+  for (const [a0, b0, win] of engaged) {
+    const ia = at.get(a0), ib = at.get(b0);
+    if (!ia || !ib) continue;
+    const key = idx.get(ia) * 1e6 + idx.get(ib);
+    if (done.has(key)) continue;
+    done.add(key);
+    const a = ia, b = ib;
+    const S = Math.min(ia.unit ? iconS(ia.unit) : ia.S, ib.unit ? iconS(ib.unit) : ib.S), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const col = rgb[win.owner] || [200, 60, 50];
     c.save();
     c.strokeStyle = 'rgba(200,40,30,.85)'; c.lineWidth = S * .07; c.setLineDash([S * .18, S * .12]);
@@ -3762,9 +4070,10 @@ const GAME_SYSTEMS = [
   ['supply', 'Снабжение', 'Окружённые и оторвавшиеся от своих отряды слабеют и теряют силы.'],
   ['fog', 'Туман войны', 'Войска противника видны только рядом с вашими отрядами и землями.'],
   ['ai', 'ИИ противника', 'Во время боёв чужие отряды сами наступают на ваши войска и города.'],
-  ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.']
+  ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.'],
+  ['hier', 'Соединения: фронт → армии → корпуса → дивизии', 'Выберите обозначение «Фронт», «Армия» или «Корпус» и щёлкните по карте: соединение встанет одним значком вдоль ближайшей границы. Приближайте — оно делится на армии, корпуса, дивизии; отдаляйте — собирается обратно. Воюют и двигают границу дивизии.']
 ];
-let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: false, log: true };
+let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: false, log: true, hier: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 let selArrow = null, selCity = null, arrowWidth = 9;
@@ -3999,26 +4308,29 @@ function issueOrder(target) {
   if (!list.length) return;
   pushHist();
   const cx = list.reduce((s, u) => s + u.x, 0) / list.length, cy = list.reduce((s, u) => s + u.y, 0) / list.length;
-  for (const u of list) u.order = { x: clamp(target.x + (u.x - cx) * .8, 0, W), y: clamp(target.y + (u.y - cy) * .8, 0, H) };
+  const keep = list.every(isHier) ? 1 : .8;           // a formation keeps its line on the march
+  for (const u of list) u.order = { x: clamp(target.x + (u.x - cx) * keep, 0, W), y: clamp(target.y + (u.y - cy) * keep, 0, H) };
   toast(list.length > 1 ? 'Отряды выступили: ' + list.length : 'Отряд выступил');
   startMarch();
 }
-function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } }
+function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } armIdleCursor(); }
 function enemyContact(u) {
-  for (const v of units) if (!allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (unitS(u) + unitS(v)) / 2 * 1.9) return true;
-  return false;
+  let hit = false;
+  forNear(u, bodyS(u) * 2, v => { if (!allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (bodyS(u) + bodyS(v)) / 2 * 1.9) { hit = true; return false; } });
+  return hit;
 }
 function marchFrame(t) {
   marchRaf = 0;
+  buildBattleGrid();
   const dt = Math.min(.1, (t - marchLast) / 1000); marchLast = t;
   let any = false;
   for (const u of units) {
     if (!u.order) continue;
     if (!game.orders || immobile(u)) { delete u.order; continue; }
     any = true;
-    const sp = unitS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
+    const sp = bodyS(u) * .9 * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
     const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
-    if (enemyContact(u)) { delete u.order; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') вступил в бой', u.owner); continue; }
+    if (enemyContact(u)) { delete u.order; logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — в бою', u.owner); continue; }
     if (d <= sp) { moveUnit(u, u.order.x, u.order.y); delete u.order; continue; }
     moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp);
   }
@@ -4029,12 +4341,14 @@ function marchFrame(t) {
 }
 function drawOrders(c) {
   if (!game.orders) return;
-  for (const u of units) {
-    if (!u.order || !isVisible(u)) continue;
-    const col = rgb[u.owner] || [80, 80, 80], S = unitS(u);
+  for (const it of shown) {
+    const list = it.unit ? [it.unit] : it.leaves, go = list.filter(u => u.order);
+    if (!go.length) continue;
+    const u = it.unit || it.m, ox = go.reduce((s, v) => s + v.order.x, 0) / go.length, oy = go.reduce((s, v) => s + v.order.y, 0) / go.length;
+    const col = rgb[u.owner] || [80, 80, 80], S = it.unit ? iconS(u) : it.S;
     c.strokeStyle = `rgba(${col[0] * .5 | 0},${col[1] * .5 | 0},${col[2] * .5 | 0},.85)`; c.lineWidth = S * .06;
-    c.setLineDash([S * .2, S * .14]); c.beginPath(); c.moveTo(u.x, u.y); c.lineTo(u.order.x, u.order.y); c.stroke(); c.setLineDash([]);
-    c.beginPath(); c.arc(u.order.x, u.order.y, S * .14, 0, Math.PI * 2); c.fillStyle = c.strokeStyle; c.fill();
+    c.setLineDash([S * .2, S * .14]); c.beginPath(); c.moveTo(it.x, it.y); c.lineTo(ox, oy); c.stroke(); c.setLineDash([]);
+    c.beginPath(); c.arc(ox, oy, S * .14, 0, Math.PI * 2); c.fillStyle = c.strokeStyle; c.fill();
   }
 }
 
@@ -4057,7 +4371,7 @@ function updateSupply() {
   for (const u of units) {
     const was = !!u.oos, now = game.supply ? !inSupply(u) : false;
     if (now) u.oos = true; else delete u.oos;
-    if (now && !was) logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') остался без снабжения', u.owner);
+    if (now && !was) logEvent((u.label || unitDef(u).def[1]) + ' (' + ownerName(u.owner) + ') — без снабжения', u.owner);
   }
 }
 
@@ -4067,7 +4381,7 @@ function isVisible(u) {
   if (!game.fog || !player || allied(u.owner, player)) return true;
   if (visCache && visCache.has(u)) return visCache.get(u);
   let v = allied(cellOwner(u.x, u.y), player);
-  if (!v) for (const m of units) if (allied(m.owner, player) && Math.hypot(m.x - u.x, m.y - u.y) <= unitS(m) * 6) { v = true; break; }
+  if (!v) forNear(u, Math.max(bodyS(u), unitS(u)) * 6, m => { if (allied(m.owner, player) && Math.hypot(m.x - u.x, m.y - u.y) <= bodyS(m) * 6) { v = true; return false; } });
   if (visCache) visCache.set(u, v);
   return v;
 }
@@ -4077,16 +4391,16 @@ function aiStep(fought) {
   if (!game.ai) return;
   for (const u of units) {
     if (allied(u.owner, player) || fought.has(u) || u.order || immobile(u)) continue;
-    let best = null, bd = unitS(u) * 12;
-    for (const v of units) if (!allied(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    let best = null, bd = bodyS(u) * 12;
+    forNear(u, bd, v => { if (!allied(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best && game.cities) {
       bd = Infinity;
       for (const c of cities) if (!allied(cityOwner(c), u.owner)) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
     }
     if (!best) continue;
     const d = Math.hypot(best.x - u.x, best.y - u.y);
-    if (d < unitS(u) * .5) continue;
-    const step = unitS(u) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
+    if (d < bodyS(u) * .5) continue;
+    const step = bodyS(u) * .05 * (SPEED[unitDef(u).def[2]] || 1), nx = u.x + (best.x - u.x) / d * step, ny = u.y + (best.y - u.y) / d * step;
     if (protect && cellOwner(nx, ny) === 0) continue;
     moveUnit(u, nx, ny);
   }
@@ -4132,9 +4446,9 @@ function applySystems() {
 }
 
 // ---------- history ----------
-function snap() { exclaveLearn = false; return { vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities) }; }
+function snap() { exclaveLearn = false; return { vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: JSON.stringify(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
-function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); selArrow = selCity = null;
+function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = JSON.parse(e.u || '[]'); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); forms = JSON.parse(e.fm || '[]'); selArrow = selCity = null;
   if (e.st && geoStore) { applyStoreLog(e.st); readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null; }
 }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
@@ -4212,6 +4526,13 @@ function takeControlAt(g) {
   const gx = Math.floor(g.x), gy = Math.floor(g.y);
   const o = gx >= 0 && gy >= 0 && gx < W && gy < H ? own[gy * W + gx] : 0;
   if (o) takeControl(o); else toast('Здесь ничья земля — щёлкните колёсиком по стране.');
+}
+// just the percentages of the country list (rebuilding the rows each second of a battle would cost a jerk)
+function updateCountryShares() {
+  const rows = document.querySelectorAll('#countries .country');
+  if (rows.length !== countries.length) { renderCountries(); return; }
+  const { n, tot } = own ? areas() : { n: [], tot: 0 };
+  rows.forEach(li => { const i = +li.dataset.i, ar = li.querySelector('.area'), v = tot ? (n[i] / tot * 100).toFixed(1) + '%' : '—'; if (ar && ar.textContent !== v) ar.textContent = v; });
 }
 function setActive(idx, rerender = true) {
   active = idx;
@@ -4337,23 +4658,32 @@ cv.addEventListener('pointerdown', e => {
     pushHist();
     if (fillAt(g)) edited(); else { hist.pop(); updUndo(); }
   } else if (tool === 'units') {
-    const u = hitUnit(g);
+    const hs = hierOn() && forms.length ? hitShown(g) : null;
+    const u = hs ? hs.unit || hs.leaves[0] : hitUnit(g), grp = hs && hs.leaves ? hs.leaves : u ? [u] : [];
     if (e.shiftKey) {
       if (u) {
         const cur = targets();
-        if (cur.includes(u)) setSel(cur.filter(v => v !== u)); else setSel(cur.concat([u]), u);
+        if (grp.every(v => cur.includes(v))) setSel(cur.filter(v => !grp.includes(v))); else setSel(cur.concat(grp.filter(v => !cur.includes(v))), u);
       } else drag = { mode: 'box', a: g, b: g };
       return;
     }
     if (u) {
-      if (!targets().includes(u)) selectUnit(u); else { selUnit = u; renderUnitPanel(); renderGenEditor(); }
+      if (!grp.every(v => targets().includes(v))) setSel(grp, u); else { selUnit = u; renderUnitPanel(); renderGenEditor(); }
       pushHist();
       units.splice(units.indexOf(u), 1); units.push(u);   // bring to front
       drag = { mode: 'unit', u, group: targets().map(v => ({ v, ox: g.x - v.x, oy: g.y - v.y })), moved: false };
+      if (hideCursor && unitsPushBorder) cv.style.cursor = 'none';
     } else {
       if (!active) { toast('Сначала добавьте страну'); return; }
       if (!inside) return;
       pushHist();
+      if (hierOn() && FORM_CHILD[unitEch]) {
+        // a front, army or corps: the whole formation down to divisions, shown as one marker for now
+        const made = spawnFormation(g, unitEch, active);
+        setSel(made, made[0]); unitsChanged();
+        toast(rootForm(made[0]).label + ': ' + made.length + ' дивизий. Приближайте карту — соединение разделится на части.');
+        return;
+      }
       const nu = { x: g.x, y: g.y, era, type: unitType, owner: active, ech: unitEch, label: '' };
       units.push(nu); selectUnit(nu); unitsChanged();
     }
@@ -4437,7 +4767,7 @@ const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : to
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
-  if (drag.mode === 'pan' || drag.mode === 'warp' || drag.mode === 'paint') cv.style.cursor = spaceDown ? 'grab' : toolCursor();
+  if (drag.mode === 'pan' || drag.mode === 'warp' || drag.mode === 'paint' || drag.mode === 'unit') cv.style.cursor = spaceDown ? 'grab' : toolCursor();
   if (drag.mode === 'pan' && drag.mid && Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 5) { takeControlAt(toGrid(drag.p0)); drag = null; return; }
   if (drag.mode === 'pinch') { if (pointers.size === 0) { drag = null; viewChanged(); } return; }
   if (drag.mode === 'pan') viewChanged();
@@ -4488,6 +4818,13 @@ function endPointer(e) {
   if (wasEdit) edited();
 }
 cv.addEventListener('pointerup', endPointer);
+// while battles or marches move the border by themselves, the arrow disappears once the mouse rests on the map
+let idleT = 0, idleHidden = false;
+function armIdleCursor() {
+  clearTimeout(idleT);
+  idleT = setTimeout(() => { if (hideCursor && !drag && (battlesOn || marchRaf)) { idleHidden = true; cv.style.cursor = 'none'; } else if (battlesOn || marchRaf) armIdleCursor(); }, 1200);
+}
+cv.addEventListener('pointermove', () => { if (idleHidden) { idleHidden = false; cv.style.cursor = spaceDown ? 'grab' : toolCursor(); } armIdleCursor(); });
 cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestUi(); } });
 cv.addEventListener('wheel', e => {
@@ -4734,7 +5071,7 @@ $('#btnPng').addEventListener('click', async () => {
 $('#btnProj').addEventListener('click', () => {
   if (!W) return;
   const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoBorders, geoStore, win,
-    vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
+    forms, vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth };
   download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
@@ -4751,7 +5088,7 @@ function loadProjectFile(file) {
         geoStack = (d.geoStack || []).map(g => Object.assign({}, g, { own: unrle(g.own, g.W * g.H) }));
         renderGeoPanel();
         countries = d.countries; active = d.active || 1;
-        units = d.units || []; if (d.unitSize) setUnitSize(d.unitSize);
+        units = d.units || []; forms = d.forms || []; if (d.unitSize) setUnitSize(d.unitSize);
         loadGenerals(d.generals); player = d.player || 1;
         loadGame(d);
         own.set(unrle(d.own, W * H));
@@ -4799,7 +5136,7 @@ function scheduleSave() {
   saveT = setTimeout(saveFn = () => {
     saveFn = null;
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, exclaves, vsrc: vsrcDef(), units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -4829,7 +5166,7 @@ async function restoreSaved() {
     if (st.ringMode) { ringMode = st.ringMode; $('#ringMode').value = ringMode; }
     exclaves = st.exclaves || [];
     if (typeof st.hideCursor === 'boolean') { hideCursor = st.hideCursor; $('#hideCursor').checked = hideCursor; }
-    units = st.units || [];
+    units = st.units || []; forms = st.forms || [];
     loadGenerals(st.generals); player = st.player || 1;
     loadGame(st);
     if (typeof st.unitsPushBorder === 'boolean') unitsPushBorder = st.unitsPushBorder;
@@ -4904,7 +5241,9 @@ $('#era').addEventListener('change', e => {
 });
 $('#unitEch').addEventListener('change', e => {
   unitEch = e.target.value;
-  if (selUnit) { pushHist(); targets().forEach(u => { u.ech = unitEch; }); unitsChanged(); }
+  // divisions of a formation keep their rank: picking another one is a choice for the next placement
+  if (selUnit && hierOn() && targets().every(isHier)) { selUnit = null; selUnits = []; renderUnitPanel(); requestDraw(); }
+  else if (selUnit) { pushHist(); targets().forEach(u => { u.ech = unitEch; }); unitsChanged(); }
 });
 let labelHist = false;
 $('#unitLabel').addEventListener('focus', () => { labelHist = false; });
