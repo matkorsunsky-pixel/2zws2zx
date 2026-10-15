@@ -255,6 +255,13 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg>
         Земля</button>
     </div>
+    <div class="subpanel" id="warPanel">
+      <label for="warSel" class="sub"><b>Войны и конфликты</b></label>
+      <select id="warSel" aria-label="Выберите войну"></select>
+      <p class="hint" id="warInfo"></p>
+      <button id="warGo" class="primary">Открыть сценарий</button>
+      <p class="hint">Открывает карту Земли, раскрашенную по воюющим странам и союзам, с ключевыми городами, датой и известными полководцами. Границы того времени собраны из современных стран и областей, поэтому они приблизительные. Текущая карта будет заменена: если она нужна, сначала сохраните проект.</p>
+    </div>
     <div class="subpanel" id="geoPanel" hidden>
       <div class="row urlrow">
         <input id="geoQuery" placeholder="Найти место: город, страна, адрес" aria-label="Поиск места" style="font:13px var(--f-ui);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:7px;padding:8px;flex:1;min-width:0">
@@ -1221,11 +1228,17 @@ function tileBlock(l, tx, ty) {
   const px0 = Math.floor(ax) - 1, py0 = Math.floor(ay) - 1;
   const pw = Math.floor(((tx + 1) * TS - .5) * sc - .5) - px0 + 3, ph = Math.floor(((ty + 1) * TS - .5) * sc - .5) - py0 + 3;
   const patch = new Uint8Array(pw * ph);
+  // cells inside the ancestor tile are read straight from it; only the thin rim needs the general lookup
+  const atx = tx >> d, aty = ty >> d, anc = store.get(tk(k, atx, aty)), ax0 = atx * TS, ay0 = aty * TS;
   let first = -1, uniform = true;
-  for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
-    const v = cellAt(k, px0 + x, py0 + y);
-    patch[y * pw + x] = v;
-    if (first < 0) first = v; else if (v !== first) uniform = false;
+  for (let y = 0; y < ph; y++) {
+    const gy = py0 + y, inY = gy >= ay0 && gy < ay0 + TS;
+    for (let x = 0; x < pw; x++) {
+      const gx = px0 + x;
+      const v = inY && gx >= ax0 && gx < ax0 + TS ? (typeof anc === 'number' ? anc : anc[((gy - ay0) << 8) | (gx - ax0)]) : cellAt(k, gx, gy);
+      patch[y * pw + x] = v;
+      if (first < 0) first = v; else if (v !== first) uniform = false;
+    }
   }
   if (uniform) return first;
   // Enlarge with cubic B-spline weights over the 4×4 nearest coarse cells: each owner gets a smooth
@@ -1280,30 +1293,46 @@ function logTile(k) {
   const t = store.get(k);
   txLog.set(k, t === undefined ? undefined : typeof t === 'number' ? t : t.slice());
 }
-function storeWrite(L, cx0, cy0, w, h, valAt) {
-  const n = worldCells(L), changed = new Map();
-  for (let y = 0; y < h; y++) {
-    const gy = cy0 + y;
-    if (gy < 0 || gy >= n) continue;
-    let i = y * w;
-    for (let x = 0; x < w; x++, i++) {
-      const v = valAt(i);
-      if (v < 0) continue;
-      const gx = (((cx0 + x) % n) + n) % n, tx = gx >> 8, ty = gy >> 8, key = tk(L, tx, ty);
-      let c = changed.get(key);
-      if (!c) { c = { x: tx, y: ty, t: ensureTile(L, tx, ty), m: new Uint8Array(TS * TS), any: false }; changed.set(key, c); }
-      const j = ((gy & 255) << 8) | (gx & 255);
-      if (c.t[j] !== v) { c.t[j] = v; c.m[j] = 1; c.any = true; storeDirty.add(key); }
-    }
-  }
+// Write a w×h block of level L cells starting at (cx0, cy0): where msk[i] is set the cell becomes
+// src ? src[i] : val. Works tile by tile; tiles that get fully covered skip the smoothing enlargement.
+function storeWrite(L, cx0, cy0, w, h, msk, src, val) {
+  const n = worldCells(L), nT = n / TS;
+  const tx0 = Math.floor(cx0 / TS), tx1 = Math.floor((cx0 + w - 1) / TS), ty0 = Math.max(0, Math.floor(cy0 / TS)), ty1 = Math.min(nT - 1, Math.floor((cy0 + h - 1) / TS));
   let any = false;
-  for (const c of changed.values()) if (c.any) { any = true; pushDown(L, c); pushUp(L, c.x, c.y); }
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const x0 = Math.max(cx0, tx * TS), x1 = Math.min(cx0 + w, (tx + 1) * TS), y0 = Math.max(cy0, ty * TS), y1 = Math.min(cy0 + h, (ty + 1) * TS);
+    let cnt = 0;
+    for (let y = y0; y < y1; y++) { const r = (y - cy0) * w - cx0; for (let x = x0; x < x1; x++) if (msk[r + x]) cnt++; }
+    if (!cnt) continue;
+    const wtx = ((tx % nT) + nT) % nT, key = tk(L, wtx, ty);
+    let t;
+    if (cnt === TS * TS && !(store.get(key) instanceof Uint8Array)) { logTile(key); t = new Uint8Array(TS * TS); tileSet(L, wtx, ty, t); }
+    else t = ensureTile(L, wtx, ty);
+    const m = new Uint8Array(TS * TS);
+    let changed = cnt === TS * TS;
+    for (let y = y0; y < y1; y++) {
+      const r = (y - cy0) * w - cx0, tr = (y - ty * TS) << 8, ox = tx * TS;
+      for (let x = x0; x < x1; x++) {
+        const i = r + x;
+        if (!msk[i]) continue;
+        const v = src ? src[i] : val, j = tr + x - ox;
+        m[j] = 1;
+        if (t[j] !== v) { t[j] = v; changed = true; }
+      }
+    }
+    if (!changed) continue;
+    any = true; storeDirty.add(key);
+    pushDown(L, { x: wtx, y: ty, t, m }); pushUp(L, wtx, ty);
+  }
   if (any) { storeAreaStamp = 0; scheduleTileSave(); }
   return any;
 }
 function commitWindow() {
   if (!geoStore || !win || !own || !winOwn0) return false;
-  const r = storeWrite(win.L, win.cx0, win.cy0, W, H, i => own[i] === winOwn0[i] ? -1 : own[i]);
+  const msk = new Uint8Array(W * H);
+  let k = 0;
+  for (let i = 0; i < msk.length; i++) if (own[i] !== winOwn0[i]) { msk[i] = 1; k++; }
+  const r = k ? storeWrite(win.L, win.cx0, win.cy0, W, H, msk, own, 0) : false;
   winOwn0.set(own);
   return r;
 }
@@ -1601,7 +1630,8 @@ const gridToMerc = g => { const n = worldCells(win.L); return [(win.cx0 + g.x) /
 // cells of level l covered by one polygon part, even-odd over all its rings
 function rasterPart(part, val) {
   const b = part.box, size = Math.max(b[2] - b[0], b[3] - b[1], 1e-9);
-  const l = clamp(Math.floor(Math.log2(2048 / (TS * size))), 0, LMAX), n = worldCells(l);
+  // the source borders are good to roughly a kilometre, so level 9 (~300 m cells) is as fine as it is worth going
+  const l = clamp(Math.floor(Math.log2(4096 / (TS * size))), 0, 9), n = worldCells(l);
   const cx0 = Math.floor(b[0] * n), cy0 = Math.floor(b[1] * n);
   const w = Math.max(1, Math.ceil(b[2] * n) - cx0 + 1), h = Math.max(1, Math.ceil(b[3] * n) - cy0 + 1);
   const rows = Array.from({ length: h }, () => []);
@@ -1623,7 +1653,7 @@ function rasterPart(part, val) {
       if (z >= a) mask.fill(1, y * w + a, y * w + z + 1);
     }
   });
-  storeWrite(l, cx0, cy0, w, h, i => mask[i] ? val : -1);
+  storeWrite(l, cx0, cy0, w, h, mask, null, val);
 }
 function regionFill(g) {
   if (!active) { toast('Сначала добавьте страну'); return; }
@@ -1678,6 +1708,229 @@ function setRegionMode(on) {
   hoverRegion = null; requestUi(); updateRegionHover();
   toast(on ? 'Заливка по регионам Земли: щелчок закрашивает весь регион.' : 'Заливка по регионам выключена: границы регионов не влияют.');
   scheduleSave();
+}
+
+// ---------- wars: ready-made scenarios on the real Earth ----------
+// Historical borders are put together from today's countries and provinces, so they are close, not exact.
+const SOVIET = ['RUS', 'UKR', 'BLR', 'EST', 'LVA', 'LTU', 'MDA', 'GEO', 'ARM', 'AZE', 'KAZ', 'UZB', 'TKM', 'KGZ', 'TJK'];
+const BRIT_EMPIRE = ['GBR', 'CAN', 'AUS', 'NZL', 'ZAF', 'IND', 'PAK', 'BGD', 'MMR', 'MYS', 'SGP', 'EGY', 'NGA', 'GHA', 'KEN', 'UGA', 'TZA', 'ZMB', 'ZWE', 'SDN'];
+const FR_EMPIRE = ['FRA', 'DZA', 'TUN', 'MAR', 'SYR', 'LBN', 'VNM', 'LAO', 'KHM', 'SEN', 'MLI', 'MRT', 'NER', 'GIN', 'CIV', 'BFA', 'BEN', 'TCD', 'CAF', 'COG', 'GAB', 'MDG', 'CMR'];
+const p = (c, list) => list.map(n => c + ':' + n);
+const DE_EAST_1939 = [...p('POL', ['Нижнесилезское воеводство', 'Опольское воеводство', 'Любушское воеводство', 'Западно-Поморское воеводство', 'Варминско-Мазурское воеводство']), 'RUS:Калининградская область', 'LTU:Клайпедский уезд'];
+const GALICIA = [...p('POL', ['Малопольское воеводство', 'Подкарпатское воеводство']), ...p('UKR', ['Львовская область', 'Ивано-Франковская область', 'Тернопольская область', 'Черновицкая область', 'Закарпатская область'])];
+const TRANSYLVANIA = p('ROU', ['Сату-Маре', 'Бихор', 'Арад', 'Тимиш', 'Караш-Северин', 'Хунедоара', 'Алба', 'Сибиу', 'Брашов', 'Ковасна', 'Харгита', 'Муреш', 'Клуж', 'Сэлаж', 'Марамуреш', 'Бистрица-Нэсэуд']);
+const N_TRANSYLVANIA = p('ROU', ['Сату-Маре', 'Бихор', 'Сэлаж', 'Марамуреш', 'Клуж', 'Бистрица-Нэсэуд', 'Муреш', 'Харгита', 'Ковасна']);
+const VOJVODINA = p('SRB', ['Северно-Бачский округ', 'Западно-Бачский округ', 'Южно-Бачский округ', 'Северно-Банатский округ', 'Средне-Банатский округ', 'Южно-Банатский округ', 'Сремский округ']);
+const OCCUPIED_1942 = [...p('RUS', ['Псковская область', 'Новгородская область', 'Смоленская область', 'Брянская область', 'Орловская область', 'Курская область', 'Белгородская область', 'Ростовская область', 'Краснодарский край', 'Адыгея', 'Ставропольский край', 'Карачаево-Черкесия', 'Кабардино-Балкария', 'Автономная Республика Крым', 'Севастополь']), 'BLR', 'UKR', 'EST', 'LVA', 'LTU'];
+const COURLAND = p('LVA', ['Лиепая', 'Вентспилс', 'Кулдигский край', 'Салдусский край', 'Тукумсский край', 'Талсинский край', 'Дундагский край', 'Айзпутский край', 'Приекульский край', 'Гробинский край', 'Павилостский край', 'Скрундский край', 'Кандавский край', 'Броценский край', 'Дурбский край', 'Вайнёдский край', 'Руцавский край', 'Алсунгский край', 'Ройский край', 'Мерсрагский край', 'Энгурский край']);
+const N_ITALY = p('ITA', ['Аоста', 'Вербано-Кузио-Оссола', 'Варезе', 'Комо', 'Сондрио', 'Трентино — Альто-Адидже', 'Трентино', 'Империя', 'Кунео', 'Турин', 'Беллуно', 'Удине', 'Гориция', 'Триест', 'Венеция', 'Падуя', 'Ровиго', 'Феррара', 'Специя', 'Лигурия', 'Савона', 'Асти', 'Бергамо', 'Брешиа', 'Кремона', 'Мантуя', 'Милан', 'Лекко', 'Монца и Брианца', 'Лоди', 'Верчелли', 'Павия', 'Новара', 'Алессандрия', 'Виченца', 'Верона', 'Тревизо', 'Пьяченца', 'Парма', 'Реджо-Эмилия', 'Модена', 'Болонья', 'Порденоне', 'Биелла', 'Равенна', 'Масса-Каррара']);
+const GDR = p('DEU', ['Бранденбург', 'Мекленбург — Передняя Померания', 'Саксония', 'Саксония-Анхальт', 'Тюрингия', 'Берлин']);
+const WARS = [
+  { id: 'ww1', name: 'Первая мировая война — август 1914', date: '1914-08-04', era: 'ww1', view: [40, -10, 62, 45], player: 1,
+    countries: [
+      { name: 'Российская империя', color: '#3f7f4f', side: 'Антанта', own: [...SOVIET, 'FIN', ...p('POL', ['Мазовецкое воеводство', 'Лодзинское воеводство', 'Свентокшиское воеводство', 'Люблинское воеводство', 'Подляское воеводство'])] },
+      { name: 'Франция', color: '#3b5fb5', side: 'Антанта', own: ['FRA', 'DZA', 'TUN', 'MAR'] },
+      { name: 'Британская империя', color: '#c84c4c', side: 'Антанта', own: ['GBR', 'IRL', 'CAN', 'AUS', 'NZL', 'ZAF', 'IND', 'PAK', 'BGD', 'MMR', 'EGY'] },
+      { name: 'Сербия', color: '#8a5a9c', side: 'Антанта', own: ['SRB', 'MNE', 'KOS', 'MKD'] },
+      { name: 'Бельгия', color: '#d9b740', side: 'Антанта', own: ['BEL'] },
+      { name: 'Германская империя', color: '#5c5c5c', side: 'Центральные державы', own: ['DEU', ...p('POL', ['Нижнесилезское воеводство', 'Опольское воеводство', 'Любушское воеводство', 'Западно-Поморское воеводство', 'Поморское воеводство', 'Варминско-Мазурское воеводство', 'Великопольское воеводство', 'Куявско-Поморское воеводство', 'Силезское воеводство']), 'RUS:Калининградская область', 'LTU:Клайпедский уезд', ...p('FRA', ['Нижний Рейн', 'Верхний Рейн', 'Мозель'])] },
+      { name: 'Австро-Венгрия', color: '#b88a4a', side: 'Центральные державы', own: ['AUT', 'HUN', 'CZE', 'SVK', 'SVN', 'HRV', 'BIH', ...GALICIA, ...TRANSYLVANIA, ...VOJVODINA, ...p('ITA', ['Трентино — Альто-Адидже', 'Трентино', 'Триест', 'Гориция'])] },
+      { name: 'Османская империя', color: '#8f6b3f', side: 'Центральные державы', own: ['TUR', 'SYR', 'IRQ', 'LBN', 'ISR', 'PSX', 'JOR'] }
+    ],
+    cities: [['Петроград', 59.94, 30.31, 25, 1], ['Москва', 55.756, 37.617, 10], ['Варшава', 52.23, 21.01, 5], ['Берлин', 52.52, 13.405, 25, 1], ['Париж', 48.857, 2.352, 25, 1], ['Верден', 49.16, 5.38, 3], ['Лондон', 51.507, -.128, 20, 1], ['Вена', 48.21, 16.37, 20, 1], ['Будапешт', 47.5, 19.04, 5], ['Белград', 44.82, 20.46, 10, 1], ['Брюссель', 50.85, 4.35, 10, 1], ['Константинополь', 41.01, 28.98, 20, 1]],
+    generals: [[0, 'Алексей Брусилов', 'Генерал', 4], [0, 'Николай Юденич', 'Генерал', 4], [1, 'Жозеф Жоффр', 'Маршал', 3], [5, 'Пауль фон Гинденбург', 'Фельдмаршал', 4], [5, 'Эрих Людендорф', 'Генерал', 4]] },
+  { id: 'ww2', name: 'Вторая мировая война — 1 сентября 1939', date: '1939-09-01', era: 'ww2', view: [35, -10, 62, 45], player: 5,
+    countries: [
+      { name: 'Германия', color: '#5c5c5c', side: 'Ось', own: ['DEU', 'AUT', 'CZE', ...DE_EAST_1939] },
+      { name: 'Италия', color: '#3c8a3c', side: 'Ось', own: ['ITA', 'ALB', 'LBY', 'ETH', 'ERI', 'SOM'] },
+      { name: 'Словакия', color: '#5a7fb0', side: 'Ось', own: ['SVK'] },
+      { name: 'Япония', color: '#e3cf6a', side: 'Ось', own: ['JPN', 'KOR', 'PRK', 'TWN', ...p('CHN', ['Хэйлунцзян', 'Гирин', 'Ляонин', 'Хэбэй', 'Пекин', 'Тяньцзинь', 'Шаньдун', 'Цзянсу', 'Шанхай', 'Шаньси'])] },
+      { name: 'Польша', color: '#c9506b', side: 'Союзники', own: ['POL', 'BLR:Брестская область', 'BLR:Гродненская область', ...p('UKR', ['Волынская область', 'Ровненская область', 'Львовская область', 'Ивано-Франковская область', 'Тернопольская область']), 'LTU:Вильнюсский уезд'] },
+      { name: 'Франция', color: '#3b5fb5', side: 'Союзники', own: FR_EMPIRE },
+      { name: 'Британская империя', color: '#c84c4c', side: 'Союзники', own: BRIT_EMPIRE },
+      { name: 'Китай', color: '#b39a4f', side: 'Союзники', own: ['CHN'] },
+      { name: 'СССР (нейтралитет)', color: '#a32020', side: '', own: ['RUS', 'UKR', 'BLR', 'GEO', 'ARM', 'AZE', 'KAZ', 'UZB', 'TKM', 'KGZ', 'TJK'] },
+      { name: 'Венгрия', color: '#c48a5a', side: '', own: ['HUN', 'UKR:Закарпатская область'] },
+      { name: 'Румыния', color: '#d4b84a', side: '', own: ['ROU', 'MDA', 'UKR:Черновицкая область'] }
+    ],
+    cities: [['Берлин', 52.52, 13.405, 25, 1], ['Данциг', 54.35, 18.65, 5], ['Варшава', 52.23, 21.01, 20, 1], ['Париж', 48.857, 2.352, 25, 1], ['Лондон', 51.507, -.128, 25, 1], ['Рим', 41.9, 12.496, 20, 1], ['Москва', 55.756, 37.617, 25, 1], ['Токио', 35.68, 139.69, 25, 1], ['Чунцин', 29.56, 106.55, 15, 1]],
+    generals: [[0, 'Хайнц Гудериан', 'Генерал', 5], [0, 'Эрих фон Манштейн', 'Фельдмаршал', 5], [4, 'Эдвард Рыдз-Смиглы', 'Маршал', 2], [5, 'Морис Гамелен', 'Генерал', 2]] },
+  { id: 'vov41', name: 'Великая Отечественная — 22 июня 1941', date: '1941-06-22', era: 'ww2', view: [40, 10, 62, 50], player: 1,
+    countries: [
+      { name: 'СССР', color: '#a32020', side: 'Коалиция', own: SOVIET },
+      { name: 'Германия', color: '#5c5c5c', side: 'Ось', own: ['DEU', 'AUT', 'CZE', 'POL', 'LUX', 'NLD', 'BEL', 'DNK', 'NOR', 'FRA', 'GRC', 'SRB', 'KOS', 'RUS:Калининградская область', 'LTU:Клайпедский уезд'] },
+      { name: 'Финляндия', color: '#9db3c8', side: 'Ось', own: ['FIN'] },
+      { name: 'Румыния', color: '#d4b84a', side: 'Ось', own: ['ROU'] },
+      { name: 'Венгрия', color: '#c48a5a', side: 'Ось', own: ['HUN', 'UKR:Закарпатская область', ...N_TRANSYLVANIA, ...p('SRB', ['Северно-Бачский округ', 'Западно-Бачский округ', 'Южно-Бачский округ'])] },
+      { name: 'Италия', color: '#3c8a3c', side: 'Ось', own: ['ITA', 'ALB', 'MNE', 'LBY'] },
+      { name: 'Словакия', color: '#5a7fb0', side: 'Ось', own: ['SVK'] },
+      { name: 'Болгария', color: '#5b8f4a', side: 'Ось', own: ['BGR', 'MKD'] },
+      { name: 'Хорватия', color: '#8a4a6a', side: 'Ось', own: ['HRV', 'BIH'] },
+      { name: 'Британская империя', color: '#c84c4c', side: 'Коалиция', own: ['GBR', 'CAN', 'AUS', 'NZL', 'ZAF', 'IND', 'PAK', 'BGD', 'MMR', 'EGY'] }
+    ],
+    cities: [['Москва', 55.756, 37.617, 25, 1], ['Ленинград', 59.94, 30.31, 15], ['Киев', 50.45, 30.52, 10], ['Минск', 53.9, 27.56, 5], ['Брест', 51.135, 23.66, 3], ['Смоленск', 54.78, 32.05, 5], ['Одесса', 46.48, 30.72, 5], ['Севастополь', 44.62, 33.52, 5], ['Сталинград', 48.708, 44.513, 10], ['Берлин', 52.52, 13.405, 25, 1], ['Хельсинки', 60.17, 24.94, 10, 1], ['Бухарест', 44.43, 26.1, 10, 1], ['Будапешт', 47.5, 19.04, 10, 1], ['Рим', 41.9, 12.496, 15, 1], ['Лондон', 51.507, -.128, 20, 1]],
+    generals: [[0, 'Георгий Жуков', 'Генерал', 5], [0, 'Константин Рокоссовский', 'Генерал', 5], [0, 'Семён Тимошенко', 'Маршал', 3], [1, 'Федор фон Бок', 'Фельдмаршал', 4], [1, 'Хайнц Гудериан', 'Генерал', 5], [1, 'Эрих фон Манштейн', 'Генерал', 5]] },
+  { id: 'vov42', name: 'Великая Отечественная — ноябрь 1942 (Сталинград)', date: '1942-11-19', era: 'ww2', view: [40, 15, 62, 55], player: 1,
+    countries: [
+      { name: 'СССР', color: '#a32020', side: 'Коалиция', own: SOVIET },
+      { name: 'Германия', color: '#5c5c5c', side: 'Ось', own: ['DEU', 'AUT', 'CZE', 'POL', 'LUX', 'NLD', 'BEL', 'DNK', 'NOR', 'FRA', 'GRC', 'SRB', 'KOS', 'TUN', 'RUS:Калининградская область', ...OCCUPIED_1942] },
+      { name: 'Финляндия', color: '#9db3c8', side: 'Ось', own: ['FIN', 'RUS:Карелия'] },
+      { name: 'Румыния', color: '#d4b84a', side: 'Ось', own: ['ROU', 'MDA', 'UKR:Одесская область', 'UKR:Черновицкая область'] },
+      { name: 'Венгрия', color: '#c48a5a', side: 'Ось', own: ['HUN', 'UKR:Закарпатская область', ...N_TRANSYLVANIA] },
+      { name: 'Италия', color: '#3c8a3c', side: 'Ось', own: ['ITA', 'ALB', 'MNE', 'LBY'] },
+      { name: 'Словакия', color: '#5a7fb0', side: 'Ось', own: ['SVK'] },
+      { name: 'Болгария', color: '#5b8f4a', side: 'Ось', own: ['BGR', 'MKD'] },
+      { name: 'Хорватия', color: '#8a4a6a', side: 'Ось', own: ['HRV', 'BIH'] },
+      { name: 'Япония', color: '#e3cf6a', side: 'Ось', own: ['JPN', 'KOR', 'PRK', 'TWN', 'VNM', 'LAO', 'KHM', 'MMR', 'MYS', 'SGP', 'IDN', 'PHL', ...p('CHN', ['Хэйлунцзян', 'Гирин', 'Ляонин', 'Хэбэй', 'Пекин', 'Тяньцзинь', 'Шаньдун', 'Цзянсу', 'Шанхай', 'Шаньси', 'Аньхой', 'Чжэцзян', 'Гуандун'])] },
+      { name: 'Британская империя', color: '#c84c4c', side: 'Коалиция', own: ['GBR', 'CAN', 'AUS', 'NZL', 'ZAF', 'IND', 'PAK', 'BGD', 'EGY'] },
+      { name: 'США', color: '#3a6ea5', side: 'Коалиция', own: ['USA'] }
+    ],
+    cities: [['Москва', 55.756, 37.617, 25, 1], ['Сталинград', 48.708, 44.513, 20], ['Ленинград', 59.94, 30.31, 15], ['Ржев', 56.26, 34.33, 3], ['Воронеж', 51.67, 39.18, 5], ['Курск', 51.73, 36.19, 5], ['Харьков', 49.99, 36.23, 5], ['Ростов-на-Дону', 47.24, 39.71, 5], ['Киев', 50.45, 30.52, 10], ['Севастополь', 44.62, 33.52, 5], ['Берлин', 52.52, 13.405, 25, 1], ['Бухарест', 44.43, 26.1, 10, 1], ['Хельсинки', 60.17, 24.94, 10, 1]],
+    generals: [[0, 'Георгий Жуков', 'Генерал', 5], [0, 'Александр Василевский', 'Генерал', 5], [0, 'Василий Чуйков', 'Генерал', 4], [0, 'Николай Ватутин', 'Генерал', 4], [1, 'Фридрих Паулюс', 'Генерал', 3], [1, 'Эрих фон Манштейн', 'Фельдмаршал', 5]] },
+  { id: 'ww2end', name: 'Берлинская операция — апрель 1945', date: '1945-04-16', era: 'ww2', view: [44, -2, 60, 32], player: 1,
+    countries: [
+      { name: 'СССР', color: '#a32020', side: 'Коалиция', own: [...SOVIET, 'RUS:Калининградская область', ...p('AUT', ['Вена', 'Нижняя Австрия', 'Бургенланд'])] },
+      { name: 'Польша', color: '#c9506b', side: 'Коалиция', own: ['POL'] },
+      { name: 'Германия', color: '#5c5c5c', side: 'Ось', own: [...p('DEU', ['Берлин', 'Бранденбург', 'Мекленбург — Передняя Померания', 'Саксония', 'Саксония-Анхальт', 'Тюрингия', 'Бавария', 'Баден-Вюртемберг', 'Шлезвиг-Гольштейн', 'Гамбург', 'Нижняя Саксония', 'Бремен']), 'CZE', ...p('AUT', ['Тироль', 'Форарльберг', 'Зальцбург', 'Верхняя Австрия', 'Каринтия', 'Штирия']), ...p('NLD', ['Северная Голландия', 'Южная Голландия', 'Утрехт', 'Флеволанд']), 'DNK', 'NOR', ...COURLAND, ...N_ITALY] },
+      { name: 'Хорватия', color: '#8a4a6a', side: 'Ось', own: ['HRV'] },
+      { name: 'США', color: '#3a6ea5', side: 'Коалиция', own: ['USA', 'DEU:Гессен'] },
+      { name: 'Великобритания', color: '#c84c4c', side: 'Коалиция', own: ['GBR', 'DEU:Северный Рейн-Вестфалия', 'BEL', 'NLD'] },
+      { name: 'Франция', color: '#3b5fb5', side: 'Коалиция', own: ['FRA', 'LUX', 'DEU:Рейнланд-Пфальц', 'DEU:Саар'] },
+      { name: 'Италия (союзники)', color: '#6aa86a', side: 'Коалиция', own: ['ITA'] },
+      { name: 'Югославия (партизаны)', color: '#8a5a9c', side: 'Коалиция', own: ['SRB', 'MNE', 'MKD', 'BIH', 'KOS', 'SVN'] },
+      { name: 'Венгрия, Румыния, Болгария (под СССР)', color: '#d48a6a', side: 'Коалиция', own: ['HUN', 'ROU', 'BGR', 'SVK'] },
+      { name: 'Финляндия', color: '#9db3c8', side: '', own: ['FIN'] }
+    ],
+    cities: [['Берлин', 52.52, 13.405, 25, 1], ['Зееловские высоты', 52.53, 14.4, 5], ['Торгау', 51.56, 13.0, 2], ['Дрезден', 51.05, 13.74, 5], ['Прага', 50.08, 14.44, 10], ['Вена', 48.21, 16.37, 10], ['Кёнигсберг', 54.71, 20.51, 5], ['Москва', 55.756, 37.617, 25, 1], ['Лондон', 51.507, -.128, 20, 1], ['Париж', 48.857, 2.352, 20, 1]],
+    generals: [[0, 'Георгий Жуков', 'Маршал', 5], [0, 'Иван Конев', 'Маршал', 5], [0, 'Константин Рокоссовский', 'Маршал', 5], [2, 'Готхард Хейнрици', 'Генерал', 4], [4, 'Дуайт Эйзенхауэр', 'Генерал', 4], [5, 'Бернард Монтгомери', 'Фельдмаршал', 4]] },
+  { id: '1812', name: 'Отечественная война 1812 года', date: '1812-06-24', era: 'gunpowder', view: [40, -10, 62, 45], player: 1,
+    countries: [
+      { name: 'Российская империя', color: '#3f7f4f', side: 'Коалиция', own: ['RUS', 'UKR', 'BLR', 'LTU', 'LVA', 'EST', 'FIN', 'MDA', 'GEO'] },
+      { name: 'Французская империя', color: '#3b5fb5', side: 'Наполеон', own: ['FRA', 'BEL', 'NLD', 'LUX', 'ESP', ...p('DEU', ['Северный Рейн-Вестфалия', 'Рейнланд-Пфальц', 'Саар', 'Гамбург', 'Бремен']), 'SVN', 'HRV'] },
+      { name: 'Рейнский союз', color: '#6f86c4', side: 'Наполеон', own: p('DEU', ['Бавария', 'Баден-Вюртемберг', 'Саксония', 'Тюрингия', 'Гессен', 'Саксония-Анхальт', 'Нижняя Саксония', 'Мекленбург — Передняя Померания', 'Шлезвиг-Гольштейн']) },
+      { name: 'Пруссия', color: '#4a4a4a', side: 'Наполеон', own: [...p('DEU', ['Бранденбург', 'Берлин']), ...p('POL', ['Западно-Поморское воеводство', 'Поморское воеводство', 'Варминско-Мазурское воеводство', 'Нижнесилезское воеводство', 'Опольское воеводство']), 'RUS:Калининградская область', 'LTU:Клайпедский уезд'] },
+      { name: 'Варшавское герцогство', color: '#c9506b', side: 'Наполеон', own: p('POL', ['Мазовецкое воеводство', 'Лодзинское воеводство', 'Великопольское воеводство', 'Куявско-Поморское воеводство', 'Свентокшиское воеводство', 'Люблинское воеводство', 'Подляское воеводство', 'Малопольское воеводство', 'Любушское воеводство', 'Силезское воеводство']) },
+      { name: 'Австрийская империя', color: '#d9c06a', side: 'Наполеон', own: ['AUT', 'CZE', 'HUN', 'SVK', 'POL:Подкарпатское воеводство', ...p('UKR', ['Львовская область', 'Ивано-Франковская область', 'Тернопольская область', 'Закарпатская область']), ...TRANSYLVANIA] },
+      { name: 'Королевство Италия и Неаполь', color: '#3c8a3c', side: 'Наполеон', own: ['ITA'] },
+      { name: 'Дания и Норвегия', color: '#b05a5a', side: 'Наполеон', own: ['DNK', 'NOR', 'ISL'] },
+      { name: 'Великобритания', color: '#c84c4c', side: 'Коалиция', own: ['GBR', 'IRL', 'PRT'] },
+      { name: 'Швеция', color: '#e3cf6a', side: 'Коалиция', own: ['SWE'] },
+      { name: 'Османская империя', color: '#8f6b3f', side: '', own: ['TUR', 'GRC', 'BGR', 'SRB', 'BIH', 'ALB', 'MKD', 'MNE', 'KOS', 'SYR', 'IRQ', 'LBN', 'ISR', 'JOR', 'EGY', 'LBY'] }
+    ],
+    cities: [['Санкт-Петербург', 59.94, 30.31, 20, 1], ['Москва', 55.756, 37.617, 25], ['Бородино', 55.52, 35.82, 5], ['Смоленск', 54.78, 32.05, 5], ['Вильна', 54.69, 25.28, 3], ['Париж', 48.857, 2.352, 25, 1], ['Варшава', 52.23, 21.01, 5], ['Берлин', 52.52, 13.405, 5], ['Вена', 48.21, 16.37, 10, 1], ['Лондон', 51.507, -.128, 20, 1]],
+    generals: [[0, 'Михаил Кутузов', 'Фельдмаршал', 5], [0, 'Пётр Багратион', 'Генерал', 5], [0, 'Михаил Барклай-де-Толли', 'Генерал', 4], [1, 'Наполеон Бонапарт', 'Командир', 5], [1, 'Мишель Ней', 'Маршал', 4], [1, 'Иоахим Мюрат', 'Маршал', 4]] },
+  { id: 'cold', name: 'Холодная война — 1980', date: '1980-01-01', era: 'modern', view: [25, -130, 70, 150], player: 1,
+    countries: [
+      { name: 'СССР', color: '#a32020', side: 'ОВД', own: SOVIET },
+      { name: 'ГДР', color: '#c46a3a', side: 'ОВД', own: GDR },
+      { name: 'Страны Варшавского договора', color: '#d48a6a', side: 'ОВД', own: ['POL', 'CZE', 'SVK', 'HUN', 'ROU', 'BGR'] },
+      { name: 'Союзники СССР', color: '#c9a0a0', side: 'ОВД', own: ['MNG', 'VNM', 'LAO', 'CUB', 'AFG', 'AGO', 'ETH'] },
+      { name: 'США', color: '#3a6ea5', side: 'НАТО', own: ['USA'] },
+      { name: 'ФРГ', color: '#6f86c4', side: 'НАТО', own: ['DEU'] },
+      { name: 'Великобритания', color: '#c84c4c', side: 'НАТО', own: ['GBR'] },
+      { name: 'Франция', color: '#3b5fb5', side: 'НАТО', own: ['FRA'] },
+      { name: 'Италия', color: '#3c8a3c', side: 'НАТО', own: ['ITA'] },
+      { name: 'Турция', color: '#8f6b3f', side: 'НАТО', own: ['TUR'] },
+      { name: 'Другие страны НАТО', color: '#7aa0c8', side: 'НАТО', own: ['CAN', 'NOR', 'DNK', 'NLD', 'BEL', 'LUX', 'PRT', 'ISL', 'GRC'] },
+      { name: 'Китай', color: '#b39a4f', side: '', own: ['CHN'] }
+    ],
+    cities: [['Москва', 55.756, 37.617, 25, 1], ['Вашингтон', 38.9, -77.04, 25, 1], ['Берлин', 52.52, 13.405, 15, 1], ['Бонн', 50.73, 7.1, 10, 1], ['Лондон', 51.507, -.128, 15, 1], ['Париж', 48.857, 2.352, 15, 1], ['Варшава', 52.23, 21.01, 10, 1], ['Прага', 50.08, 14.44, 5, 1], ['Пекин', 39.9, 116.4, 15, 1], ['Гавана', 23.11, -82.37, 5, 1]],
+    generals: [] },
+  { id: 'korea', name: 'Корейская война — июнь 1950', date: '1950-06-25', era: 'ww2', view: [32, 120, 44, 134], player: 1,
+    countries: [
+      { name: 'КНДР', color: '#a32020', side: 'Коммунисты', own: ['PRK'] },
+      { name: 'Китай', color: '#c8a84a', side: 'Коммунисты', own: ['CHN'] },
+      { name: 'СССР', color: '#8a2a2a', side: 'Коммунисты', own: SOVIET },
+      { name: 'Республика Корея', color: '#3a6ea5', side: 'ООН', own: ['KOR'] },
+      { name: 'США и Япония (оккупация)', color: '#5a8ac0', side: 'ООН', own: ['USA', 'JPN'] }
+    ],
+    cities: [['Пхеньян', 39.04, 125.76, 20, 1], ['Сеул', 37.57, 126.98, 20, 1], ['Пусан', 35.18, 129.08, 10], ['Инчхон', 37.46, 126.7, 5], ['Тэджон', 36.35, 127.38, 3], ['Пекин', 39.9, 116.4, 20, 1], ['Токио', 35.68, 139.69, 15, 1]],
+    generals: [[0, 'Ким Ир Сен', 'Маршал', 3], [1, 'Пэн Дэхуай', 'Генерал', 4], [4, 'Дуглас Макартур', 'Генерал', 4], [3, 'Чон Ир Гвон', 'Генерал', 2]] },
+  { id: 'rj1904', name: 'Русско-японская война — 1904', date: '1904-02-08', era: 'gunpowder', view: [28, 112, 52, 145], player: 1,
+    countries: [
+      { name: 'Российская империя', color: '#3f7f4f', side: 'Россия', own: ['RUS', 'UKR', 'BLR', 'KAZ', 'UZB', 'TKM', 'KGZ', 'TJK', 'GEO', 'ARM', 'AZE', 'FIN', 'EST', 'LVA', 'LTU', ...p('CHN', ['Хэйлунцзян', 'Гирин', 'Ляонин'])] },
+      { name: 'Японская империя', color: '#e3cf6a', side: 'Япония', own: ['JPN', 'TWN'] },
+      { name: 'Корейская империя', color: '#9db3c8', side: '', own: ['KOR', 'PRK'] },
+      { name: 'Империя Цин', color: '#b39a4f', side: '', own: ['CHN', 'MNG'] }
+    ],
+    cities: [['Порт-Артур', 38.81, 121.26, 15], ['Мукден', 41.8, 123.43, 10], ['Ляоян', 41.27, 123.17, 5], ['Владивосток', 43.12, 131.89, 10], ['Цусима', 34.42, 129.33, 5], ['Токио', 35.68, 139.69, 25, 1], ['Сеул', 37.57, 126.98, 10, 1], ['Санкт-Петербург', 59.94, 30.31, 25, 1]],
+    generals: [[0, 'Алексей Куропаткин', 'Генерал', 2], [0, 'Роман Кондратенко', 'Генерал', 4], [0, 'Степан Макаров', 'Адмирал', 4], [1, 'Ояма Ивао', 'Маршал', 4], [1, 'Ноги Марэсукэ', 'Генерал', 3], [1, 'Того Хэйхатиро', 'Адмирал', 5]] }
+];
+// countries in the same alliance never fight each other
+const allied = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const x = countries[a - 1], y = countries[b - 1];
+  return !!(x && y && x.side && x.side === y.side);
+};
+function warInfo(w) {
+  const sides = {};
+  w.countries.forEach(c => { const s = c.side || 'Нейтралы'; (sides[s] || (sides[s] = [])).push(c.name); });
+  return Object.entries(sides).map(([s, l]) => s + ': ' + l.join(', ')).join('. ') + '.';
+}
+function renderWarPanel() {
+  const sel = $('#warSel');
+  if (!sel.options.length) WARS.forEach(w => { const o = document.createElement('option'); o.value = w.id; o.textContent = w.name; sel.append(o); });
+  const w = WARS.find(x => x.id === sel.value) || WARS[0];
+  $('#warInfo').textContent = warInfo(w);
+}
+let warBusy = false;
+async function applyWar(id) {
+  const w = WARS.find(x => x.id === id);
+  if (!w || warBusy) return;
+  warBusy = true;
+  const btn = $('#warGo'); btn.disabled = true;
+  try {
+    const R = decodeRegions();
+    setBattles(false);
+    startEarthStore();
+    countries = w.countries.map(c => ({ name: c.name, color: c.color, side: c.side }));
+    active = 1; player = w.player || 1;
+    recolor();
+    // whole countries first, then provinces that change hands on top of them
+    const jobs = [];
+    for (const pass of [0, 1]) w.countries.forEach((c, k) => c.own.forEach(sel => {
+      const prov = sel.includes(':');
+      if (prov !== !!pass) return;
+      if (!prov) R.a0.filter(f => f.code === sel).forEach(f => jobs.push([f, k + 1]));
+      else { const [code, name] = sel.split(':'); R.a1.filter(f => f.code === code && f.name === name).forEach(f => jobs.push([f, k + 1])); }
+    }));
+    let t = performance.now();
+    for (let i = 0; i < jobs.length; i++) {
+      const [f, idx] = jobs[i];
+      for (const part of f.parts) {
+        const b = part.box;
+        if (Math.max(b[2] - b[0], b[3] - b[1]) < 3e-6) continue;   // islets smaller than ~100 m
+        rasterPart(part, idx);
+      }
+      if (performance.now() - t > 60) {
+        btn.textContent = 'Строю карту… ' + Math.round(i / jobs.length * 100) + '%';
+        await new Promise(r => setTimeout(r));
+        t = performance.now();
+      }
+    }
+    refreshWindow();
+    // scenario contents
+    const n = worldCells(win.L);
+    units = []; selUnit = null; selUnits = []; arrows = [];
+    cities = w.cities.map(([name, lat, lon, vp, cap]) => ({ x: lonToX(lon) * n - win.cx0, y: latToY(lat) * n - win.cy0, name, vp, capital: !!cap }));
+    generals = (w.generals || []).map(([o, name, rank, skill], k) => ({ id: k + 1, name, owner: o + 1, photo: '', rank, skill }));
+    genSeq = generals.length + 1; selGen = null;
+    gameDate = Date.parse(w.date + 'T04:00:00Z'); gameLog = [];
+    era = w.era; $('#era').value = era; unitType = ERAS[era].units[0][0]; paletteKey = '';
+    afterChange(); checkCities(true); saveImage(); renderGeoPanel(); syncGameControls();
+    logEvent('Сценарий: ' + w.name);
+    // look at the theatre of war
+    const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight, v = w.view;
+    const gx0 = lonToX(v[1]) * n - win.cx0, gx1 = lonToX(v[3]) * n - win.cx0, gy0 = latToY(v[2]) * n - win.cy0, gy1 = latToY(v[0]) * n - win.cy0;
+    view.s = Math.min(r.width / (gx1 - gx0), (r.height - strip) / (gy1 - gy0)) * .95;
+    view.x = r.width / 2 - (gx0 + gx1) / 2 * view.s; view.y = (r.height - strip) / 2 - (gy0 + gy1) / 2 * view.s;
+    userView = true; requestDraw(); viewChanged();
+    setTool('units');
+    toast(w.name + ' — карта готова. Играете за: ' + (countries[player - 1] || {}).name + '.');
+  } finally {
+    warBusy = false; btn.disabled = false; btn.textContent = 'Открыть сценарий';
+  }
 }
 
 // ---------- drawing ----------
@@ -1965,10 +2218,11 @@ function computePockets() {
     if (rs[k] < bx0[r]) bx0[r] = rs[k]; if (re[k] > bx1[r]) bx1[r] = re[k]; if (y < by0[r]) by0[r] = y; if (y + 1 > by1[r]) by1[r] = y + 1;
     if (rs[k] === 0 || re[k] === W || y === 0 || y === H - 1) edge[r] = 1;
   }
-  const touch = (r, o) => { if (!enc[r]) enc[r] = o; else if (enc[r] !== o) enc[r] = -1; };
+  // only enemies close a ring: a piece that touches an ally is still connected to friendly land
+  const touch = (r, own_, o) => { if (allied(own_, o)) { enc[r] = -1; return; } if (!enc[r]) enc[r] = o; else if (enc[r] !== o) enc[r] = -1; };
   for (let y = 0; y < H; y++) {
-    for (let k = rowStart[y]; k + 1 < rowStart[y + 1]; k++) if (re[k] === rs[k + 1] && ro[k] !== ro[k + 1]) { touch(root[k], ro[k + 1]); touch(root[k + 1], ro[k]); }
-    if (y > 0) overlaps(y, (i, j) => { if (ro[i] !== ro[j]) { touch(root[i], ro[j]); touch(root[j], ro[i]); } });
+    for (let k = rowStart[y]; k + 1 < rowStart[y + 1]; k++) if (re[k] === rs[k + 1] && ro[k] !== ro[k + 1]) { touch(root[k], ro[k], ro[k + 1]); touch(root[k + 1], ro[k + 1], ro[k]); }
+    if (y > 0) overlaps(y, (i, j) => { if (ro[i] !== ro[j]) { touch(root[i], ro[i], ro[j]); touch(root[j], ro[j], ro[i]); } });
   }
   const comps = [];
   for (let k = 0; k < n; k++) if (root[k] === k) comps.push({ id: k, owner: ro[k], size: size[k], enc: enc[k] > 0 ? enc[k] : 0, edge: !!edge[k], box: [bx0[k], by0[k], bx1[k], by1[k]] });
@@ -2476,7 +2730,7 @@ function captureAlong(a, b, R, val) {
       const dy = y + .5 - cy, dy2 = dy * dy;
       for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
         const dx = x + .5 - cx, o = own[i];
-        if (o === val || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
+        if (allied(o, val) || dx * dx + dy2 > R2 || (o === 0 && protect)) continue;
         own[i] = val; changed++;
         if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1;
       }
@@ -2491,8 +2745,8 @@ function moveUnit(u, nx, ny) {
   if (unitsPushBorder) captureAlong(from, u, pushRadius(u), u.owner);
 }
 function fight(a, b) {
-  const near = u => units.filter(v => v !== u && v.owner === u.owner && Math.hypot(v.x - u.x, v.y - u.y) < unitS(u) * 3).length;
-  const roll = u => unitPower(u) * (1 + .15 * Math.min(near(u), 4)) * (cellOwner(u.x, u.y) === u.owner ? 1.2 : 1) * (.55 + Math.random() * .9);
+  const near = u => units.filter(v => v !== u && allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) < unitS(u) * 3).length;
+  const roll = u => unitPower(u) * (1 + .15 * Math.min(near(u), 4)) * (allied(cellOwner(u.x, u.y), u.owner) ? 1.2 : 1) * (.55 + Math.random() * .9);
   const pa = roll(a), pb = roll(b);
   const win = pa >= pb ? a : b, lose = win === a ? b : a;
   const ratio = Math.max(pa, pb) / (pa + pb);                 // 0.5 … 1
@@ -2522,7 +2776,7 @@ function battleTick() {
   for (const u of units.slice()) {
     if (fought.has(u)) continue;
     let best = null, bd = Infinity;
-    for (const v of units) if (v.owner !== u.owner && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    for (const v of units) if (!allied(v.owner, u.owner) && !fought.has(v)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
     if (!best) continue;
     if (bd <= (unitS(u) + unitS(best)) / 2 * 1.9) { fought.add(u); fought.add(best); fight(u, best); }
     else if (autoAdvance && !immobile(u) && !u.order && bd <= unitS(u) * 8) {
@@ -2636,7 +2890,7 @@ function renderLog() {
 }
 
 // --- cities & victory points ---
-const cityR = c => unitSize * ZS() * .2 * (1 + Math.min(c.vp, 25) / 12);
+const cityR = c => unitSize * ZS() * .11 * (1 + Math.min(c.vp, 25) / 20);
 function cityOwner(c) {
   if (!own) return 0;
   if (geoStore && (c.x < 0 || c.y < 0 || c.x >= W || c.y >= H)) return storeOwnerAtGrid(c.x, c.y);
@@ -2677,7 +2931,7 @@ function drawCities(c, marks) {
       c.lineWidth = r * .32; c.strokeStyle = dark; c.stroke();
       c.beginPath(); c.arc(ct.x, ct.y, r * .45, 0, Math.PI * 2); c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
     }
-    const fs = Math.max(r * 1.25, unitSize * ZS() * .3);
+    const fs = Math.max(r * 1.6, unitSize * ZS() * .3);
     c.font = `600 ${fs}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top';
     const label = ct.name + (ct.vp > 1 ? '  ' + ct.vp : '');
     const y = ct.y + r * (ct.capital ? 1.6 : 1.3);
@@ -2798,7 +3052,7 @@ function issueOrder(target) {
 }
 function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } }
 function enemyContact(u) {
-  for (const v of units) if (v.owner !== u.owner && Math.hypot(v.x - u.x, v.y - u.y) <= (unitS(u) + unitS(v)) / 2 * 1.9) return true;
+  for (const v of units) if (!allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (unitS(u) + unitS(v)) / 2 * 1.9) return true;
   return false;
 }
 function marchFrame(t) {
@@ -2836,13 +3090,13 @@ function inSupply(u) {
   const gx = Math.floor(u.x), gy = Math.floor(u.y);
   if (gx < 0 || gy < 0 || gx >= W || gy >= H) return true;
   const i = gy * W + gx;
-  if (own[i] === u.owner) return !(pocket[i] && pocket[i] !== u.owner);
+  if (allied(own[i], u.owner)) return !(pocket[i] && !allied(pocket[i], u.owner));
   const R = unitSize * ZS() * 5;
   for (let r = R / 3; r <= R + 1; r += R / 3) for (let k = 0; k < 16; k++) {
     const a = k * Math.PI / 8, x = Math.floor(u.x + Math.cos(a) * r), y = Math.floor(u.y + Math.sin(a) * r);
     if (x < 0 || y < 0 || x >= W || y >= H) continue;
     const j = y * W + x;
-    if (own[j] === u.owner && !(pocket[j] && pocket[j] !== u.owner)) return true;
+    if (allied(own[j], u.owner) && !(pocket[j] && !allied(pocket[j], u.owner))) return true;
   }
   return false;
 }
@@ -2857,10 +3111,10 @@ function updateSupply() {
 // --- fog of war ---
 let visCache = null;
 function isVisible(u) {
-  if (!game.fog || !player || u.owner === player) return true;
+  if (!game.fog || !player || allied(u.owner, player)) return true;
   if (visCache && visCache.has(u)) return visCache.get(u);
-  let v = cellOwner(u.x, u.y) === player;
-  if (!v) for (const m of units) if (m.owner === player && Math.hypot(m.x - u.x, m.y - u.y) <= unitS(m) * 6) { v = true; break; }
+  let v = allied(cellOwner(u.x, u.y), player);
+  if (!v) for (const m of units) if (allied(m.owner, player) && Math.hypot(m.x - u.x, m.y - u.y) <= unitS(m) * 6) { v = true; break; }
   if (visCache) visCache.set(u, v);
   return v;
 }
@@ -2869,12 +3123,12 @@ function isVisible(u) {
 function aiStep(fought) {
   if (!game.ai) return;
   for (const u of units) {
-    if (u.owner === player || fought.has(u) || u.order || immobile(u)) continue;
+    if (allied(u.owner, player) || fought.has(u) || u.order || immobile(u)) continue;
     let best = null, bd = unitS(u) * 12;
-    for (const v of units) if (v.owner !== u.owner) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
+    for (const v of units) if (!allied(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } }
     if (!best && game.cities) {
       bd = Infinity;
-      for (const c of cities) if (cityOwner(c) !== u.owner) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
+      for (const c of cities) if (!allied(cityOwner(c), u.owner)) { const d = Math.hypot(c.x - u.x, c.y - u.y) / (1 + c.vp / 5); if (d < bd) { bd = d; best = c; } }
     }
     if (!best) continue;
     const d = Math.hypot(best.x - u.x, best.y - u.y);
@@ -2953,6 +3207,7 @@ function renderCountries() {
     const li = document.createElement('li');
     li.className = 'country' + (idx === active ? ' on' : '');
     li.dataset.i = idx;
+    if (c.side) li.title = 'Сторона: ' + c.side;
     const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = c.color;
     const ci = document.createElement('input'); ci.type = 'color'; ci.value = c.color; ci.id = 'color-' + idx; ci.setAttribute('aria-label', 'Цвет: ' + c.name);
     ci.addEventListener('input', () => { c.color = ci.value; sw.style.background = ci.value; recolor(); });
@@ -3740,6 +3995,8 @@ function setRingMode(m) {
   toast({ always: 'Круг захвата: показывать всегда', drag: 'Круг захвата: прятать, пока тяну или рисую', never: 'Круг захвата: не показывать' }[m]);
 }
 $('#ringMode').addEventListener('change', e => setRingMode(e.target.value));
+$('#warSel').addEventListener('change', renderWarPanel);
+$('#warGo').addEventListener('click', () => applyWar($('#warSel').value));
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
 $('#bspeed').addEventListener('input', e => {
@@ -3780,6 +4037,7 @@ setUnitSize(unitSize);
 syncGameControls();
 renderLog();
 renderGeoPanel();
+renderWarPanel();
 restoreSaved().then(ok => { if (!ok) loadSample(); renderGeoPanel(); fit(); });
 })();
 </script>
