@@ -319,6 +319,12 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <div class="presets" id="presets">
         <button data-size="5">5</button><button data-size="15">15</button><button data-size="40">40</button><button data-size="90">90</button><button data-size="200">200</button><button data-size="450">450</button>
       </div>
+      <label for="ringMode" class="sub" style="grid-column: span 2">Круг захвата <span class="hint">(клавиша O)</span></label>
+      <select id="ringMode" style="grid-column: span 2">
+        <option value="always">Показывать всегда</option>
+        <option value="drag" selected>Прятать, пока тяну или рисую</option>
+        <option value="never">Не показывать</option>
+      </select>
     </div>
     <div class="field" id="fTol" hidden>
       <label for="tol">Допуск по цвету</label><output id="tolOut">40</output>
@@ -481,6 +487,7 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
       <li><b>Shift + щелчок</b> по отрядам или <b>Shift + рамка</b> выбирают несколько отрядов, <b>Ctrl+A</b> — все отряды выбранной страны</li>
       <li><b>Генералы</b> — полоса внизу карты: выберите, за кого играете, добавьте генерала, дайте имя и фото, назначьте его командиром отрядов</li>
       <li><b>ПКМ</b> по карте с выбранными отрядами — приказ на марш (если включено в «Игре»)</li>
+      <li><b>O</b> — круг захвата: всегда / прятать при перетаскивании / не показывать</li>
       <li><b>R</b> — на карте Земли: заливка по регионам вкл/выкл</li>
       <li><b>B</b> — войска двигают границу вкл/выкл, <b>P</b> — запустить или остановить бои</li>
       <li><b>Размер значков:</b> <b>[ ]</b> или <b>Shift + колёсико</b> над отрядом меняют этот отряд, над пустым местом — все значки</li>
@@ -603,6 +610,7 @@ let tool = 'warp';
 const sizes = { warp: 90, brush: 25, eraser: 25 };   // each tool keeps its own radius
 const SIZE_LABEL = { warp: 'Радиус захвата границы', brush: 'Размер кисти', eraser: 'Размер ластика' };
 const SMIN = 2, SMAX = 600;
+let ringMode = 'drag';             // brush / grab circle: always, hidden while dragging, or never
 let brush = 90, tol = 40, fillMode = 'owner', protect = true;
 let alpha = 0.5, borderW = 2;
 const view = { s: 1, x: 0, y: 0 };
@@ -1718,7 +1726,8 @@ function drawUi() {
     ctx.fillStyle = 'rgba(226,184,74,.15)'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
     ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#a87b12'; ctx.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); ctx.setLineDash([]);
   }
-  if (hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
+  const ringOn = ringMode === 'always' || (ringMode === 'drag' && !(drag && (drag.mode === 'warp' || drag.mode === 'paint')));
+  if (ringOn && hover && (tool === 'warp' || tool === 'brush' || tool === 'eraser') && !(drag && drag.mode === 'pan')) {
     const sx = hover.x * view.s + view.x, sy = hover.y * view.s + view.y, r = BR() * view.s;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.8)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
@@ -3273,6 +3282,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
   if (e.code === 'KeyP') { setBattles(!battlesOn); return; }
+  if (e.code === 'KeyO') { setRingMode({ always: 'drag', drag: 'never', never: 'always' }[ringMode]); return; }
   if (e.code === 'KeyR' && geoStore) { setRegionMode(!regionMode); return; }
   if (tool === 'units' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
     const k = e.code === 'BracketRight' ? 1.15 : 1 / 1.15;
@@ -3527,7 +3537,7 @@ function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoStack, geoStore, win, regionMode, regionLevel, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoStack, geoStore, win, regionMode, regionLevel, ringMode, units, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -3553,6 +3563,7 @@ async function restoreSaved() {
     if (typeof st.alpha === 'number') { alpha = st.alpha; $('#alpha').value = Math.round(alpha * 100); $('#alphaOut').textContent = Math.round(alpha * 100) + '%'; }
     if (typeof st.borderW === 'number') { borderW = st.borderW; $('#bw').value = borderW; $('#bwOut').textContent = borderW + ' px'; }
     if (st.sizes) Object.assign(sizes, st.sizes);
+    if (st.ringMode) { ringMode = st.ringMode; $('#ringMode').value = ringMode; }
     units = st.units || [];
     loadGenerals(st.generals); player = st.player || 1;
     loadGame(st);
@@ -3724,6 +3735,11 @@ $('#geoLabels').addEventListener('change', e => { geoLabels = e.target.checked; 
 $('#regionMode').addEventListener('change', e => setRegionMode(e.target.checked));
 $('#tglRegion').addEventListener('click', () => setRegionMode(!regionMode));
 $('#regionLevel').addEventListener('change', e => { regionLevel = e.target.value; hoverRegion = null; updateRegionHover(); requestUi(); scheduleSave(); });
+function setRingMode(m) {
+  ringMode = m; $('#ringMode').value = m; requestUi(); scheduleSave();
+  toast({ always: 'Круг захвата: показывать всегда', drag: 'Круг захвата: прятать, пока тяну или рисую', never: 'Круг захвата: не показывать' }[m]);
+}
+$('#ringMode').addEventListener('change', e => setRingMode(e.target.value));
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
 $('#bspeed').addEventListener('input', e => {
