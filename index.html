@@ -2100,6 +2100,7 @@ function exportGeoBase(c) {
 // level around what is on screen; when you zoom or pan, edits are written back to every level and
 // the window is reloaded at the level that matches the zoom.
 const TS = 256, LMAX = 16;
+let ownRev = 0;                       // changes whenever the land changes hands: the march grids are counted anew
 let frontDirty = null;               // where the grid changed since the lines last followed the border: null, true (all) or [x0, y0, x1, y1]
 let geoStore = false;
 let store = new Map();                // tile key -> Uint8Array(65536) or one owner number for a uniform tile
@@ -5135,7 +5136,8 @@ function captureAlong(a, b, R, val) {
 function moveUnit(u, nx, ny) {
   const from = { x: u.x, y: u.y };
   u.x = clamp(nx, 0, W); u.y = clamp(ny, 0, H);
-  if (unitsPushBorder) captureAlong(from, u, pushRadius(u), u.owner);
+  // an attack takes land as a front (lineFill); a march through one's own land takes none
+  if (unitsPushBorder && !u.atk && !(u.order && u.redeploy)) captureAlong(from, u, pushRadius(u), u.owner);
 }
 function fight(a, b) {
   const near = u => { let n = 0; const R = bodyS(u) * 3; forNear(u, R, v => { if (allied(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) < R) n++; }); return n; };
@@ -5158,7 +5160,7 @@ function fight(a, b) {
     const nd = Math.hypot(lose.x - win.x, lose.y - win.y);
     const adv = Math.min(step, nd - gap);
     if (adv > 0 || retreated) moveUnit(win, win.x + dx * Math.max(adv, 0), win.y + dy * Math.max(adv, 0));
-    else if (unitsPushBorder) captureAlong(win, win, pushRadius(win), win.owner);
+    else if (unitsPushBorder && !win.atk) captureAlong(win, win, pushRadius(win), win.owner);
   }
   engaged.push([a, b, win]);
 }
@@ -5180,6 +5182,7 @@ function battleTick() {
     }
   }
   aiStep(fought);
+  lineFill();
   for (const u of units) {
     if (u.oos && game.supply) u.hp = hpOf(u) - .25;                 // cut off: no supplies, slow attrition
     else if (!fought.has(u) && hpOf(u) < 100) u.hp = Math.min(100, hpOf(u) + .4);
@@ -5519,16 +5522,24 @@ function issueRoute(pts, append) {
     const wps = path.map(q => ({ x: clamp(q.x + off.x, 0, W), y: clamp(q.y + off.y, 0, H) }));
     delete u.fl;                                       // a unit given its own way leaves its front line
     if (append && u.order) { u.route = (u.route || []).concat(wps); }
-    else { u.order = wps[0]; u.route = wps.slice(1); u.roff = off; }
+    else { stopOrders(u); u.order = wps[0]; u.route = wps.slice(1); u.roff = off; }
     if (!u.route.length) delete u.route;
     delete u.fighting;
+    // one place on friendly land: the way there by friendly land
+    if (!append && wps.length === 1 && allied(cellOwner(wps[0].x, wps[0].y), u.owner)) routeTo(u, wps[0]);
+  }
+  // into the enemy's land: the group attacks as one line
+  const end = path[path.length - 1], into = list.filter(u => !u.redeploy && u.order);
+  if (into.length && !append) {
+    const dx = end.x - cx, dy = end.y - cy, l = Math.hypot(dx, dy) || 1;
+    if (into.some(u => atWar(cellOwner(clamp(end.x + u.roff.x, 0, W - 1), clamp(end.y + u.roff.y, 0, H - 1)), u.owner))) markAttack(into, { x: dx / l, y: dy / l });
   }
   const many = list.length > 1;
   toast(pts.length > 1 ? (many ? 'Наступление по маршруту: ' + list.length + ' отрядов' : 'Отряд пошёл по маршруту') + (append ? ' (добавлено к прежнему)' : '')
     : (many ? 'Отряды выступили: ' + list.length : 'Отряд выступил'));
   startMarch();
 }
-const stopOrders = u => { delete u.order; delete u.route; delete u.roff; delete u.fighting; };
+const stopOrders = u => { if (!u.fl) delete u.fdir; delete u.order; delete u.route; delete u.roff; delete u.fighting; delete u.atk; delete u.grp; delete u.gk; delete u.adv; delete u.redeploy; };
 function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } armIdleCursor(); }
 function enemyContact(u) {
   let hit = false;
@@ -5540,7 +5551,7 @@ function marchFrame(t) {
   marchRaf = 0;
   if (menuPaused) { marchLast = t; marchRaf = requestAnimationFrame(marchFrame); return; }
   buildBattleGrid();
-  const dt = Math.min(.1, (t - marchLast) / 1000); marchLast = t;
+  const dt = clamp((t - marchLast) / 1000, 0, .1); marchLast = t;   // a frame stamp can be a little older than the start of the march
   let any = false;
   for (const u of units) {
     if (!u.order) continue;
@@ -5565,11 +5576,12 @@ function marchFrame(t) {
         if (!marchNoWar || marchNoWar !== lo) { marchNoWar = lo; toast(ownerName(u.owner) + ' не воюет со страной ' + ownerName(lo) + ': войска встали у границы. Объявить войну — кнопка «Войны» вверху.'); }
         break;
       }
-      if (d > sp) { moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp); break; }
+      if (d > sp) { if (sp > 0) moveUnit(u, u.x + dx / d * sp, u.y + dy / d * sp); break; }
       moveUnit(u, u.order.x, u.order.y); sp -= d;
       if (u.route && u.route.length) u.order = u.route.shift(); else stopOrders(u);
     }
   }
+  if (t - fillBeat > 250) { fillBeat = t; lineFill(); }
   requestDrawFast();
   if (t - marchBeat > 1000) { marchBeat = t; if (geoStore && ++marchCommits % 20 === 0) setTimeout(commitWindow, 0); renderCountries(); checkCities(); renderScore(); }
   if (any) marchRaf = requestAnimationFrame(marchFrame);
@@ -5641,6 +5653,155 @@ function groupFormations(o, list) {
   }
   if (armies.length > 3) for (let g = 0; g < armies.length; g += 3) { const G = mk('XXXXX'); armies.slice(g, g + 3).forEach(x => { x.A.parent = G.id; }); }
   return armies;
+}
+// --- marching through one's own land ---
+// A unit sent to a place on friendly land goes there by friendly land: straight when the way is clear, else by
+// the shortest way found on a coarse grid of the window (A*), so troops moving up to the front never cut through
+// the enemy's land on the way. Such a march takes nothing from anyone.
+const passCache = new Map();
+function passGrid(owner) {
+  const k = Math.max(1, Math.ceil(Math.max(W, H) / 420));
+  const key = ownRev + ':' + W + ':' + H + ':' + k + ':' + (win ? win.L + ',' + win.cx0 + ',' + win.cy0 : '');
+  if (passCache.key !== key) { passCache.clear(); passCache.key = key; }
+  let P = passCache.get(owner);
+  if (P) return P;
+  const gw = Math.ceil(W / k), gh = Math.ceil(H / k), g = new Uint8Array(gw * gh);
+  const ok = (x, y) => allied(own[Math.min(H - 1, y) * W + Math.min(W - 1, x)], owner) ? 1 : 0;
+  for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
+    // open when most of five cells of the block are friendly land
+    const x0 = bx * k, y0 = by * k, h = k >> 1, q = k >> 2;
+    g[by * gw + bx] = ok(x0 + h, y0 + h) + ok(x0 + q, y0 + q) + ok(x0 + k - 1 - q, y0 + q) + ok(x0 + q, y0 + k - 1 - q) + ok(x0 + k - 1 - q, y0 + k - 1 - q) >= 3 ? 1 : 0;
+  }
+  P = { k, gw, gh, g };
+  passCache.set(owner, P);
+  return P;
+}
+// the straight way from a to b keeps to friendly land (the first and last cell aside: a unit at the border may
+// stand in a cell drawn for the other side)
+function clearLine(owner, a, b) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.ceil(d / .5);
+  for (let k = 1; k < n; k++) {
+    const t = k / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+    if (t * d < .75 || (1 - t) * d < .75) continue;
+    if (!allied(cellOwner(x, y), owner)) return false;
+  }
+  return true;
+}
+function findPath(owner, a, b) {
+  const { k, gw, gh, g } = passGrid(owner);
+  const at = p => clamp(Math.floor(p.y / k), 0, gh - 1) * gw + clamp(Math.floor(p.x / k), 0, gw - 1);
+  const near = i => { if (g[i]) return i; const x = i % gw, y = (i / gw) | 0; for (let r = 1; r <= 4; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < gw && yy < gh && g[yy * gw + xx]) return yy * gw + xx; } return -1; };
+  const s = near(at(a)), t = near(at(b));
+  if (s < 0 || t < 0) return null;
+  const N = gw * gh, gs = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+  const tx = t % gw, ty = (t / gw) | 0, hf = i => { const dx = Math.abs(i % gw - tx), dy = Math.abs(((i / gw) | 0) - ty); return Math.max(dx, dy) + .414 * Math.min(dx, dy); };
+  // a binary heap of [f, index]
+  const hf_ = [], hi = [];
+  const push = (f, i) => { let j = hf_.length; hf_.push(f); hi.push(i); while (j) { const p = (j - 1) >> 1; if (hf_[p] <= f) break; hf_[j] = hf_[p]; hi[j] = hi[p]; j = p; } hf_[j] = f; hi[j] = i; };
+  const pop = () => { const i = hi[0], lf = hf_.pop(), li = hi.pop(); if (hf_.length) { let j = 0; for (;;) { let c = 2 * j + 1; if (c >= hf_.length) break; if (c + 1 < hf_.length && hf_[c + 1] < hf_[c]) c++; if (hf_[c] >= lf) break; hf_[j] = hf_[c]; hi[j] = hi[c]; j = c; } hf_[j] = lf; hi[j] = li; } return i; };
+  gs[s] = 0; push(hf(s), s);
+  let steps = 0;
+  while (hf_.length && steps++ < 250000) {
+    const i = pop();
+    if (done[i]) continue;
+    done[i] = 1;
+    if (i === t) break;
+    const x = i % gw, y = (i / gw) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const xx = x + dx, yy = y + dy;
+      if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue;
+      const j = yy * gw + xx;
+      if (!g[j] || done[j]) continue;
+      if (dx && dy && (!g[y * gw + xx] || !g[yy * gw + x])) continue;   // no cutting a corner of enemy land
+      const c = gs[i] + (dx && dy ? 1.414 : 1);
+      if (c < gs[j]) { gs[j] = c; came[j] = i; push(c + hf(j), j); }
+    }
+  }
+  if (!done[t]) return null;
+  const cells = [];
+  for (let i = t; i !== s && i >= 0; i = came[i]) cells.push({ x: (i % gw + .5) * k, y: (((i / gw) | 0) + .5) * k });
+  cells.reverse();
+  cells[cells.length - 1] = { x: b.x, y: b.y };
+  // the corners only: from each point straight on to the farthest one in clear sight
+  const out = [];
+  let cur = { x: a.x, y: a.y }, i = 0;
+  while (i < cells.length) {
+    let j = i;
+    while (j + 1 < cells.length && clearLine(owner, cur, cells[j + 1])) j++;
+    out.push(cells[j]); cur = cells[j]; i = j + 1;
+  }
+  return out;
+}
+// an order to a place: by friendly land if the place is friendly, straight if it is an attack
+function routeTo(u, t) {
+  const target = { x: clamp(t.x, 0, W), y: clamp(t.y, 0, H) };
+  delete u.route; delete u.redeploy;
+  if (!allied(cellOwner(target.x, target.y), u.owner) && !allied(fineOwner(target.x, target.y), u.owner)) { u.order = target; return; }
+  u.redeploy = true;
+  if (clearLine(u.owner, u, target)) { u.order = target; return; }
+  const p = findPath(u.owner, u, target);
+  if (!p || !p.length) { u.order = target; return; }
+  u.order = p[0];
+  if (p.length > 1) u.route = p.slice(1);
+}
+
+// --- an offensive moves as a front ---
+// Units attacking together (a front line on «Наступать», or a group sent into the enemy's land) do not each cut a
+// trail of their own: the land between neighbours along the line, from a little ahead of them back to where they
+// came from, changes hands as one band, so the whole front line rolls forward. A unit with no neighbour near
+// takes the ground round itself.
+let grpSeq = 0, fillBeat = 0;
+function fillWar(pts, val) {
+  let y0 = H, y1 = 0, x0 = W, x1 = 0;
+  for (const q of pts) { y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
+  const ya = Math.max(0, Math.floor(y0)), yb = Math.min(H - 1, Math.ceil(y1)), n = pts.length, xs = [];
+  let changed = 0;
+  for (let y = ya; y <= yb; y++) {
+    const cy = y + .5; xs.length = 0;
+    for (let k = 0, j = n - 1; k < n; j = k++) { const a = pts[k], b = pts[j]; if ((a.y > cy) !== (b.y > cy)) xs.push(a.x + (cy - a.y) / (b.y - a.y) * (b.x - a.x)); }
+    xs.sort((u, v) => u - v);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const xa = Math.max(0, Math.ceil(xs[k] - .5)), xb = Math.min(W - 1, Math.floor(xs[k + 1] - .5));
+      for (let x = xa, i = y * W + xa; x <= xb; x++, i++) {
+        const o = own[i];
+        if (!o || o === val || !atWar(o, val)) continue;
+        occTrack(i, o, val); own[i] = val; changed++;
+      }
+    }
+  }
+  if (changed) { const bx0 = Math.max(0, Math.floor(x0)), bx1 = Math.min(W, Math.ceil(x1) + 1); addDirty(bx0, ya, bx1, yb + 1); markFrontDirty(bx0, ya, bx1, yb + 1); }
+  return changed;
+}
+function lineFill() {
+  if (!unitsPushBorder || !own) return 0;
+  const groups = new Map();
+  for (const u of units) if (u.atk && inWin(u) && !immobile(u)) { const k = u.grp || u; (groups.get(k) || groups.set(k, []).get(k)).push(u); }
+  let changed = 0;
+  const ends = (u, k) => {
+    const d = u.adv || { x: 0, y: 0 }, S = bodyS(u), f = S * .5, b = Math.max(S * 4, 1.2);
+    return k ? [{ x: u.x + d.x * f, y: u.y + d.y * f }, { x: u.x - d.x * b, y: u.y - d.y * b }] : [{ x: u.x - d.x * b, y: u.y - d.y * b }, { x: u.x + d.x * f, y: u.y + d.y * f }];
+  };
+  for (const list of groups.values()) {
+    list.sort((a, b) => (a.gk || 0) - (b.gk || 0));
+    const gaps = [];
+    for (let i = 1; i < list.length; i++) gaps.push(Math.hypot(list[i].x - list[i - 1].x, list[i].y - list[i - 1].y));
+    const med = gaps.length ? gaps.slice().sort((a, b) => a - b)[gaps.length >> 1] : 0;
+    const linked = new Set();
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i];
+      if (gaps[i - 1] > Math.max(med * 5, bodyS(a) * 8, 6)) continue;     // a real break in the line
+      changed += fillWar([...ends(a, 0), ...ends(b, 1)], a.owner);
+      linked.add(a); linked.add(b);
+    }
+    for (const u of list) if (!linked.has(u)) changed += captureAlong(u, u, pushRadius(u), u.owner);
+  }
+  return changed;
+}
+// the units of an attack: one line, ordered across the direction they go
+function markAttack(list, dir) {
+  const g = 'g' + (++grpSeq), px = -dir.y, py = dir.x;
+  for (const u of list) { u.atk = true; u.grp = g; u.gk = u.x * px + u.y * py; u.adv = { x: dir.x, y: dir.y }; delete u.redeploy; }
 }
 // --- front lines, as in Hearts of Iron ---
 // A front line is a stretch of border held by a group of units. It is drawn along the border in the «Фронт» mode
@@ -5762,13 +5923,16 @@ function frontOrders(f, force, all) {
     if (!sl) return;
     const S = bodyS(u);
     if (f.mode === 'attack') {
+      // straight ahead, each unit in the direction its stretch of the line faced when the attack began
       if (enemyContact(u)) return;
+      if (!u.fdir) u.fdir = { x: -sl.nx, y: -sl.ny };
       const go = fineGrid() ? S * 3 : Math.max(S * 3, 1.2);
-      u.order = { x: clamp(sl.bx - sl.nx * go, 0, W), y: clamp(sl.by - sl.ny * go, 0, H) }; delete u.route; n++;
+      u.order = { x: clamp(u.x + u.fdir.x * go, 0, W), y: clamp(u.y + u.fdir.y * go, 0, H) }; delete u.route; delete u.redeploy; n++;
+      u.atk = true; u.grp = 'f' + f.id; u.gk = u.ft; u.adv = { x: u.fdir.x, y: u.fdir.y };
     } else if (force || Math.hypot(u.x - sl.x, u.y - sl.y) > Math.max(S * 3, fineGrid() ? 0 : .8)) {
       // only to a place on its own side of the line: where the line has no room the unit stays
       const ex = frontSlot(f, j, k, true);
-      if (ex && Math.hypot(u.x - ex.x, u.y - ex.y) > S * 1.2) { u.order = { x: ex.x, y: ex.y }; delete u.route; n++; }
+      if (ex && Math.hypot(u.x - ex.x, u.y - ex.y) > S * 1.2) { routeTo(u, ex); n++; }
     }
   });
   return n;
@@ -5783,6 +5947,7 @@ function pruneFronts() {
 // Where the grid changed since the lines last looked at it: only there can a line have lost its border.
 // A stroke of the border tools changes anything anywhere: then the whole window is looked at.
 function markFrontDirty(x0, y0, x1, y1) {
+  ownRev++;
   if (frontDirty === true) return;
   if (x0 === undefined) { frontDirty = true; return; }
   if (!frontDirty) frontDirty = [x0, y0, x1, y1];
@@ -5804,6 +5969,13 @@ function frontTick() {
     if (performance.now() - t0 > 6) { frontRot = (frontRot + c) % nf; if (dirty) { if (dirty === true) markFrontDirty(); else markFrontDirty(...dirty); } break; }
     const list = by.get(f.id) || [];
     let touched = false;
+    if (f.mode === 'attack') {
+      // an attacking line is where its units are; it settles on the new border when the front holds again
+      const ls = list.filter(inWin).sort((a, b) => (a.ft || 0) - (b.ft || 0));
+      if (ls.length >= 2) f.pts = ls.map(u => ({ x: u.x, y: u.y, nx: u.fdir ? -u.fdir.x : 0, ny: u.fdir ? -u.fdir.y : 1 }));
+      n += frontOrders(f, false, list);
+      continue;
+    }
     if (dirty) {
       const m = 4, box = dirty === true ? null : [dirty[0] - m, dirty[1] - m, dirty[2] + m, dirty[3] + m];
       if (!box || f.pts.some(p => p.x >= box[0] && p.x <= box[2] && p.y >= box[1] && p.y <= box[3])) touched = resnapFront(f, box) > 0;
@@ -5817,7 +5989,7 @@ let frontRot = 0;
 setInterval(() => { if (fronts.length) frontTick(); }, 1000);
 // a stroke along the border: the selected units take up the line, with none selected new ones fill it
 function frontFromStroke(raw) {
-  const sel = targets().filter(u => !immobile(u));
+  const alive = new Set(units), sel = targets().filter(u => alive.has(u) && !immobile(u));
   const cnt = new Map(); for (const u of sel) cnt.set(u.owner, (cnt.get(u.owner) || 0) + 1);
   const o = sel.length ? [...cnt].sort((a, b) => b[1] - a[1])[0][0] : spawnSide && countries[spawnSide - 1] ? spawnSide : cellOwner(raw[0].x, raw[0].y) || active;
   if (!o || !countries[o - 1]) { toast('Начните линию на земле страны, чьи войска встанут на фронт.'); return; }
@@ -5867,13 +6039,30 @@ function setFrontMode(list, mode) {
   const fs = new Set(list.map(u => u.fl).filter(Boolean)), loose = list.filter(u => !u.fl && !immobile(u));
   if (!fs.size && !loose.length) return;
   pushHist();
-  for (const f of fronts) if (fs.has(f.id)) f.mode = mode;
+  for (const f of fronts) if (fs.has(f.id)) {
+    f.mode = mode;
+    const ls = frontUnits(f).filter(u => !immobile(u)).sort((a, b) => (a.ft || 0) - (b.ft || 0));
+    if (mode === 'attack') {
+      // one way forward for the whole line, across it as a whole rather than across every bend of the border:
+      // the units go side by side and never cross or crowd together
+      const ns = ls.map((u, j) => frontSlot(f, j, ls.length, false)), w = ls.length;
+      ls.forEach((u, j) => {
+        let x = 0, y = 0;
+        for (let i = Math.max(0, j - w); i <= Math.min(ls.length - 1, j + w); i++) if (ns[i]) { x -= ns[i].nx; y -= ns[i].ny; }
+        const l = Math.hypot(x, y);
+        if (l) u.fdir = { x: x / l, y: y / l };
+      });
+    } else ls.forEach(u => { delete u.fdir; });
+    if (mode === 'hold') { f.k = -1; resnapFront(f); }
+  }
   if (mode === 'attack') {
     // units on no line: across the nearest enemy border
     for (const u of loose) {
       const b = nearestBorder(u.x, u.y, u.owner, Math.max(4, 60 / view.s), q => atWar(u.owner, q));
       if (b) { const d = Math.hypot(b.x - u.x, b.y - u.y) || 1, go = Math.max(bodyS(u) * 3, fineGrid() ? 0 : 1.2); u.order = { x: clamp(b.x + (b.x - u.x) / d * go, 0, W), y: clamp(b.y + (b.y - u.y) / d * go, 0, H) }; delete u.route; }
     }
+    const go = loose.filter(u => u.order);
+    if (go.length) { let dx = 0, dy = 0; for (const u of go) { const d = Math.hypot(u.order.x - u.x, u.order.y - u.y) || 1; dx += (u.order.x - u.x) / d; dy += (u.order.y - u.y) / d; } const l = Math.hypot(dx, dy) || 1; markAttack(go, { x: dx / l, y: dy / l }); }
     if (!battlesOn && units.some(u => atWar(u.owner, list[0].owner))) setBattles(true);
   } else for (const u of list) if (u.fl) stopOrders(u);
   for (const f of fronts) if (fs.has(f.id)) frontOrders(f, mode === 'hold');
@@ -5883,7 +6072,7 @@ function setFrontMode(list, mode) {
 function deleteFront(f) {
   if (!f) return;
   pushHist();
-  for (const u of units) if (u.fl === f.id) delete u.fl;
+  for (const u of units) if (u.fl === f.id) { delete u.fl; delete u.fdir; }
   fronts = fronts.filter(x => x !== f); selFront = null;
   updUndo(); scheduleSave(); renderSidePick(); requestDraw();
   toast('Линия фронта убрана, отряды остались на местах.');
