@@ -324,6 +324,9 @@ main { container-type: size; container-name: stage; }
 .sidepick .usize button.ech { min-width: 30px; height: 30px; padding: 0 6px; justify-content: center; font: 700 10.5px var(--f-mono); letter-spacing: -.04em; border-color: var(--line); background: var(--bg); }
 .sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 9px); height: calc(var(--k) * 6px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
 .sidepick .usize button.ech.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sidepick .usize button.pc { min-width: 34px; height: 30px; padding: 0 7px; justify-content: center; font: 700 11px var(--f-mono); border-color: var(--line); background: var(--bg); }
+.sidepick .usize button.pc.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sidepick .usize .pcl { margin-left: 10px; }
 .sidepick .usize .ename { display: flex; flex-direction: column; line-height: 1.1; margin-left: 6px; min-width: 110px; }
 .sidepick .usize .ename b { font-size: 12.5px; } .sidepick .usize .ename small { font-size: 10.5px; color: var(--muted); }
 .sidepick .umode { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); margin-right: 4px; }
@@ -1047,7 +1050,7 @@ const HINTS = {
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
-  units: 'Плашка над картой: «Ставить» (Q), «Двигать» (E) или «Фронт» (G). Фронт: протяните линию вдоль границы — выбранные отряды встанут на неё, без выбора её заполнят новые; «Наступать» — удар через линию. Ставить: щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
+  units: 'Плашка над картой: «Ставить» (Q), «Двигать» (E) или «Фронт» (G). «Сразу: 1 · ×10 · ×100» (C) — сколько отрядов ставит один щелчок. Фронт: протяните линию вдоль границы — выбранные отряды встанут на неё, без выбора её заполнят новые; «Наступать» — удар через линию. Ставить: щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -4476,6 +4479,7 @@ let selUnit = null;          // the unit whose details the panel shows
 let selUnits = [];           // every selected unit (Shift + click / Shift + drag adds more)
 const targets = () => selUnits.length ? selUnits : selUnit ? [selUnit] : []; selUnits = [];
 let era = 'ww2', unitType = 'inf', unitEch = 'XX';
+let placeCount = 1;                   // how many units one click of «Ставить» puts down: 1, 10 or 100
 let unitSize = 36, showUnits = true;
 
 const unitDef = u => { const e = ERAS[u.era] || ERAS.ww2; return { frame: e.frame, def: e.units.find(d => d[0] === u.type) || e.units[0] }; };
@@ -6283,6 +6287,15 @@ function renderSidePick() {
   const cur = ECH_LIST.find(x => x[0] === (unitEch || 'XX'));
   const cn = document.createElement('span'); cn.className = 'ename'; cn.innerHTML = '<b></b><small></small>'; cn.firstChild.textContent = cur[1]; cn.lastChild.textContent = cur[2]; row.append(cn);
   const kz = document.createElement('kbd'); kz.textContent = 'Z X'; kz.title = 'Z — меньше, X — больше'; row.append(kz);
+  // how many units one click puts down
+  const cl = document.createElement('span'); cl.className = 'lbl pcl'; cl.textContent = 'Сразу:'; row.append(cl);
+  for (const n of PLACE_COUNTS) {
+    const b = document.createElement('button'); b.className = 'pc' + (placeCount === n ? ' on' : ''); b.textContent = n === 1 ? '1' : '×' + n;
+    b.title = n === 1 ? 'Щелчок ставит один отряд' : 'Щелчок ставит сразу ' + n + ' отрядов плотным блоком';
+    b.setAttribute('aria-pressed', placeCount === n); b.dataset.pc = n;
+    b.addEventListener('click', () => setPlaceCount(n)); row.append(b);
+  }
+  const kc = document.createElement('kbd'); kc.textContent = 'C'; kc.title = 'C — 1, 10 или 100 отрядов за щелчок'; row.append(kc);
   const chip = (i, name, color, title) => {
     const b = document.createElement('button');
     b.className = i === spawnSide ? 'on' : ''; b.title = title; b.setAttribute('aria-pressed', i === spawnSide);
@@ -6312,6 +6325,36 @@ function setPlaceEch(e, quiet) {
   renderSidePick(); requestUi(); scheduleSave();
   if (!quiet) { const c = ECH_LIST.find(x => x[0] === e); if (c) toast('Ставить: ' + c[1].toLowerCase() + ' (' + c[2] + ')'); }
 }
+// n units in one click: a tight block round the point, nearest places first, rows of markers side by side;
+// only on the land of the side they are put down for (or, for a landing, on any land)
+const PLACE_COUNTS = [1, 10, 100];
+function placeBatch(g, owner, n, landing) {
+  const S = unitCellsAt(g.y), dx = S * 1.7, dy = S * 1.3, made = [];
+  const ech = FORM_CHILD[unitEch] ? 'XX' : unitEch;
+  const fits = (x, y) => { const o = fineOwner(x, y); return landing ? o !== 0 : o === owner; };
+  for (let ring = 0; made.length < n && ring < 60; ring++) {
+    // the places on this ring of the grid, nearest the click first
+    const ring_ = [];
+    for (let j = -ring; j <= ring; j++) for (let i = -ring; i <= ring; i++) {
+      if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue;
+      const x = g.x + i * dx + (j & 1) * dx / 2, y = g.y + j * dy;
+      ring_.push([Math.hypot(x - g.x, y - g.y), x, y]);
+    }
+    ring_.sort((a, b) => a[0] - b[0]);
+    for (const [, x, y] of ring_) {
+      if (made.length >= n) break;
+      if (x < 0 || y < 0 || x >= W || y >= H || !fits(x, y)) continue;
+      const u = { x, y, era, type: unitType, owner, ech, label: '' };
+      units.push(u); made.push(u);
+    }
+  }
+  return made;
+}
+function setPlaceCount(n, quiet) {
+  placeCount = PLACE_COUNTS.includes(n) ? n : 1;
+  renderSidePick(); requestUi(); scheduleSave();
+  if (!quiet) toast(placeCount === 1 ? 'Щелчок ставит один отряд' : 'Щелчок ставит сразу ' + placeCount + ' отрядов плотным блоком (C — сменить)');
+}
 // a see-through marker under the cursor: what a click would place, in whose colours
 function drawSpawnGhost(c) {
   if (tool !== 'units' || unitMode !== 'place' || !hover || drag || spaceDown || !showUnits || !countries.length) return;
@@ -6326,7 +6369,13 @@ function drawSpawnGhost(c) {
   c.globalAlpha = .55;
   c.drawImage(sp.c, sx - sp.left / dpr, sy - sp.top / dpr, sp.c.width / dpr, sp.c.height / dpr);
   c.globalAlpha = 1;
-  const tag = ct.name + (big ? ' · ' + FORM_WORD[unitEch][0] : '');
+  if (placeCount > 1) {
+    // the block the click would fill
+    const S = unitCellsAt(hover.y), side = Math.sqrt(placeCount);
+    const w = Math.max(Sp * 1.6, side * S * 1.7 * view.s), h = Math.max(Sp * 1.2, side * S * 1.3 * view.s);
+    c.setLineDash([5, 4]); c.lineWidth = 1.5; c.strokeStyle = 'rgba(20,25,32,.75)'; c.strokeRect(sx - w / 2, sy - h / 2, w, h); c.setLineDash([]);
+  }
+  const tag = ct.name + (big && placeCount === 1 ? ' · ' + FORM_WORD[unitEch][0] : '') + (placeCount > 1 ? ' · ×' + placeCount : '');
   c.font = `600 11.5px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'middle';
   const tw = c.measureText(tag).width + 14, ty = sy + Sp * .62 + 14;
   const col = rgb[o] || [120, 120, 120];
@@ -6461,6 +6510,13 @@ cv.addEventListener('pointerdown', e => {
       if (!inside) return;
       const owner = spawnOwner(g, e.ctrlKey || e.metaKey);
       pushHist();
+      if (placeCount > 1) {
+        const made = placeBatch(g, owner, placeCount, (e.ctrlKey || e.metaKey) && owner !== cellOwner(g.x, g.y));
+        if (!made.length) { hist.pop(); updUndo(); toast('Здесь нет земли страны «' + countries[owner - 1].name + '», чтобы поставить войска.'); return; }
+        setSel(made, made[0]); unitsChanged();
+        toast('Поставлено отрядов: ' + made.length + ' (' + countries[owner - 1].name + ')' + (made.length < placeCount ? ' — больше не поместилось на этой земле' : '') + '. «Двигать» (E) — приказы всем сразу');
+        return;
+      }
       if (hierOn() && FORM_CHILD[unitEch]) {
         // a front, army or corps: the whole formation down to divisions, shown as one marker for now
         const made = spawnFormation(g, unitEch, owner);
@@ -6692,6 +6748,7 @@ window.addEventListener('keydown', e => {
     if (unitMode !== 'place') setUnitMode('place', true);
     return;
   }
+  if (e.code === 'KeyC' && tool === 'units') { setPlaceCount(PLACE_COUNTS[(PLACE_COUNTS.indexOf(placeCount) + 1) % PLACE_COUNTS.length]); if (unitMode !== 'place') setUnitMode('place', true); return; }
   if (e.code === 'KeyQ' || e.code === 'KeyE' || e.code === 'KeyG') { if (tool !== 'units') setTool('units'); setUnitMode(e.code === 'KeyE' ? 'move' : e.code === 'KeyG' ? 'front' : 'place'); return; }
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
@@ -7078,7 +7135,7 @@ function scheduleSave() {
   saveT = setTimeout(saveFn = () => {
     saveFn = null;
     if (!own) return;
-    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, echScale, warpMode, mapTitle, wars, settled: [...settled], warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth, fronts }).catch(() => {});
+    dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, placeCount, echScale, warpMode, mapTitle, wars, settled: [...settled], warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units, forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth, fronts }).catch(() => {});
   }, 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
@@ -7114,6 +7171,7 @@ async function restoreSaved() {
     if (st.unitMode) unitMode = st.unitMode;
     if (typeof st.echScale === 'boolean') { echScale = st.echScale; $('#echScale').checked = echScale; }
     if (typeof st.unitEch === 'string' && st.unitEch in ECH_SIZE) { unitEch = st.unitEch; $('#unitEch').value = unitEch; }
+    if (PLACE_COUNTS.includes(st.placeCount)) placeCount = st.placeCount;
     if (st.warpMode) setWarpMode(st.warpMode, true);
     mapTitle = st.mapTitle || '';
     if (typeof st.warOnly === 'boolean') { warOnly = st.warOnly; $('#warOnly').checked = warOnly; }
