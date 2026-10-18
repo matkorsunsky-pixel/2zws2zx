@@ -4697,16 +4697,20 @@ function formMarker(n) {
 }
 // decide what is drawn: each formation either as one marker or opened into its parts (recursively)
 function layoutUnits() { layoutTree(); stackShown(); }
+// a single unit whose real size is under 4 px on the screen is drawn as a dot rather than a 7 px marker
+const DOT_PX = 3;
+const isDot = it => !!it.unit && !it.stack && iconS(it.unit) * view.s < 4;
 // Markers that would cover each other on the screen stand as one stack with the number of units in it, as in
 // Hearts of Iron: a front of thousands of small units reads as a row of stacks, and zooming in spreads them out.
 function stackShown() {
   if (shown.length < 2) return;
   const s = view.s;
   let cell = 8;
-  for (const it of shown) { const px = drawS(it.S) * s; if (px > cell) cell = px; }
+  for (const it of shown) { if (isDot(it)) continue; const px = drawS(it.S) * s; if (px > cell) cell = px; }
   cell = Math.min(cell * 1.6, 600);
   const grid = new Map(), out = [];
   for (const it of shown) {
+    if (isDot(it)) { out.push({ it }); continue; }
     const px = drawS(it.S) * s, sx = it.x * s, sy = it.y * s, kx = Math.floor(sx / cell), ky = Math.floor(sy / cell);
     const owner = (it.unit || it.m).owner;
     let host = null;
@@ -4784,18 +4788,33 @@ function drawUnitsFast(c) {
   const selSet = tool === 'units' ? new Set(selUnits.length ? selUnits : selUnit ? [selUnit] : []) : null;
   layoutUnits();
   const r = stage.getBoundingClientRect(), vx0 = -view.x / view.s, vy0 = -view.y / view.s, vx1 = (r.width - view.x) / view.s, vy1 = (r.height - view.y) / view.s;
-  const stacks = [];
+  const stacks = [], dots = new Map();
   for (const it of shown) {
     const u = it.unit || it.m, S = drawS(it.unit ? iconS(u) : it.S);
     // off screen: skipped (a marker is at most a few sizes wide)
     if (it.x + S * 3 < vx0 || it.x - S * 3 > vx1 || it.y + S * 3 < vy0 || it.y - S * 3 > vy1) continue;
     const sel = !!(selSet && (it.unit ? selSet.has(u) : it.leaves.every(v => selSet.has(v))));
+    if (isDot(it)) { const k = sel ? -1 : u.owner; (dots.get(k) || dots.set(k, []).get(k)).push(it.x * view.s + view.x, it.y * view.s + view.y); continue; }
     // the sprite is drawn at one of six sizes per octave and scaled to the exact one, so zooming smoothly
     // reuses a few cached pictures instead of painting new ones every frame
     const px = Math.min(700, S * zoom), pq = Math.pow(2, Math.round(Math.log2(Math.max(px, 2)) * 6) / 6), q = pq / S;
     const sp = unitSprite(u, pq, sel);
     c.drawImage(sp.c, it.x - sp.left / q, it.y - sp.top / q, sp.c.width / q, sp.c.height / q);
     if (it.stack) stacks.push(it, S);
+  }
+  // units far smaller than a pixel: each one a dot in its country's colour, so a front of thousands of 20 m
+  // units reads as a chain of dots along the border, every one of them a unit of its own
+  if (dots.size) {
+    c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const d = DOT_PX;
+    c.fillStyle = 'rgba(20,24,30,.9)';
+    for (const xy of dots.values()) for (let k = 0; k < xy.length; k += 2) c.fillRect(xy[k] - d / 2 - 1, xy[k + 1] - d / 2 - 1, d + 2, d + 2);
+    for (const [o, xy] of dots) {
+      const col = o < 0 ? [255, 214, 90] : rgb[o] || [120, 120, 120];
+      c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      for (let k = 0; k < xy.length; k += 2) c.fillRect(xy[k] - d / 2, xy[k + 1] - d / 2, d, d);
+    }
+    c.restore();
   }
   // the number of units in each stack, in screen pixels at the marker's corner
   if (stacks.length) {
@@ -5210,10 +5229,11 @@ function drawBattles(c) {
   // a fight inside closed formations is drawn once, between the markers that stand for them
   const at = new Map(), idx = new Map();
   shown.forEach((it, k) => { idx.set(it, k); if (it.unit) at.set(it.unit, it); else for (const u of it.leaves) at.set(u, it); });
-  const done = new Set();
+  const done = new Set(), many = engaged.length > 150;
   for (const [a0, b0, win] of engaged) {
     const ia = at.get(a0), ib = at.get(b0);
     if (!ia || !ib) continue;
+    if (many && isDot(ia) && isDot(ib)) continue;        // thousands of dots in contact: the front itself shows the fight
     const key = idx.get(ia) * 1e6 + idx.get(ib);
     if (done.has(key)) continue;
     done.add(key);
@@ -5834,7 +5854,6 @@ function frontFromStroke(raw) {
       units.push(u); made.push(u);
     }
     if (!made.length) { hist.pop(); updUndo(); toast('Вдоль этой линии некуда поставить войска.'); return; }
-    if (ech === 'XX') groupFormations(o, made);
     fronts.push(f);
     toast('На линию фронта встали ' + made.length + ' ' + plural(made.length, 'отряд', 'отряда', 'отрядов') + ' (' + countries[o - 1].name + ', по ' + fmtUnitSize(unitSize) + ')' + (k === 2000 ? '. Линия длинная: отряды стоят реже, чем плечом к плечу' : ''));
   }
@@ -5893,8 +5912,9 @@ function drawFronts(c) {
     for (const p of P) { if (p.x < bx0) bx0 = p.x; if (p.x > bx1) bx1 = p.x; if (p.y < by0) by0 = p.y; if (p.y > by1) by1 = p.y; }
     if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1) continue;
     const col = rgb[f.owner] || [80, 80, 80], sel = f === selFront;
-    const path = new Path2D();
-    P.forEach((p, k) => { const x = p.x + p.nx * off, y = p.y + p.ny * off; k ? path.lineTo(x, y) : path.moveTo(x, y); });
+    // a stretch longer than the line's points can follow (a close zoom) is left out: there the units show the front
+    const path = new Path2D(), far = 90 / s;
+    P.forEach((p, k) => { const x = p.x + p.nx * off, y = p.y + p.ny * off; k && Math.hypot(p.x - P[k - 1].x, p.y - P[k - 1].y) < far ? path.lineTo(x, y) : path.moveTo(x, y); });
     c.strokeStyle = sel ? 'rgba(255,214,90,.95)' : 'rgba(255,255,255,.85)'; c.lineWidth = (sel ? 7 : 5) / s; c.stroke(path);
     c.strokeStyle = `rgb(${col[0] * .8 | 0},${col[1] * .8 | 0},${col[2] * .8 | 0})`; c.lineWidth = 2.6 / s; c.stroke(path);
     if (f.mode === 'attack') {
@@ -7614,7 +7634,7 @@ function deployFronts() {
       let ux = b.x + sx * back, uy = b.y + sy * back;
       if (fineOwner(ux, uy) !== side) { ux = b.x + sx * back * 3; uy = b.y + sy * back * 3; if (fineOwner(ux, uy) !== side) continue; }
       const type = k % 5 === 2 ? ARM : k % 7 === 4 ? ART : INF; k++;
-      const u = { x: ux, y: uy, era, type, owner: side, ech: 'XX', label: '' };
+      const u = { x: ux, y: uy, era, type, owner: side, ech: '•••', label: '' };   // a platoon: 20 m of front
       units.push(u); (placed.get(side) || placed.set(side, []).get(side)).push([u, { x: b.x, y: b.y, nx: sx, ny: sy }]);
     }
   }
@@ -7639,11 +7659,9 @@ function deployFronts() {
     // stretches: the walk breaks where the next unit is far away
     const runs = [[]];
     order.forEach((it, i) => { if (i && Math.hypot(it[0].x - order[i - 1][0].x, it[0].y - order[i - 1][0].y) > sp * 5) runs.push([]); runs[runs.length - 1].push(it); });
-    let nDiv = units.filter(u => u.owner === o && u.ech === 'XX' && isHier(u)).length;
     const gens = generals.filter(gn => gn.owner === o);
     let armyNo = 0;
     for (const run of runs) {
-      run.forEach(it => { it[0].label = formLabel(++nDiv, 'XX'); });
       for (let a = 0; a < run.length; a += 9) {
         const army = run.slice(a, a + 9);
         const fl = { id: frontSeq++, owner: o, mode: 'hold', pts: army.map(it => it[1]) };
@@ -7653,7 +7671,6 @@ function deployFronts() {
         const gn = gens[armyNo++];
         if (gn) army.forEach(it => { it[0].gen = gn.id; });
       }
-      groupFormations(o, run.map(it => it[0]));
     }
   }
   unitsChanged();
@@ -7665,7 +7682,7 @@ function deployNow() {
   if (!wars.length) { toast('Сейчас никто не воюет: сначала объявите войну — тогда появится линия фронта.'); return; }
   pushHist();
   const before = units.length, n = deployFronts() - before;
-  if (n > 0) toast('На линию фронта встали ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '. Плашка «Двигать» (E) — приказы.');
+  if (n > 0) toast('На линию фронта встали ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + '. Плашка «Двигать» (E) — приказы.');
   else { hist.pop(); updUndo(); toast('На видимой части карты нет линии фронта между воюющими странами.'); }
 }
 // troops for the fronts are the smallest there are: 20 m on the Earth, for fights over streets and blocks
@@ -7687,7 +7704,7 @@ async function startScenario(id, pl) {
       btn.textContent = 'Расставляю войска…';
       clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
       const n = deployFronts();
-      if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '. Плашка «Двигать» (E) — выделять и отдавать приказы.');
+      if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '. «Двигать» (E) — приказы, «Фронт» (G) — линии фронта.');
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
   } finally { btn.disabled = false; btn.textContent = 'В бой'; }
@@ -8039,7 +8056,7 @@ $('#hideCursor').addEventListener('change', e => { hideCursor = e.target.checked
 $('#warSel').addEventListener('change', renderWarPanel);
 $('#warGo').addEventListener('click', async () => {
   await applyWar($('#warSel').value);
-  if ($('#warTroops').checked && wars.length) { clearTimeout(settleT); maybeReload(); const n = deployFronts(); if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + '.'); }
+  if ($('#warTroops').checked && wars.length) { clearTimeout(settleT); maybeReload(); const n = deployFronts(); if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.'); }
 });
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
