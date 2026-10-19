@@ -320,6 +320,9 @@ main { container-type: size; container-name: stage; }
   padding: 5px 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 4px 18px rgb(0 0 0 / .12);
 }
 .sidepick { flex-wrap: wrap; row-gap: 6px; }
+.livebar .lsw { font-weight: 600; } .livebar .lsw b { font: 500 11px var(--f-mono); padding: 2px 6px; border-radius: 5px; background: var(--bg); color: var(--muted); }
+.livebar .lsw.on b { background: var(--accent); color: var(--accent-ink); } .livebar kbd { font: 600 9.5px var(--f-mono); opacity: .6; }
+.livebar .lch { opacity: .45; } .livebar .lch.on { opacity: 1; } .livebar .lch canvas { border-radius: 2px; }
 .sidepick .usize { flex-basis: 100%; display: flex; align-items: center; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
 .sidepick .usize button.ech { min-width: 30px; height: 30px; padding: 0 6px; justify-content: center; font: 700 10.5px var(--f-mono); letter-spacing: -.04em; border-color: var(--line); background: var(--bg); }
 .sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 7px); height: calc(var(--k) * 7px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
@@ -870,6 +873,7 @@ body:not(.nopanel) .status > #hint { display: none; }
   <canvas id="view"></canvas>
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
+  <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <button class="hcountry" id="hudCountry" title="Страны: выбрать, за кого играть (щелчок колёсиком по стране на карте — тоже)"><span class="hflag" id="hudFlag"></span><span class="hctext"><small>Играю за</small><b id="hudCName">—</b></span></button>
@@ -4021,6 +4025,7 @@ function warpStep() {
 // the area a border drag has touched so far, cleaned up when the button is released
 function growBox(b) {
   if (!b || !drag || b[2] <= b[0] || b[3] <= b[1]) return;
+  if (drag.live) liveFollow(drag.live, b);
   const u = drag.ub;
   drag.ub = u ? [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])] : b.slice();
 }
@@ -4417,6 +4422,7 @@ function collapseTick() {
     pk.inside = inside.length;
     if (pk.hrs < pocketHold(inside.length)) continue;
     takePocket(pk);
+    noteLosses(inside);
     if (inside.length) {
       units = units.filter(u => !inside.includes(u)); pruneForms();
       selUnits = selUnits.filter(u => !inside.includes(u));
@@ -4484,6 +4490,90 @@ function scheduleCommit() {
 }
 // called after every finished edit
 function edited() { if (geoStore) commitWindow(); computePockets(); renderCountries(); renderPockets(); updUndo(); scheduleSave(); if (typeof game !== 'undefined') { logPockets(); if (game.supply) updateSupply(); checkCities(); renderScore(); renderCityPanel(); } }
+
+// ---------- the live front ----------
+// With «Живой фронт» on, the troops standing at a border follow it while the border tool drags it: those whose land
+// is taken step back to the new line, those whose side gains land step up to it. Which arms follow is picked on the
+// bar over the map (all of them at first). Nothing marches: they stand where the border now is, on every step of
+// the drag, so they go with it as smoothly as the line itself.
+let liveFront = true, liveOff = new Set();            // read from the browser's storage once it is up (below)
+const liveType = u => !liveOff.has(u.type) && !immobile(u);
+// the units at a border now (an enemy's or a foreign land within a couple of their sizes), not marching or attacking
+function liveUnits() {
+  const out = [];
+  for (const u of units) {
+    if (!inWin(u) || u.order || u.atk || !liveType(u)) continue;
+    const rr = clamp(Math.ceil(bodyS(u) * 2.2), 2, 40), gx = Math.floor(u.x), gy = Math.floor(u.y), o = u.owner;
+    let at = false;
+    for (let y = gy - rr; y <= gy + rr && !at; y += Math.max(1, rr >> 3)) for (let x = gx - rr; x <= gx + rr; x += Math.max(1, rr >> 3)) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const q = own[y * W + x]; if (q && q !== o && !allied(q, o)) { at = true; break; }
+    }
+    if (at) out.push(u);
+  }
+  return out;
+}
+// after a step of the drag changed the box b: the units by it go to the nearest point of their border
+function liveFollow(list, b) {
+  for (const u of list) {
+    const S = bodyS(u), m = Math.max(S * 3, 30);
+    if (u.x < b[0] - m || u.x > b[2] + m || u.y < b[1] - m || u.y > b[3] + m) continue;
+    const o = u.owner, test = notFriend(o), back = u.ech === 'XX' ? S * .55 : fineGrid() ? S * 1.5 : Math.max(S * 1.5, .02);
+    const near = fineOwner(u.x, u.y) === o && nearestBorder(u.x, u.y, o, Math.max(2, back * 1.6), test);
+    if (near) continue;                              // still at its border, on its own side
+    const nb = nearestBorder(u.x, u.y, o, Math.max(40, S * 5), test) || nearestBorder(u.x, u.y, o, Math.max(120, S * 12), test);
+    if (!nb) continue;
+    // into own land, away from the border: the mean of the directions round the point that lead into it
+    let dx = 0, dy = 0;
+    for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6, cx = Math.cos(a), cy = Math.sin(a); if (fineOwner(nb.x + cx * back * 1.2, nb.y + cy * back * 1.2) === o) { dx += cx; dy += cy; } }
+    const l = Math.hypot(dx, dy);
+    if (!l) continue;
+    const nx = clamp(nb.x + dx / l * back, 0, W), ny = clamp(nb.y + dy / l * back, 0, H);
+    if (fineOwner(nx, ny) !== o) continue;
+    u.x = nx; u.y = ny;
+  }
+  requestDrawFast();
+}
+function setLiveFront(on, quiet) {
+  liveFront = on; LS.set('mezha-live', on ? '1' : '0');
+  renderLiveBar();
+  if (!quiet) toast(on ? 'Живой фронт: войска у границы идут за ней, когда вы её тянете' : 'Живой фронт выключен: войска стоят, граница двигается без них');
+}
+// the bar over the map with the border tool: the switch and the arms that follow
+function renderLiveBar() {
+  const box = $('#liveBar');
+  if (!box) return;
+  box.hidden = tool !== 'warp' || !W;
+  if (box.hidden) return;
+  box.textContent = '';
+  const sw = document.createElement('button'); sw.className = 'lsw' + (liveFront ? ' on' : ''); sw.setAttribute('aria-pressed', liveFront);
+  sw.title = 'Войска, стоящие у границы, идут за ней, когда вы её тянете (L)';
+  sw.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16c3-6 6 2 9-4s6 1 9-3"/><rect x="5" y="16" width="4" height="4"/><rect x="14" y="13" width="4" height="4"/></svg>';
+  sw.append('Живой фронт '); const st = document.createElement('b'); st.textContent = liveFront ? 'вкл' : 'выкл'; sw.append(st);
+  const kb = document.createElement('kbd'); kb.textContent = 'L'; sw.append(kb);
+  sw.addEventListener('click', () => setLiveFront(!liveFront));
+  box.append(sw);
+  if (!liveFront) return;
+  // the arms on the map (or of the era, with none placed yet): a click switches one, a double click leaves only it
+  const seen = new Map();
+  for (const u of units) if (!seen.has(u.type)) seen.set(u.type, u);
+  if (!seen.size) for (const d of (ERAS[era] || ERAS.ww2).units) seen.set(d[0], { era, type: d[0], owner: active || 1 });
+  const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = 'Идут за границей:'; box.append(lbl);
+  for (const [type, u] of seen) {
+    const def = unitDef(u).def;
+    if (def[2] === 'tower') continue;
+    const b = document.createElement('button'); b.className = 'lch' + (liveOff.has(type) ? '' : ' on'); b.setAttribute('aria-pressed', !liveOff.has(type));
+    b.title = def[1] + (liveOff.has(type) ? ' — стоят на месте' : ' — идут за границей') + '. Щелчок — переключить, двойной щелчок — только этот род войск';
+    const ic = document.createElement('canvas'); ic.width = ic.height = 18 * dpr; ic.style.width = ic.style.height = '18px';
+    ic.getContext('2d').drawImage(ctrSquare(u, 18 * dpr), 0, 0);
+    b.append(ic, def[1]);
+    b.addEventListener('click', () => { liveOff.has(type) ? liveOff.delete(type) : liveOff.add(type); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); });
+    b.addEventListener('dblclick', () => { liveOff = new Set([...seen.keys()].filter(t => t !== type)); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); toast('За границей идёт только: ' + def[1]); });
+    box.append(b);
+  }
+  const all = document.createElement('button'); all.textContent = 'Все'; all.title = 'Все рода войск идут за границей';
+  all.addEventListener('click', () => { liveOff.clear(); LS.set('mezha-live-off', '[]'); renderLiveBar(); }); box.append(all);
+}
 
 // ---------- troops ----------
 // Glyphs are drawn in a frame centred on 0,0; w and h are the frame's half-width and half-height.
@@ -4989,7 +5079,7 @@ function hitUnit(g) {
   const it = hitShown(g);
   return it ? it.unit || it.leaves[0] : null;
 }
-function unitsChanged() { pruneForms(); pruneFronts(); renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
+function unitsChanged() { if (tool === 'warp') renderLiveBar(); pruneForms(); pruneFronts(); renderUnitPanel(); renderGenerals(); renderGenEditor(); updUndo(); scheduleSave(); requestDraw(); }
 function selectUnit(u) { setSel(u ? [u] : [], u); }
 function setSel(list, primary) {
   if (tool === 'units' && unitMode === 'move') setTimeout(renderSidePick);
@@ -5427,8 +5517,10 @@ function battleTick() {
   if (game.ai) aiFronts(h);
   if (goalCheck()) startMarch();
   if (game.calendar) gameDate += hoursPerTick * 3600e3;
+  if (game.reinforce) reinforceTick(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
+    noteLosses(dead);
     units = units.filter(u => hpOf(u) > 0); pruneForms();
     selUnits = selUnits.filter(u => !dead.includes(u));
     if (dead.includes(selUnit)) selUnit = selUnits[selUnits.length - 1] || null;
@@ -5505,9 +5597,10 @@ const GAME_SYSTEMS = [
   ['ai', 'ИИ противника', 'Во время боёв чужие отряды сами наступают на ваши войска и города.'],
   ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.'],
   ['pocketNote', 'Уведомления о котлах', 'Сообщения и записи в хронике, когда замыкается кольцо и когда котёл сдаётся. Выключите — котлы всё так же считаются, подсвечиваются и сдаются, но молча.'],
+  ['reinforce', 'Подкрепления', 'Армия, потерявшая дивизии в котле или в бою, получает новые: по одной в сутки они выходят из тыла на опустевший участок фронта, пока армия не станет такой, как была.'],
   ['collapse', 'Ликвидация котлов', 'Пока идут бои, окружённый котёл держится три дня и ещё по полтора дня на каждый отряд внутри, потом сдаётся: земля отходит окружившим, отряды попадают в плен.'],
 ];
-let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: true, log: true, hier: true, collapse: true, pocketNote: true };
+let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 // front lines (see «front lines» below): { id, owner, mode: 'hold' | 'attack', pts: [{ x, y, nx, ny }] on the border, n toward own land }
@@ -5804,8 +5897,9 @@ function marchFrame(t) {
     any = true;
     if (!inWin(u) || u.rest || u.retreat > 0) continue;               // resting after a battle, or falling back
     let sp = marchCells(u) * (SPEED[unitDef(u).def[2]] || 1) * (u.oos && game.supply ? .6 : 1) * dt;
-    // an offensive: the unit fights where it stands and goes on once the way is clear
-    if (enemyContact(u)) { u.fighting = true; continue; }
+    // an offensive: the unit fights where it stands and goes on once the way is clear (a march by its own land
+    // goes on along the front)
+    if (u.atk && enemyContact(u)) { u.fighting = true; continue; }
     // along the route: on to the next point, carrying over what is left of this frame's step
     for (let guard = 0; guard < 8 && u.order; guard++) {
       const dx = u.order.x - u.x, dy = u.order.y - u.y, d = Math.hypot(dx, dy);
@@ -6312,7 +6406,8 @@ function frontOrders(f, force, all) {
 }
 function pruneFronts() {
   const used = new Set(); for (const u of units) if (u.fl) used.add(u.fl);
-  fronts = fronts.filter(f => used.has(f.id) && countries[f.owner - 1]);
+  // a line whose army was lost (a pocket, a battle) stays while its reinforcements are on the way
+  fronts = fronts.filter(f => (used.has(f.id) || (f.lost > 0 && game.reinforce)) && countries[f.owner - 1]);
   const ids = new Set(fronts.map(f => f.id));
   for (const u of units) if (u.fl && !ids.has(u.fl)) delete u.fl;
   if (selFront && !ids.has(selFront.id)) selFront = null;
@@ -6651,6 +6746,59 @@ function aiFronts(h) {
   }
 }
 let aiClock = 0;
+// --- reinforcements ---
+// Divisions of a line lost in a pocket or a battle are counted on the line; while it is short of them, a new division
+// comes every day of play from deep behind the line to the stretch of it that stands emptiest, so a front
+// broken by a pocket is held thinly at first and is as strong as before after some days.
+function noteLosses(list) {
+  for (const u of list) { const f = u.fl && frontById(u.fl); if (f) f.lost = (f.lost || 0) + 1; }
+}
+function reinforceTick(h) {
+  for (const f of fronts) {
+    if (!(f.lost > 0) || !countries[f.owner - 1]) continue;
+    f.rclock = (f.rclock || 0) + h;
+    if (f.rclock < 24) continue;
+    f.rclock = 0;
+    if (reinforce(f)) {
+      f.lost--;
+      if (!f.rsent) { f.rsent = true; const g = f.gen && genById(f.gen); logEvent((g ? 'Армия ' + g.name : ownerName(f.owner)) + ': на фронт идут подкрепления — ' + (f.lost + 1) + ' ' + plural(f.lost + 1, 'дивизия', 'дивизии', 'дивизий'), f.owner); }
+      if (!f.lost) delete f.rsent;
+    }
+  }
+}
+function reinforce(f) {
+  if (f.kind === 'front' ? !(f.guides && tracePath(f)) : !(f.pts && f.pts.length > 1)) return false;
+  const P = f.pts, ls = frontUnits(f), o = f.owner;
+  // the emptiest stretch: the point of the line farthest from every unit of the side
+  let best = null, bd = -1;
+  const step = Math.max(1, Math.floor(P.length / 80));
+  for (let i = 0; i < P.length; i += step) {
+    const p = P[i];
+    let d = Infinity;
+    for (const u of ls) { const t = u.order ? (u.route && u.route.length ? u.route[u.route.length - 1] : u.order) : u, e = Math.hypot(t.x - p.x, t.y - p.y); if (e < d) d = e; }   // where it stands or is going
+    if (d === Infinity) { forNear({ x: p.x, y: p.y }, unitCellsAt(p.y) * 6, v => { if (v.owner === o) { const e = Math.hypot(v.x - p.x, v.y - p.y); if (e < d) d = e; } }); if (d === Infinity) d = 1e9 - i * 1e3 * ((f.rsentN || 0) % 3 + 1); }
+    if (d > bd) { bd = d; best = p; }
+  }
+  if (!best) return false;
+  // from deep behind it: the farthest of a few places back into own land
+  const S = unitCellsAt(best.y);
+  let from = null;
+  for (const k of [8, 5, 3, 1.5]) { const x = best.x + best.nx * S * k, y = best.y + best.ny * S * k; if (x > 0 && y > 0 && x < W && y < H && fineOwner(x, y) === o) { from = { x, y }; break; } }
+  if (!from) return false;
+  // of the arm most of the line is, named after the last of its country's divisions
+  const kinds = new Map(); for (const u of ls) kinds.set(u.type, (kinds.get(u.type) || 0) + 1);
+  const type = kinds.size ? [...kinds].sort((a, b) => b[1] - a[1])[0][0] : (ERAS[era] || ERAS.ww2).units[0][0];
+  const ref = ls[0] || units.find(u => u.owner === o) || { era, ech: 'XX' };
+  const u = { x: from.x, y: from.y, era: ref.era || era, type, owner: o, ech: ref.ech || 'XX', label: '', fl: f.id, ft: .5, org: 45 };
+  if (f.gen && genById(f.gen)) u.gen = f.gen;
+  if (u.ech === 'XX') { let n = 0; for (const v of units) if (v.owner === o && v.label) { const m = /^(\d+)-я/.exec(v.label); if (m) n = Math.max(n, +m[1]); } nameDivision(u, n + 1); }
+  units.push(u);
+  f.rsentN = (f.rsentN || 0) + 1;
+  const back = u.ech === 'XX' ? S * .55 : S * 1.5;
+  routeTo(u, { x: best.x + best.nx * back, y: best.y + best.ny * back }); u.fo = true;
+  startMarch();
+  return true;
+}
 function deleteFront(f) {
   if (!f) return;
   pushHist();
@@ -7237,6 +7385,7 @@ function drawSpawnGhost(c) {
 }
 function setTool(t) {
   tool = t;
+  renderLiveBar();
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   $('#fSize').hidden = !(t in sizes);
   if (t in sizes) { $('#sizeLabel').textContent = SIZE_LABEL[t]; setBrush(sizes[t]); }
@@ -7311,7 +7460,7 @@ cv.addEventListener('pointerdown', e => {
     const o = inside ? own[gy * W + gx] : 0;
     if (warpMode === 'push' && !o) { toast('Натиск начинают с земли наступающей страны.'); return; }
     pushHist(); own0.set(own);
-    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null };
+    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null, live: liveFront ? liveUnits() : null };
     if (hideCursor) cv.style.cursor = 'none';
     $('#hint').textContent = warpMode === 'smooth' ? 'Сглаживаете линию фронта.' : o ? (warpMode === 'push' ? 'Наступает: ' : 'Тянете в пользу: ') + countries[o - 1].name : HINTS.warp;
     if (warpMode !== 'rubber') warpStep();
@@ -7608,6 +7757,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
+  if (e.code === 'KeyL') { setLiveFront(!liveFront); return; }
   if (e.code === 'KeyP') { setBattles(!battlesOn); return; }
   if (e.code === 'Tab' && tool === 'units' && countries.length) {
     e.preventDefault();
@@ -8193,7 +8343,7 @@ const WARP_HINT = {
 const WARP_NAMES = { rubber: 'Резина', push: 'Натиск', smooth: 'Сгладить' };
 function setWarpMode(m, quiet) {
   if (!WARP_HINT[m]) return;
-  warpMode = m; HINTS.warp = WARP_HINT[m];
+  warpMode = m; HINTS.warp = WARP_HINT[m] + ' «Живой фронт» (L) над картой: войска у границы идут за ней.';
   document.querySelectorAll('#warpModes button').forEach(b => { b.classList.toggle('on', b.dataset.wm === m); b.setAttribute('aria-checked', b.dataset.wm === m); });
   if (tool === 'warp') { $('#hint').textContent = HINTS.warp; renderToolHead('warp'); }
   document.querySelectorAll('#setGrid [data-wm]').forEach(b => b.classList.toggle('on', b.dataset.wm === m));
@@ -8494,6 +8644,7 @@ function scenarioPreview(w) {
 // holds a stretch of 4–15 km (more on a very long front, so that there are never more than the setting); each
 // side's divisions are shared out into armies of up to 24, every army under a general, holding its own stretch as a
 // front line. «Плотно» in the settings puts 20 m units shoulder to shoulder instead, for fights over streets.
+liveFront = LS.get('mezha-live', '1') === '1'; try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
 const denseDeploy = () => deployCap >= 100000;
 // a division's name: its number in its army list and its arm
