@@ -5658,7 +5658,7 @@ function issueRoute(pts, append) {
     : (many ? 'Отряды выступили: ' + list.length : 'Отряд выступил'));
   startMarch();
 }
-const stopOrders = u => { if (!u.fl) delete u.fdir; delete u.order; delete u.route; delete u.roff; delete u.fighting; delete u.atk; delete u.grp; delete u.gk; delete u.adv; delete u.redeploy; };
+const stopOrders = u => { if (!u.fl) delete u.fdir; delete u.fo; delete u.order; delete u.route; delete u.roff; delete u.fighting; delete u.atk; delete u.grp; delete u.gk; delete u.adv; delete u.redeploy; };
 function startMarch() { if (!marchRaf) { marchLast = performance.now(); marchRaf = requestAnimationFrame(marchFrame); } armIdleCursor(); }
 function enemyContact(u) {
   let hit = false;
@@ -6155,7 +6155,7 @@ function frontOrders(f, force, all) {
     } else if (force || Math.hypot(u.x - sl.x, u.y - sl.y) > Math.max(S * 3, 3)) {
       // the line is traced along cells: a unit within a cell or two of its place is where it should be
       if (orderBudget-- <= 0) return;
-      routeTo(u, sl); n++;
+      routeTo(u, sl); u.fo = true; n++;
     }
   });
   if (f.pending && (f.pendingIdx || 0) >= k) { f.pending = false; f.pendingIdx = 0; }
@@ -6188,19 +6188,23 @@ function holdBorder(f, list, dirty) {
     if (!inWin(u) || u.order || u.fighting) continue;
     if (dirty !== true && (u.x < dirty[0] - m || u.x > dirty[2] + m || u.y < dirty[1] - m || u.y > dirty[3] + m)) continue;
     const o = u.owner, gx = Math.floor(u.x), gy = Math.floor(u.y);
-    // the enemy within two cells and own land under the unit: still at the border
+    // the enemy within a few of the unit's sizes (at least two cells) and own land under the unit: still at the
+    // border (up close, where a cell is a couple of metres, a unit 30 m back from the line is at it)
+    const rr = clamp(Math.ceil(bodyS(u) * 3), 2, 40);
     let enemy = false;
-    for (let y = gy - 2; y <= gy + 2 && !enemy; y++) for (let x = gx - 2; x <= gx + 2; x++) if (x >= 0 && y >= 0 && x < W && y < H && test(own[y * W + x])) { enemy = true; break; }
+    for (let y = gy - rr; y <= gy + rr && !enemy; y++) for (let x = gx - rr; x <= gx + rr; x++) if (x >= 0 && y >= 0 && x < W && y < H && test(own[y * W + x])) { enemy = true; break; }
     const mine = cellOwner(u.x, u.y) === o || (enemy && fineOwner(u.x, u.y) === o);
     if (enemy && mine) continue;
     holdBudget--;
-    const b = nearestBorder(u.x, u.y, o, 30, test);
+    const b = nearestBorder(u.x, u.y, o, Math.max(30, rr * 3), test);
     if (!b) continue;
     // a little back from the border into own land, across from where the enemy is
     const S = bodyS(u), back = fineGrid() ? S * 1.5 : Math.max(S * 1.5, .02);
     let dx = u.x - b.x, dy = u.y - b.y, d = Math.hypot(dx, dy);
     if (!mine || d < 1e-6) { const p = fineOwner(b.x + .3, b.y) === o ? [1, 0] : fineOwner(b.x - .3, b.y) === o ? [-1, 0] : fineOwner(b.x, b.y + .3) === o ? [0, 1] : [0, -1]; dx = p[0]; dy = p[1]; d = 1; }
-    routeTo(u, { x: b.x + dx / d * back, y: b.y + dy / d * back });
+    const t = { x: b.x + dx / d * back, y: b.y + dy / d * back };
+    if (Math.hypot(t.x - u.x, t.y - u.y) < S) continue;            // already there
+    routeTo(u, t); u.fo = true;
   }
 }
 // the line as shown: through the units of the front in their order along it (thinned to a few hundred points and
@@ -6242,7 +6246,18 @@ function frontTick() {
     else if (f.mode === 'attack' && f.kind !== 'defense') n += frontOrders(f, false, list);
     else if (f.kind === 'defense') { if (f.k !== list.length) n += frontOrders(f, false, list); }
     else {
-      if (dirty) { const before = holdBudget; holdBorder(f, list, dirty); n += before - holdBudget; }
+      if (dirty) {
+        // the army still on its way: the line moves with the border, and so do the places they are going to
+        const going = list.filter(u => u.fo && u.order);
+        if (going.length && f.guides && f.pts && (dirty === true || f.pts.some(p => p.x >= dirty[0] - 8 && p.x <= dirty[2] + 8 && p.y >= dirty[1] - 8 && p.y <= dirty[3] + 8)) && tracePath(f)) {
+          const L = arcs(f.pts), k = list.length, idx = new Map(list.slice().sort((a, b) => (a.ft || 0) - (b.ft || 0)).map((u, j) => [u, j]));
+          for (const u of going) {
+            const sl = lineSlot(f, L, idx.get(u), k), last = u.route && u.route.length ? u.route[u.route.length - 1] : u.order;
+            if (Math.hypot(sl.x - last.x, sl.y - last.y) > Math.max(bodyS(u) * 2, 1)) { routeTo(u, sl); u.fo = true; n++; }
+          }
+        }
+        const before = holdBudget; holdBorder(f, list, dirty); n += before - holdBudget;
+      }
       f.k = list.length;
     }
     frontView(f, list);
