@@ -322,7 +322,7 @@ main { container-type: size; container-name: stage; }
 .sidepick { flex-wrap: wrap; row-gap: 6px; }
 .sidepick .usize { flex-basis: 100%; display: flex; align-items: center; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
 .sidepick .usize button.ech { min-width: 30px; height: 30px; padding: 0 6px; justify-content: center; font: 700 10.5px var(--f-mono); letter-spacing: -.04em; border-color: var(--line); background: var(--bg); }
-.sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 9px); height: calc(var(--k) * 6px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
+.sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 7px); height: calc(var(--k) * 7px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
 .sidepick .usize button.ech.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sidepick .usize button.pc { min-width: 34px; height: 30px; padding: 0 7px; justify-content: center; font: 700 11px var(--f-mono); border-color: var(--line); background: var(--bg); }
 .sidepick .usize button.pc.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -4562,10 +4562,11 @@ function framePath(c, frame, w, h) {
   } else c.rect(-w, -h, w * 2, h * 2);
 }
 // Draws one troop marker at its map position; S is the frame height in map pixels.
+// Every unit is one shape, a square (its kind is told by the sign inside it, its size by the mark above).
 function drawUnit(c, u, S, selected) {
-  const { frame, def } = unitDef(u);
+  const { def } = unitDef(u), frame = 'square';
   const col = rgb[u.owner] || [140, 140, 140];
-  const h = S / 2, w = S * .75, ink = '#1b2028', bg = tint(col, .35);
+  const h = S / 2, w = S / 2, ink = '#1b2028', bg = tint(col, .35);
   c.save(); c.translate(u.x, u.y);
   c.lineJoin = 'round'; c.lineCap = 'round';
   framePath(c, frame, w, h);
@@ -4630,7 +4631,7 @@ function unitSprite(u, P, sel) {
   const key = unitKey(u, P, sel), S = P;
   let sp = spriteCache.get(key);
   if (sp) return sp;
-  const h = S / 2, w = S * .75;
+  const h = S / 2, w = S / 2;
   let lw = 0;
   if (u.label) { measureCtx.font = `600 ${S * .38}px ${FONT_UI}`; lw = measureCtx.measureText(u.label).width + S * .3; }
   const left = Math.max(w + S * .5, lw / 2), top = h + S * .8, bottom = h * 1.2 + S * 1.05;
@@ -4832,7 +4833,7 @@ function layoutTree() {
 }
 function hitShown(g) {
   for (let k = shown.length - 1; k >= 0; k--) {
-    const it = shown[k], S = drawS(it.S), h = S / 2, w = S * .75;
+    const it = shown[k], S = drawS(it.S), h = S / 2, w = S / 2;
     if (Math.abs(g.x - it.x) <= w && Math.abs(g.y - it.y) <= h * 1.2) return it;
   }
   return null;
@@ -4904,9 +4905,12 @@ function drawUnitsFast(c) {
     // reuses a few cached pictures instead of painting new ones every frame
     const px = Math.min(700, S * zoom), pq = Math.pow(2, Math.round(Math.log2(Math.max(px, 2)) * 6) / 6), q = pq / S;
     const sp = unitSprite(u, pq, sel);
+    c.globalAlpha = sel ? .95 : UNIT_ALPHA;                    // see-through: the map shows under the troops
     c.drawImage(sp.c, it.x - sp.left / q, it.y - sp.top / q, sp.c.width / q, sp.c.height / q);
   }
+  c.globalAlpha = 1;
 }
+const UNIT_ALPHA = .62;
 // The dots of small units, painted straight into the pixels of a screen-sized picture: hundreds of thousands of
 // them cost a few milliseconds. The picture is painted again only when a unit, the view or the selection changes.
 let dotCv = null, dotSig = '', dotMark = null;
@@ -4940,14 +4944,14 @@ function drawDots(c, selSet) {
     for (let k = 0; k < list.length; k++) if (keep[k]) fill(xs[k] - h, ys[k] - h, d, keep[k] === 2 ? selCol : cols[list[k].owner] || cols[0]);
     dc.putImageData(img, 0, 0);
   }
-  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(dotCv, 0, 0); c.restore();
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = UNIT_ALPHA + .1; c.drawImage(dotCv, 0, 0); c.restore();
 }
 function drawUnits(c, marks) { if (showUnits) for (const u of units) drawUnit(c, u, drawS(unitS(u)), marks && targets().includes(u) && tool === 'units'); }
 function hitUnit(g) {
   if (!showUnits) return null;
   if (hierOn() && forms.length) { const it = hitShown(g); return it ? it.unit || it.leaves[0] : null; }
   for (let k = units.length - 1; k >= 0; k--) {
-    const u = units[k], S = drawS(unitS(u)), h = S / 2, w = S * .75;
+    const u = units[k], S = drawS(unitS(u)), h = S / 2, w = S / 2;
     if (!isVisible(u)) continue;
     if (Math.abs(g.x - u.x) <= w && Math.abs(g.y - u.y) <= h * 1.2) return u;
   }
