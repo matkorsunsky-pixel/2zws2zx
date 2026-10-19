@@ -322,7 +322,7 @@ main { container-type: size; container-name: stage; }
 .sidepick { flex-wrap: wrap; row-gap: 6px; }
 .livebar .lsw { font-weight: 600; } .livebar .lsw b { font: 500 11px var(--f-mono); padding: 2px 6px; border-radius: 5px; background: var(--bg); color: var(--muted); }
 .livebar .lsw.on b { background: var(--accent); color: var(--accent-ink); } .livebar kbd { font: 600 9.5px var(--f-mono); opacity: .6; }
-.livebar .lch { opacity: .45; } .livebar .lch.on { opacity: 1; } .livebar .lch canvas { border-radius: 2px; }
+.livebar .lch { opacity: .45; padding: 4px 6px; } .livebar .lch.on { opacity: 1; } .livebar .lch canvas { border-radius: 2px; }
 .sidepick .usize { flex-basis: 100%; display: flex; align-items: center; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
 .sidepick .usize button.ech { min-width: 30px; height: 30px; padding: 0 6px; justify-content: center; font: 700 10.5px var(--f-mono); letter-spacing: -.04em; border-color: var(--line); background: var(--bg); }
 .sidepick .usize button.ech::before { content: ''; width: calc(var(--k) * 7px); height: calc(var(--k) * 7px); border: 1.5px solid currentColor; border-radius: 2px; margin-right: 4px; opacity: .55; flex: none; }
@@ -614,6 +614,7 @@ body:not(.nopanel) .status > #hint { display: none; }
               <button data-wm="push" role="radio" title="Круг как бульдозер: всё, по чему он прошёл, занимает страна, с чьей земли вы начали. Земля в тылу не растягивается"><b>Натиск</b><small>занимать</small></button>
               <button data-wm="smooth" role="radio" title="Выпрямляет рваную линию фронта, убирает щели, занозы и точки. Берега не трогает"><b>Сгладить</b><small>чистить</small></button>
             </div>
+            <label class="check" id="liveRow"><input type="checkbox" id="liveChk"><span><b>Живой фронт</b> — плотная цепь войск обеих сторон вдоль границы; когда тянете границу, войска идут за ней (L)</span></label>
         <label for="size" id="sizeLabel">Радиус захвата</label><output id="sizeOut">90 px</output>
         <div class="sizer">
           <button id="sizeDown" title="Уменьшить ( [ )" aria-label="Уменьшить радиус">−</button>
@@ -1126,6 +1127,7 @@ let toastT = 0;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 function addDirty(x0, y0, x1, y1) {
   vecVersion++;
+  if (liveFront && liveDirty.length < 64) liveDirty.push([x0, y0, x1, y1]);
   markFrontDirty(x0, y0, x1, y1);          // the front lines look again at the land that changed
   if (preview) previewGrow(x0, y0, x1, y1);
   // merge with a region it overlaps (or nearly touches); otherwise keep it separate
@@ -2055,7 +2057,7 @@ function geoBack() {
   const outside = JSON.parse(prev.outside);
   const gens = generals;
   setMap(null, prev.W, prev.H, prev.geo);
-  own.set(prev.own);
+  liveEpoch++; own.set(prev.own);
   resampleOwn(curOwn, curExt, cW, cH, own, prev.geo, prev.W, prev.H, true);   // detailed edits flow back
   units = outside.units.concat(moved.units); cities = outside.cities.concat(moved.cities); arrows = outside.arrows.concat(moved.arrows); generals = gens; fronts = []; pruneFronts();
   afterChange(); saveImage(); renderGeoPanel(); fit();
@@ -2396,6 +2398,7 @@ function pushDown(l, c) {
 }
 // fill a grid of level l starting at (cx0, cy0) from the store
 function readGrid(l, cx0, cy0, w, h, dst) {
+  if (dst === own) liveEpoch++;
   const tx0 = Math.floor(cx0 / TS), tx1 = Math.floor((cx0 + w - 1) / TS), ty0 = Math.floor(cy0 / TS), ty1 = Math.floor((cy0 + h - 1) / TS);
   for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
     const b = tileBlock(l, tx, ty);
@@ -3406,6 +3409,7 @@ function recalcWars() {
     if (on) { warM[(a << 8) | b] = 1; warM[(b << 8) | a] = 1; }
   }
   vecVersion++;                        // front lines are drawn between countries at war only
+  liveEpoch++;
 }
 const atWar = (a, b) => warM[((a & 255) << 8) | (b & 255)] === 1;
 // whether the border tools move a border only between countries at war (on), or anywhere (map editing)
@@ -3779,6 +3783,7 @@ function drawMap() {
   visCache = new Map();
   drawCities(ctx, true);
   drawArrows(ctx, true);
+  drawLiveChain(ctx);
   drawFronts(ctx);
   drawOrders(ctx);
   drawUnitsFast(ctx);
@@ -4496,7 +4501,131 @@ function edited() { if (geoStore) commitWindow(); computePockets(); renderCountr
 // is taken step back to the new line, those whose side gains land step up to it. Which arms follow is picked on the
 // bar over the map (all of them at first). Nothing marches: they stand where the border now is, on every step of
 // the drag, so they go with it as smoothly as the line itself.
-let liveFront = true, liveOff = new Set();            // read from the browser's storage once it is up (below)
+let liveFront = false, liveOff = new Set();            // read from the browser's storage once it is up (below)
+// The chain of the live front: troops of both sides shoulder to shoulder along every border at war (every border
+// between countries, while nobody is at war), a few screen pixels apart on any zoom, so a front of thousands of
+// kilometres is thousands of soldiers at once. They are not units of the battlefield: each is where the border is,
+// found from the cells of the map, so they stand on it whatever moves it. The map is cut into square blocks a
+// spacing across (a power of two of cells for each zoom); a block the border runs through holds one soldier of each
+// side, at the mean of its border edges, set off from the line toward its own side. The blocks are counted once for a
+// zoom and again only where the land changed, and a soldier glides to its new place when the border moves.
+let liveEpoch = 0, liveDirty = [], liveLevels = new Map(), liveKey = '';
+let liveDense = clamp(+(typeof localStorage !== 'undefined' && localStorage.getItem('mezha-live-dense')) || 1, 0, 2);
+// «редко», «плотно», «очень плотно»: the spacing along the border on the screen, the ranks on each side, the size
+const LIVE_PX = [14, 10, 8], LIVE_RANKS = [1, 2, 3], LIVE_SIZE = [10, 9, 8];
+const livePair = new Uint8Array(256 * 256);
+function livePairs() {
+  livePair.fill(0);
+  const n = Math.min(countries.length, 250);
+  let war = false;
+  for (let i = 0; i < warM.length && !war; i++) if (warM[i]) war = true;
+  for (let a = 1; a <= n; a++) for (let b = 1; b <= n; b++) if (a !== b && (war ? atWar(a, b) : !allied(a, b))) livePair[(a << 8) | b] = 1;
+}
+// the border edges of cells x0..x1, y0..y1 into the blocks of level k
+function liveScan(L, k, x0, y0, x1, y1) {
+  const m = L.map, old = L.old;
+  for (let y = y0; y < y1; y++) {
+    const row = y * W, by = y >> k;
+    const lastX = x1 >= W ? W - 1 : x1, lastY = y + 1 >= H;
+    for (let x = x0, i = row + x0; x < x1; x++, i++) {
+      const a = own[i];
+      if (!a || (x < lastX && !lastY && own[i + 1] === a && own[i + W] === a)) continue;
+      for (let d = 0; d < 2; d++) {
+        let q, ex, ey, nx, ny;
+        if (d === 0) { if (x + 1 >= W) continue; q = own[i + 1]; ex = x + 1; ey = y + .5; nx = 1; ny = 0; }
+        else { if (y + 1 >= H) continue; q = own[i + W]; ex = x + .5; ey = y + 1; nx = 0; ny = 1; }
+        if (q === a || !q || !livePair[(a << 8) | q]) continue;
+        const key = (x >> k) * 65536 + by;
+        let r = m.get(key);
+        if (!r) { const o = old && old.get(key); r = { a, b: q, sx: 0, sy: 0, n: 0, nx: 0, ny: 0, dx: o ? o.dx : NaN, dy: o ? o.dy : NaN }; m.set(key, r); }
+        if (r.a === a && r.b === q) { r.sx += ex; r.sy += ey; r.n++; r.nx += nx; r.ny += ny; }
+        else if (r.a === q && r.b === a) { r.sx += ex; r.sy += ey; r.n++; r.nx -= nx; r.ny -= ny; }
+      }
+    }
+  }
+}
+// the blocks of level k, counted tile by tile (256 cells across) as the view needs them, a few milliseconds a frame:
+// a new window or zoom shows its chain over a few frames instead of stopping one
+const LIVE_T = 256;
+function liveLevel(k) {
+  const key = [W, H, win ? win.L + ',' + win.cx0 + ',' + win.cy0 : '', liveEpoch, countries.length].join();
+  if (key !== liveKey) { liveKey = key; liveLevels = new Map(); liveDirty = []; livePairs(); }
+  const tw = Math.ceil(W / LIVE_T), th = Math.ceil(H / LIVE_T);
+  // the land changed somewhere: those blocks of every level counted again, in the tiles already counted (a soldier
+  // keeps where it was shown, to glide from there)
+  if (liveDirty.length) {
+    const ds = liveDirty; liveDirty = [];
+    for (const [k2, L] of liveLevels) for (const d of ds) {
+      const s_ = 1 << k2;
+      const cx0 = Math.max(0, (Math.floor(d[0] / s_) - 1) * s_), cy0 = Math.max(0, (Math.floor(d[1] / s_) - 1) * s_);
+      const cx1 = Math.min(W, (Math.ceil(d[2] / s_) + 1) * s_), cy1 = Math.min(H, (Math.ceil(d[3] / s_) + 1) * s_);
+      for (let ty = Math.floor(cy0 / LIVE_T); ty * LIVE_T < cy1; ty++) for (let tx = Math.floor(cx0 / LIVE_T); tx * LIVE_T < cx1; tx++) {
+        if (!L.done[ty * tw + tx]) continue;
+        const x0 = Math.max(cx0, tx * LIVE_T), y0 = Math.max(cy0, ty * LIVE_T), x1 = Math.min(cx1, (tx + 1) * LIVE_T, W), y1 = Math.min(cy1, (ty + 1) * LIVE_T, H);
+        const old = new Map();
+        for (let bx = x0 >> k2; bx < Math.ceil(x1 / s_); bx++) for (let by = y0 >> k2; by < Math.ceil(y1 / s_); by++) { const kk = bx * 65536 + by, r = L.map.get(kk); if (r) { old.set(kk, r); L.map.delete(kk); } }
+        L.old = old; liveScan(L, k2, x0, y0, x1, y1); L.old = null;
+      }
+    }
+  }
+  let L = liveLevels.get(k);
+  if (!L) { L = { map: new Map(), old: null, done: new Uint8Array(tw * th), tw }; liveLevels.set(k, L); }
+  return L;
+}
+// count the tiles of the cells x0..x1, y0..y1 not counted yet, until the time runs out; false if some are left
+function liveFill(L, k, x0, y0, x1, y1, until) {
+  const tw = L.tw;
+  for (let ty = Math.max(0, Math.floor(y0 / LIVE_T)); ty * LIVE_T < Math.min(y1, H); ty++) for (let tx = Math.max(0, Math.floor(x0 / LIVE_T)); tx * LIVE_T < Math.min(x1, W); tx++) {
+    if (L.done[ty * tw + tx]) continue;
+    if (performance.now() > until) return false;
+    L.done[ty * tw + tx] = 1;
+    liveScan(L, k, tx * LIVE_T, ty * LIVE_T, Math.min(W, (tx + 1) * LIVE_T), Math.min(H, (ty + 1) * LIVE_T));
+  }
+  return true;
+}
+// the kinds of soldiers in the chain: the land arms of the era picked on the bar
+function liveKinds() {
+  const out = [];
+  for (const d of (ERAS[era] || ERAS.ww2).units) if (!liveOff.has(d[0]) && !['tower', 'hq', 'ship', 'sub', 'galley', 'plane', 'biplane', 'heli', 'drone', 'missile', 'train'].includes(d[2])) out.push(d[0]);
+  return out.length ? out : [(ERAS[era] || ERAS.ww2).units[0][0]];
+}
+function drawLiveChain(c) {
+  if (!liveFront || !own || !W || !showUnits) return;
+  const P = LIVE_PX[liveDense], k = clamp(Math.ceil(Math.log2(P / view.s)), 0, 8), L = liveLevel(k), s_ = 1 << k;
+  const r = stage.getBoundingClientRect(), vs = view.s;
+  const bx0 = Math.floor((-view.x / vs) / s_) - 1, by0 = Math.floor((-view.y / vs) / s_) - 1, bx1 = Math.ceil(((r.width - view.x) / vs) / s_) + 1, by1 = Math.ceil(((r.height - view.y) / vs) / s_) + 1;
+  const filled = liveFill(L, k, bx0 * s_, by0 * s_, (bx1 + 1) * s_, (by1 + 1) * s_, performance.now() + 5);
+  const mpx = LIVE_SIZE[liveDense], half = mpx / 2, off = mpx * .62, ranks = LIVE_RANKS[liveDense], kinds = liveKinds(), dev = Math.round(mpx * dpr);
+  const sprite = (o, t) => ctrSquare({ era, type: t, owner: o }, dev);
+  c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.globalAlpha = .82;
+  let moving = false;
+  const each = (key, rr) => {
+    const bx = Math.floor(key / 65536), by = key - bx * 65536;
+    if (bx < bx0 || bx > bx1 || by < by0 || by > by1) return;
+    const tx = rr.sx / rr.n, ty = rr.sy / rr.n;
+    // glide to the border's new place (a jump of more than a few blocks is not a glide)
+    if (!(Math.abs(rr.dx - tx) < s_ * 4 && Math.abs(rr.dy - ty) < s_ * 4)) { rr.dx = tx; rr.dy = ty; }
+    else if (Math.abs(rr.dx - tx) + Math.abs(rr.dy - ty) > .02 * s_) { rr.dx += (tx - rr.dx) * .35; rr.dy += (ty - rr.dy) * .35; moving = true; }
+    else { rr.dx = tx; rr.dy = ty; }
+    const l = Math.hypot(rr.nx, rr.ny) || 1, nx = rr.nx / l, ny = rr.ny / l;
+    const x = rr.dx * vs + view.x, y = rr.dy * vs + view.y, h = ((key * 2654435761) >>> 0);
+    // rank behind rank, each staggered by half a place along the border
+    for (let q = 0; q < ranks; q++) {
+      const d = off + q * mpx * 1.08, sh = (q & 1) * P / 2, lx = -ny * sh, ly = nx * sh;
+      c.drawImage(sprite(rr.a, kinds[(h >>> (q * 5)) % kinds.length]), x - nx * d + lx - half, y - ny * d + ly - half, mpx, mpx);
+      c.drawImage(sprite(rr.b, kinds[(h >>> (q * 5 + 13)) % kinds.length]), x + nx * d + lx - half, y + ny * d + ly - half, mpx, mpx);
+    }
+  };
+  // few blocks on the screen: only those; else every block of the level, skipping those off it
+  if ((bx1 - bx0) * (by1 - by0) < L.map.size) { for (let bx = bx0; bx <= bx1; bx++) for (let by = by0; by <= by1; by++) { const rr = L.map.get(bx * 65536 + by); if (rr) each(bx * 65536 + by, rr); } }
+  else for (const [key, rr] of L.map) each(key, rr);
+  c.restore();
+  if (moving || !filled) requestDrawFast();
+}
+function setLiveDense(d) {
+  liveDense = clamp(d, 0, 2); try { localStorage.setItem('mezha-live-dense', String(liveDense)); } catch (e) {}
+  renderLiveBar(); requestDraw();
+}
 const liveType = u => !liveOff.has(u.type) && !immobile(u);
 // the units at a border now (an enemy's or a foreign land within a couple of their sizes), not marching or attacking
 function liveUnits() {
@@ -4535,9 +4664,9 @@ function liveFollow(list, b) {
   requestDrawFast();
 }
 function setLiveFront(on, quiet) {
-  liveFront = on; LS.set('mezha-live', on ? '1' : '0');
-  renderLiveBar();
-  if (!quiet) toast(on ? 'Живой фронт: войска у границы идут за ней, когда вы её тянете' : 'Живой фронт выключен: войска стоят, граница двигается без них');
+  liveFront = on; LS.set('mezha-live2', on ? '1' : '0'); liveEpoch++;
+  renderLiveBar(); const ck = $('#liveChk'); if (ck) ck.checked = on; requestDraw();
+  if (!quiet) toast(on ? 'Живой фронт: вдоль границы встала плотная цепь войск обеих сторон — тяните границу, войска пойдут за ней' : 'Живой фронт выключен: войска стоят, граница двигается без них');
 }
 // the bar over the map with the border tool: the switch and the arms that follow
 function renderLiveBar() {
@@ -4554,11 +4683,13 @@ function renderLiveBar() {
   sw.addEventListener('click', () => setLiveFront(!liveFront));
   box.append(sw);
   if (!liveFront) return;
-  // the arms on the map (or of the era, with none placed yet): a click switches one, a double click leaves only it
+  const dl = document.createElement('span'); dl.className = 'lbl'; dl.textContent = 'Плотность:'; box.append(dl);
+  ['Редко', 'Плотно', 'Очень плотно'].forEach((t, i) => { const b = document.createElement('button'); b.className = 'lch' + (liveDense === i ? ' on' : ''); b.textContent = t; b.title = LIVE_RANKS[i] + ' ' + plural(LIVE_RANKS[i], 'шеренга', 'шеренги', 'шеренг') + ' с каждой стороны, через ' + LIVE_PX[i] + ' пикселей экрана на любом масштабе'; b.addEventListener('click', () => setLiveDense(i)); box.append(b); });
+  // the arms of the era and those on the map: a click switches one, a double click leaves only it
   const seen = new Map();
+  for (const d of (ERAS[era] || ERAS.ww2).units) if (!['tower', 'hq', 'ship', 'sub', 'galley', 'plane', 'biplane', 'heli', 'drone', 'missile', 'train'].includes(d[2])) seen.set(d[0], { era, type: d[0], owner: player || active || 1 });
   for (const u of units) if (!seen.has(u.type)) seen.set(u.type, u);
-  if (!seen.size) for (const d of (ERAS[era] || ERAS.ww2).units) seen.set(d[0], { era, type: d[0], owner: active || 1 });
-  const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = 'Идут за границей:'; box.append(lbl);
+  const lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = 'Войска:'; box.append(lbl);
   for (const [type, u] of seen) {
     const def = unitDef(u).def;
     if (def[2] === 'tower') continue;
@@ -4566,13 +4697,13 @@ function renderLiveBar() {
     b.title = def[1] + (liveOff.has(type) ? ' — стоят на месте' : ' — идут за границей') + '. Щелчок — переключить, двойной щелчок — только этот род войск';
     const ic = document.createElement('canvas'); ic.width = ic.height = 18 * dpr; ic.style.width = ic.style.height = '18px';
     ic.getContext('2d').drawImage(ctrSquare(u, 18 * dpr), 0, 0);
-    b.append(ic, def[1]);
-    b.addEventListener('click', () => { liveOff.has(type) ? liveOff.delete(type) : liveOff.add(type); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); });
-    b.addEventListener('dblclick', () => { liveOff = new Set([...seen.keys()].filter(t => t !== type)); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); toast('За границей идёт только: ' + def[1]); });
+    b.append(ic); b.setAttribute('aria-label', def[1]);
+    b.addEventListener('click', () => { liveOff.has(type) ? liveOff.delete(type) : liveOff.add(type); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); requestDraw(); });
+    b.addEventListener('dblclick', () => { liveOff = new Set([...seen.keys()].filter(t => t !== type)); LS.set('mezha-live-off', JSON.stringify([...liveOff])); renderLiveBar(); requestDraw(); toast('За границей идёт только: ' + def[1]); });
     box.append(b);
   }
   const all = document.createElement('button'); all.textContent = 'Все'; all.title = 'Все рода войск идут за границей';
-  all.addEventListener('click', () => { liveOff.clear(); LS.set('mezha-live-off', '[]'); renderLiveBar(); }); box.append(all);
+  all.addEventListener('click', () => { liveOff.clear(); LS.set('mezha-live-off', '[]'); renderLiveBar(); requestDraw(); }); box.append(all);
 }
 
 // ---------- troops ----------
@@ -7048,7 +7179,7 @@ function unpackUnits(p) {
 }
 function snap() { exclaveLearn = false; if (geoStore) commitOcc(); return { sl: [...settled], wr: JSON.stringify(wars), oc: occ ? occ.slice() : null, os: geoStore ? new Map(occStore) : null, vn: vsrc ? vsrc.n : undefined, own: own.slice(), c: JSON.stringify(countries), a: active, u: packUnits(units), g: JSON.stringify(generals), ar: JSON.stringify(arrows), ci: JSON.stringify(cities), fm: JSON.stringify(forms), fr: JSON.stringify(fronts) }; }
 function pushHist() { scaleHistFor = null; hist.push(snap()); while (hist.length > histMax()) hist.shift(); redoStack.length = 0; updUndo(); }
-function restore(e) { if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = unpackUnits(e.u); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); forms = JSON.parse(e.fm || '[]'); fronts = JSON.parse(e.fr || '[]'); selFront = null; markFrontDirty(); selArrow = selCity = null;
+function restore(e) { liveEpoch++; if (vsrc && e.vn !== undefined && e.vn !== vsrc.n) { vsrc.n = Math.min(e.vn, vsrc.user.length); srcChanged(); } own.set(e.own); countries = JSON.parse(e.c); active = clamp(e.a, countries.length ? 1 : 0, countries.length); units = unpackUnits(e.u); selUnit = null; selUnits = []; loadGenerals(JSON.parse(e.g || '[]')); arrows = JSON.parse(e.ar || '[]'); cities = JSON.parse(e.ci || '[]'); forms = JSON.parse(e.fm || '[]'); fronts = JSON.parse(e.fr || '[]'); selFront = null; markFrontDirty(); selArrow = selCity = null;
   if (e.st && geoStore) { applyStoreLog(e.st); readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null; }
   if (e.wr) { wars = JSON.parse(e.wr); recalcWars(); }
   if (e.sl) { settled = new Set(e.sl); syncSettled(); }
@@ -7404,7 +7535,7 @@ function setTool(t) {
   if (t === 'units') renderUnitPanel();
   $('#hint').textContent = HINTS[t];
   renderToolHead(t);
-  $('#warpModes').hidden = t !== 'warp';
+  $('#warpModes').hidden = t !== 'warp'; $('#liveRow').hidden = t !== 'warp';
   cv.style.cursor = toolCursor();
   requestDraw();
 }
@@ -7887,7 +8018,7 @@ function loadSample() {
   geoStack = []; renderGeoPanel();
   countries = [{ name: 'Аргония', color: '#d0473f' }, { name: 'Борея', color: '#3766c9' }];
   active = 1;
-  own.set(s.own);
+  liveEpoch++; own.set(s.own);
   era = 'ww2'; $('#era').value = era;
   units = [
     { x: 500, y: 300, era, type: 'tank', owner: 1, ech: 'XX', label: '3-я танковая', gen: 1 },
@@ -8093,7 +8224,7 @@ function loadProjectFile(file) {
         units = d.units || []; forms = d.forms || []; if (d.unitSize) setUnitSize(d.unitSize);
         loadGenerals(d.generals); player = d.player || 1;
         loadGame(d);
-        own.set(unrle(d.own, W * H));
+        liveEpoch++; own.set(unrle(d.own, W * H));
         if (d.geoStore && d.tiles && d.win) {
           vsrc = d.vsrc ? buildVsrc(d.vsrc) : null; srcChanged();
           adoptTiles(new Map(d.tiles.map(([k, v]) => [k, typeof v === 'number' ? v : unrle(v, TS * TS)])));
@@ -8155,14 +8286,14 @@ async function restoreSaved() {
     geoLayer = st.geoLayer || 'sat'; geoLabels = st.geoLabels !== false; geoBorders = st.geoBorders !== false; geoStack = st.geoStack || [];
     URL.revokeObjectURL(url);
     if (st.own.length !== W * H) return false;
-    own.set(st.own); countries = st.countries || []; active = st.active || 1;
+    liveEpoch++; own.set(st.own); countries = st.countries || []; active = st.active || 1;
     if (st.geoStore && st.win) {
       vsrc = st.vsrc ? buildVsrc(st.vsrc) : null; srcChanged();
       adoptTiles(await loadTileDB());
       geoStore = true; win = st.win;
       readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
       // the window as it was when saved, over the tiles (they may lag behind it during battles)
-      if (st.own.length === own.length) own.set(st.own);
+      if (st.own.length === own.length) liveEpoch++; own.set(st.own);
       if (st.regionLevel) { regionLevel = st.regionLevel; $('#regionLevel').value = regionLevel; }
       if (st.regionMode) { regionMode = true; $('#regionMode').checked = true; $('#tglRegion').setAttribute('aria-pressed', true); $('#tglRegion').querySelector('b').textContent = 'вкл'; }
     }
@@ -8644,7 +8775,7 @@ function scenarioPreview(w) {
 // holds a stretch of 4–15 km (more on a very long front, so that there are never more than the setting); each
 // side's divisions are shared out into armies of up to 24, every army under a general, holding its own stretch as a
 // front line. «Плотно» in the settings puts 20 m units shoulder to shoulder instead, for fights over streets.
-liveFront = LS.get('mezha-live', '1') === '1'; try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
+liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
 const denseDeploy = () => deployCap >= 100000;
 // a division's name: its number in its army list and its arm
@@ -8925,6 +9056,7 @@ function renderSettings() {
   seg(bd, 'Как двигать границу (W)', Object.entries(WARP_NAMES), warpMode, { key: 'wm', fn: m => setWarpMode(m) });
   mirrorCheck(bd, 'Прятать курсор, пока двигается граница', 'Мышь не мешает смотреть на линию фронта — ни при перетаскивании, ни когда её двигают войска.', '#hideCursor');
   select(bd, 'Круг захвата (O)', '#ringMode');
+  mirrorCheck(bd, 'Живой фронт (L)', 'Плотная цепь войск обеих сторон вдоль границы: идёт за ней, когда её тянут. Плотность и рода войск — на плашке над картой с инструментом «Граница».', '#liveChk');
   mirrorCheck(bd, 'Не заходить на нейтральные земли и море', 'Граница и войска не занимают ничьи земли и не выходят в море.', '#protect');
   mirrorCheck(bd, 'Двигать границу только между странами в войне', 'Пока страны не воюют, их общая граница стоит на месте. Снимите, чтобы свободно перекраивать карту как редактор.', '#warOnly');
   const mp = card('Карта');
