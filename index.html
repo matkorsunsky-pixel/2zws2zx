@@ -1050,7 +1050,7 @@ const HINTS = {
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
-  units: 'Плашка над картой: «Ставить» (Q), «Двигать» (E), «Фронт» (G) или «Оборона» (V). «Сразу: 1 · ×10 · ×100» (C) — сколько отрядов ставит один щелчок. Фронт и оборона, как в Hearts of Iron: выберите генерала в полосе внизу и протяните линию — вдоль границы (фронт) или где угодно на своей земле (оборона): его армия встанет на неё; без генерала — выбранные отряды или новые. «Наступать» — удар через линию фронта. Ставить: щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
+  units: 'Плашка над картой: «Ставить» (Q), «Двигать» (E), «Фронт» (G), «Оборона» (V) или «Область» (N). «Сразу: 1 · ×10 · ×100» (C) — сколько отрядов ставит один щелчок. Фронт и оборона, как в Hearts of Iron: выберите генерала в полосе внизу и протяните линию — вдоль границы (фронт) или где угодно на своей земле (оборона): его армия встанет на неё; «Область» — обведите участок, армия расположится внутри. Новые отряды генерала сразу идут на его линию; отряд, посланный вручную, остаётся в линии, и она сдвигается за ним; без генерала — выбранные отряды или новые. «Наступать» — удар через линию фронта. Ставить: щелчок ставит отряд: в режиме «По земле» — за страну, на чьей земле щёлкнули, иначе за страну, выбранную над картой. Ctrl + щелчок — наоборот, Tab — сменить сторону. Протяните ПКМ — маршрут наступления для выбранных (Shift — добавить к маршруту). ПКМ — приказ выбранным отрядам идти к точке. Shift + щелчок или Shift + рамка выбирает несколько отрядов, их можно тащить вместе. Ctrl+A выбирает все отряды страны.'
 };
 
 // ---------- state ----------
@@ -5643,9 +5643,10 @@ function issueRoute(pts, append) {
   for (const u of list) {
     const off = { x: (u.x - cx) * keep, y: (u.y - cy) * keep };
     const wps = path.map(q => ({ x: clamp(q.x + off.x, 0, W), y: clamp(q.y + off.y, 0, H) }));
-    delete u.fl;                                       // a unit given its own way leaves its front line
+    // a unit sent by hand stays in its line: the line goes where its units go, and the unit holds where it is sent
     if (append && u.order) { u.route = (u.route || []).concat(wps); }
     else { stopOrders(u); u.order = wps[0]; u.route = wps.slice(1); u.roff = off; }
+    if (u.fl || u.gen) u.man = true;
     if (!u.route.length) delete u.route;
     delete u.fighting;
     // one place on friendly land: the way there by friendly land
@@ -6099,14 +6100,39 @@ function arcs(P) {
 }
 // the place of the j-th of k units on a line: evenly along it, a little back into own land (on a line of defence,
 // on the line itself)
+// an area of defence: k places spread evenly over the polygon, row by row (counted once per number of units)
+function inPoly(P, x, y) {
+  let inside = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside; }
+  return inside;
+}
+function areaSlots(f, k) {
+  if (f._slots && f._slots.length === k && f._slotsFor === f.pts) return f._slots;
+  const P = f.pts;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, area = 0;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; area += (b.x - a.x) * (b.y + a.y) / 2; x0 = Math.min(x0, a.x); x1 = Math.max(x1, a.x); y0 = Math.min(y0, a.y); y1 = Math.max(y1, a.y); }
+  let d = Math.sqrt(Math.abs(area) / Math.max(1, k)), out = [];
+  for (let tries = 0; tries < 12; tries++) {
+    out = [];
+    for (let y = y0 + d / 2; y < y1; y += d * .87) { const row = Math.round((y - y0) / (d * .87)); for (let x = x0 + d / 2 + (row & 1) * d / 2; x < x1; x += d) if (inPoly(P, x, y)) out.push({ x, y, nx: 0, ny: 0 }); }
+    if (out.length >= k) break;
+    d *= .88;
+  }
+  // evenly picked when there are more places than units
+  const pick = [];
+  for (let j = 0; j < k && out.length; j++) pick.push(out[Math.min(out.length - 1, Math.floor((j + .5) * out.length / k))]);
+  f._slots = pick; f._slotsFor = f.pts;
+  return pick;
+}
 function lineSlot(f, L, j, k) {
+  if (f.kind === 'area') { const sl = areaSlots(f, k)[j]; return sl ? { x: sl.x, y: sl.y, bx: sl.x, by: sl.y, nx: 0, ny: 0 } : { x: f.pts[0].x, y: f.pts[0].y, bx: 0, by: 0, nx: 0, ny: 0 }; }
   const P = f.pts, tot = L[L.length - 1], t = (j + .5) / k * tot;
   let lo = 0, hi = P.length - 1;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (L[m] < t) lo = m; else hi = m; }
   const a = P[lo], b = P[hi], seg = L[hi] - L[lo], w = seg > 0 ? (t - L[lo]) / seg : 0;
   const x = a.x + (b.x - a.x) * w, y = a.y + (b.y - a.y) * w;
   let nx = a.nx + (b.nx - a.nx) * w, ny = a.ny + (b.ny - a.ny) * w; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-  const S = unitCellsAt(y), back = f.kind === 'defense' ? 0 : fineGrid() ? S * 1.5 : Math.max(S * 1.5, .5);
+  const S = unitCellsAt(y), back = f.kind !== 'front' ? 0 : fineGrid() ? S * 1.5 : Math.max(S * 1.5, .5);
   return { x: x + nx * back, y: y + ny * back, bx: x, by: y, nx, ny };
 }
 // the units of a line: each to its place on it, or straight across it when the front attacks
@@ -6136,7 +6162,7 @@ function frontOrders(f, force, all) {
     u.ft = (j + .5) / k;
     if (j < from) return;
     if (force && f.pending) { if (orderBudget <= 0) return; f.pendingIdx = j + 1; }
-    if (!inWin(u) || (u.order && !force) || u.fighting) return;
+    if (!inWin(u) || (u.order && !force) || u.fighting || (u.man && !force)) return;
     const S = bodyS(u);
     // holding: a unit stays where it stands while it is by the line; when the line has moved away (the border
     // went forward or back), to the nearest point of the line; only a newly assigned army spreads out evenly
@@ -6144,12 +6170,12 @@ function frontOrders(f, force, all) {
     if (!force && f.mode !== 'attack') {
       const i = nearest(u.x, u.y);
       if (i >= 0) {
-        const p = f.pts[i], back = f.kind === 'defense' ? 0 : fineGrid() ? S * 1.5 : Math.max(S * 1.5, .02);
+        const p = f.pts[i], back = f.kind !== 'front' ? 0 : fineGrid() ? S * 1.5 : Math.max(S * 1.5, .02);
         sl = { x: p.x + p.nx * back, y: p.y + p.ny * back, bx: p.x, by: p.y, nx: p.nx, ny: p.ny };
       }
     }
     if (!sl) sl = lineSlot(f, L, j, k);
-    if (f.mode === 'attack' && f.kind !== 'defense') {
+    if (f.mode === 'attack' && f.kind === 'front') {
       if (!enemyAround(u, S * 2) || !enemyContact(u)) {
         if (!u.fdir) u.fdir = { x: -sl.nx, y: -sl.ny };
         const go = fineGrid() ? S * 3 : Math.max(S * 3, 1.2);
@@ -6189,7 +6215,7 @@ function holdBorder(f, list, dirty) {
   const test = frontTest(f), m = 4;
   for (const u of list) {
     if (holdBudget <= 0) return;
-    if (!inWin(u) || u.order || u.fighting) continue;
+    if (!inWin(u) || u.order || u.fighting || u.man) continue;
     if (dirty !== true && (u.x < dirty[0] - m || u.x > dirty[2] + m || u.y < dirty[1] - m || u.y > dirty[3] + m)) continue;
     const o = u.owner, gx = Math.floor(u.x), gy = Math.floor(u.y);
     // the enemy within a few of the unit's sizes (at least two cells) and own land under the unit: still at the
@@ -6215,11 +6241,12 @@ function holdBorder(f, list, dirty) {
 // smoothed), broken where the next unit stands far away; while a newly drawn army is still marching to its line,
 // the line it was given
 function frontView(f, list) {
-  if (f.kind === 'defense') { f.view = f.pts; return; }
-  const moving = list.filter(u => u.order).length;
-  if (f.pts && f.pts.length > 1 && f.mode !== 'attack' && moving > list.length * .3) { f.view = f.pts; return; }
-  // the units at their places (those still on the way would draw the line across the country)
-  const ls = list.filter(u => inWin(u) && (!u.order || f.mode === 'attack')).sort((a, b) => (a.ft || 0) - (b.ft || 0));
+  if (f.kind === 'defense' || f.kind === 'area') { f.view = f.pts; return; }
+  if (f.kind === 'area') { f.view = f.pts; return; }
+  const going = list.filter(u => u.fo && u.order).length;
+  if (f.pts && f.pts.length > 1 && f.mode !== 'attack' && going > list.length * .3) { f.view = f.pts; return; }
+  // the units at their places and those sent by hand (the line follows them); not those still on the way to it
+  const ls = list.filter(u => inWin(u) && (!(u.fo && u.order) || f.mode === 'attack')).sort((a, b) => (a.ft || 0) - (b.ft || 0));
   if (ls.length < 2) { f.view = f.pts || null; return; }
   const step = Math.max(1, Math.floor(ls.length / 500)), P = [];
   for (let i = 0; i < ls.length; i += step) {
@@ -6237,8 +6264,35 @@ function frontView(f, list) {
   }
   f.view = smoothPts(smoothPts(P, 2), 2);
 }
+// a unit given to a general who holds a line goes to that line at once; one taken from him leaves it
+function attachToGenerals() {
+  const lineOf = new Map();
+  for (const f of fronts) if (f.gen) lineOf.set(f.gen, f);           // the general's latest line
+  const byId = new Map(fronts.map(f => [f.id, f]));
+  let n = 0;
+  for (const u of units) {
+    if (u.fl) { const f = byId.get(u.fl); if (f && f.gen && u.gen !== f.gen) { delete u.fl; delete u.man; } continue; }
+    if (!u.gen || u.man || immobile(u)) continue;
+    const f = lineOf.get(u.gen);
+    if (!f || f.owner !== u.owner || !f.pts || f.pts.length < 2) continue;
+    u.fl = f.id; stopOrders(u);
+    if (f.kind === 'front') {
+      // to the nearest point of the line, a little back from it
+      const P = f.view || f.pts, L = arcs(P);
+      let bi = 0, bd = Infinity;
+      P.forEach((p, i) => { const d = (p.x - u.x) ** 2 + (p.y - u.y) ** 2; if (d < bd) { bd = d; bi = i; } });
+      const p = P[bi], S = bodyS(u), back = fineGrid() ? S * 1.5 : Math.max(S * 1.5, .02);
+      u.ft = L[bi] / (L[L.length - 1] || 1);
+      routeTo(u, { x: p.x + p.nx * back, y: p.y + p.ny * back }); u.fo = true;
+    } else { u.ft = 1; f.k = -1; }                                   // a line or area of defence spreads its units again
+    n++;
+  }
+  return n;
+}
 function frontTick() {
   if (!fronts.length || !W || menuPaused || drag) return;
+  const attached = attachToGenerals();
+  if (attached) startMarch();
   const dirty = frontDirty; frontDirty = null;
   const by = new Map(); for (const u of units) if (u.fl) (by.get(u.fl) || by.set(u.fl, []).get(u.fl)).push(u);
   let n = 0;
@@ -6247,8 +6301,8 @@ function frontTick() {
   for (const f of fronts) {
     const list = by.get(f.id) || [];
     if (f.pending) n += frontOrders(f, true, list);
-    else if (f.mode === 'attack' && f.kind !== 'defense') n += frontOrders(f, false, list);
-    else if (f.kind === 'defense') { if (f.k !== list.length) n += frontOrders(f, false, list); }
+    else if (f.mode === 'attack' && f.kind === 'front') n += frontOrders(f, false, list);
+    else if (f.kind !== 'front') { if (f.k !== list.length) n += frontOrders(f, false, list); }
     else {
       if (dirty) {
         // the army still on its way: the line moves with the border, and so do the places they are going to
@@ -6299,6 +6353,12 @@ function lineFromStroke(raw, kind) {
     if (guides.length < 2) { toast('Ведите линию вдоль границы: у страны «' + countries[o - 1].name + '» здесь нет границы с чужой страной.'); return; }
     f.guides = guides;
     if (!tracePath(f)) { toast('Здесь нет границы, вдоль которой встать.'); return; }
+  } else if (kind === 'area') {
+    // an area of defence: the outline drawn, closed
+    const P = raw.filter((q, k) => k === 0 || Math.hypot(q.x - raw[k - 1].x, q.y - raw[k - 1].y) * view.s >= 3).map(q => ({ x: q.x, y: q.y, nx: 0, ny: 0 }));
+    let area = 0; for (let i = 0, j = P.length - 1; i < P.length; j = i++) area += (P[j].x - P[i].x) * (P[j].y + P[i].y) / 2;
+    if (P.length < 3 || Math.abs(area) * view.s * view.s < 400) { toast('Обведите область: проведите замкнутую линию вокруг неё.'); return; }
+    f.pts = P;
   } else {
     // a line of defence: the stroke itself, smoothed
     const P = [];
@@ -6311,17 +6371,27 @@ function lineFromStroke(raw, kind) {
   }
   pushHist();
   const L = arcs(f.pts), len = L[L.length - 1];
-  if (sel.length) {
+  if (sel.length && kind === 'area') {
+    sel.forEach(u => { stopOrders(u); delete u.fdir; delete u.man; u.fl = f.id; });
+    // each to the place of the area nearest it, in rows: units sorted the same way as the places
+    sel.sort((a, b) => (a.y - b.y) || (a.x - b.x)).forEach((u, j) => { u.ft = (j + .5) / sel.length; });
+    fronts.push(f); f.pending = true; f.pendingIdx = 0;
+    orderBudget = 3000; pathBudget = 60;
+    frontOrders(f, true); pathBudget = Infinity; startMarch();
+    toast('Область обороны' + (gen ? ' армии ' + gen.name : '') + ': ' + sel.length + ' ' + plural(sel.length, 'отряд', 'отряда', 'отрядов') + ' располагаются по ней');
+  } else if (sel.length) {
     // the units keep their order along the line: each to the place nearest its own
     const at = u => { let bi = 0, bd = Infinity; f.pts.forEach((p, i) => { const d = (p.x - u.x) ** 2 + (p.y - u.y) ** 2; if (d < bd) { bd = d; bi = i; } }); return L[bi]; };
-    sel.map(u => [u, at(u)]).sort((a, b) => a[1] - b[1]).forEach(([u], j) => { stopOrders(u); delete u.fdir; u.fl = f.id; u.ft = (j + .5) / sel.length; });
+    sel.map(u => [u, at(u)]).sort((a, b) => a[1] - b[1]).forEach(([u], j) => { stopOrders(u); delete u.fdir; delete u.man; u.fl = f.id; u.ft = (j + .5) / sel.length; });
     fronts.push(f);
     f.pending = true; f.pendingIdx = 0;
     orderBudget = 3000; pathBudget = 60;
     frontOrders(f, true); pathBudget = Infinity; startMarch();
     toast((kind === 'front' ? 'Линия фронта' : 'Линия обороны') + (gen ? ' армии ' + gen.name : '') + ': ' + sel.length + ' ' + plural(sel.length, 'отряд', 'отряда', 'отрядов') + ' встают вдоль неё' + (kind === 'front' ? '. «Наступать» — удар через линию' : ''));
   } else {
-    const S = unitCellsAt(f.pts[f.pts.length >> 1].y), k = clamp(Math.floor(len / (S * 1.6)), 1, 20000);
+    const S = unitCellsAt(f.pts[f.pts.length >> 1].y);
+    let k = clamp(Math.floor(len / (S * 1.6)), 1, 20000);
+    if (kind === 'area') { let a = 0; for (let i = 0, j = f.pts.length - 1; i < f.pts.length; j = i++) a += (f.pts[j].x - f.pts[i].x) * (f.pts[j].y + f.pts[i].y) / 2; k = clamp(Math.floor(Math.abs(a) / (S * 3) ** 2), 1, 2000); }
     const ech = FORM_CHILD[unitEch] ? 'XX' : unitEch;
     const made = [];
     for (let j = 0; j < k; j++) {
@@ -6331,7 +6401,7 @@ function lineFromStroke(raw, kind) {
       units.push(u); made.push(u);
     }
     fronts.push(f); f.k = made.length;
-    toast('На ' + (kind === 'front' ? 'линию фронта' : 'линию обороны') + ' встали ' + made.length + ' ' + plural(made.length, 'отряд', 'отряда', 'отрядов') + ' (' + countries[o - 1].name + (gen ? ', армия ' + gen.name : '') + ', по ' + fmtUnitSize(unitSize) + ')' + (k === 20000 ? '. Линия длинная: отряды стоят реже, чем плечом к плечу' : ''));
+    toast('На ' + (kind === 'front' ? 'линию фронта' : kind === 'area' ? 'область обороны' : 'линию обороны') + ' встали ' + made.length + ' ' + plural(made.length, 'отряд', 'отряда', 'отрядов') + ' (' + countries[o - 1].name + (gen ? ', армия ' + gen.name : '') + ', по ' + fmtUnitSize(unitSize) + ')' + (k === 20000 ? '. Линия длинная: отряды стоят реже, чем плечом к плечу' : ''));
   }
   selFront = f; setSel(frontUnits(f)); unitsChanged(); renderSidePick();
 }
@@ -6340,9 +6410,10 @@ function setFrontMode(list, mode) {
   if (!fs.size && !loose.length) return;
   pushHist();
   for (const f of fronts) if (fs.has(f.id)) {
-    if (f.kind === 'defense' && mode === 'attack') continue;
+    if (f.kind !== 'front' && mode === 'attack') continue;
     f.mode = mode;
     const ls = frontUnits(f).filter(u => !immobile(u)).sort((a, b) => (a.ft || 0) - (b.ft || 0));
+    ls.forEach(u => { delete u.man; });
     if (mode === 'attack') {
       // one way forward for the whole line, across it as a whole rather than across every bend of the border:
       // the units go side by side and never cross or crowd together
@@ -6351,7 +6422,7 @@ function setFrontMode(list, mode) {
       ls.forEach((u, j) => { const sl = lineSlot(f, L, j, ls.length); x -= sl.nx; y -= sl.ny; });
       const l = Math.hypot(x, y);
       if (l) ls.forEach(u => { u.fdir = { x: x / l, y: y / l }; });
-    } else { ls.forEach(u => { stopOrders(u); delete u.fdir; }); f.k = -1; if (f.kind !== 'defense') tracePath(f); }
+    } else { ls.forEach(u => { stopOrders(u); delete u.fdir; }); f.k = -1; if (f.kind === 'front') tracePath(f); }
   }
   if (mode === 'attack') {
     // units on no line: across the nearest enemy border
@@ -6380,7 +6451,7 @@ function setFrontMode(list, mode) {
 function deleteFront(f) {
   if (!f) return;
   pushHist();
-  for (const u of units) if (u.fl === f.id) { delete u.fl; delete u.fdir; }
+  for (const u of units) if (u.fl === f.id) { delete u.fl; delete u.fdir; delete u.man; }
   fronts = fronts.filter(x => x !== f); selFront = null;
   updUndo(); scheduleSave(); renderSidePick(); requestDraw();
   toast('Линия убрана, отряды остались на местах.');
@@ -6392,6 +6463,7 @@ function hitFront(g) {
   for (const f of fronts) {
     const P = f.view || f.pts;
     if (!frontVisible(f) || !P) continue;
+    if (f.kind === 'area' && inPoly(P, g.x, g.y)) return f;
     for (let k = 1; k < P.length; k++) {
       if (P[k].gap) continue;
       const a = P[k - 1], b = P[k], dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
@@ -6411,19 +6483,20 @@ function drawFronts(c) {
   for (const f of fronts) {
     const P = f.view || f.pts;
     if (!frontVisible(f) || !P || P.length < 2) continue;
-    const off = f.kind === 'defense' ? 0 : 3 / s;
+    const off = f.kind !== 'front' ? 0 : 3 / s;
     let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
     for (const p of P) { if (p.x < bx0) bx0 = p.x; if (p.x > bx1) bx1 = p.x; if (p.y < by0) by0 = p.y; if (p.y > by1) by1 = p.y; }
     if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1) continue;
     const col = rgb[f.owner] || [80, 80, 80], sel = f === selFront;
     const path = new Path2D();
     P.forEach((p, k) => { const x = p.x + p.nx * off, y = p.y + p.ny * off; k && !p.gap ? path.lineTo(x, y) : path.moveTo(x, y); });
+    if (f.kind === 'area') { path.closePath(); c.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},.16)`; c.fill(path); }
     c.strokeStyle = sel ? 'rgba(255,214,90,.95)' : 'rgba(255,255,255,.9)'; c.lineWidth = (sel ? 8 : 6) / s; c.stroke(path);
     c.strokeStyle = `rgb(${col[0] * .75 | 0},${col[1] * .75 | 0},${col[2] * .75 | 0})`; c.lineWidth = 3.2 / s;
-    if (f.kind === 'defense') c.setLineDash([9 / s, 6 / s]);
+    if (f.kind !== 'front') c.setLineDash([9 / s, 6 / s]);
     c.stroke(path); c.setLineDash([]);
     // arrowheads toward the enemy every 40 px of an attacking line
-    if (f.mode === 'attack' && f.kind !== 'defense') {
+    if (f.mode === 'attack' && f.kind === 'front') {
       c.fillStyle = `rgb(${col[0] * .65 | 0},${col[1] * .65 | 0},${col[2] * .65 | 0})`;
       let acc = 0;
       for (let k = 1; k < P.length; k++) {
@@ -6433,11 +6506,13 @@ function drawFronts(c) {
       }
     }
     // the badge: the general's initials (or the side's colour) and the number of units, in the middle of the line
-    const m = P[P.length >> 1], sx = m.x * s + view.x, sy = m.y * s + view.y;
+    let m = P[P.length >> 1];
+    if (f.kind === 'area') { let cx = 0, cy = 0; for (const p of P) { cx += p.x; cy += p.y; } m = { x: cx / P.length, y: cy / P.length }; }
+    const sx = m.x * s + view.x, sy = m.y * s + view.y;
     if (sx < -40 || sy < -40 || sx > r.width + 40 || sy > r.height + 40) continue;
     const g = f.gen && genById(f.gen), n = f.k > 0 ? f.k : 0;
     c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const label = (g ? g.name.split(' ').map(w => w[0]).join('').slice(0, 2) : '') , txt = n + ' отр.' + (f.kind === 'defense' ? ' · оборона' : f.mode === 'attack' ? ' · наступает' : '');
+    const label = (g ? g.name.split(' ').map(w => w[0]).join('').slice(0, 2) : '') , txt = n + ' отр.' + (f.kind === 'defense' ? ' · оборона' : f.kind === 'area' ? ' · область' : f.mode === 'attack' ? ' · наступает' : '');
     c.font = `700 11px ${FONT_UI}`; const tw = c.measureText(txt).width;
     const w = tw + (label ? 34 : 14);
     c.fillStyle = 'rgba(27,32,40,.92)'; c.beginPath(); c.roundRect(sx - w / 2, sy - 12, w, 24, 12); c.fill();
@@ -6458,10 +6533,11 @@ function drawFrontDraft(c) {
   c.save(); c.lineJoin = c.lineCap = 'round';
   c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 8;
   c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke();
-  c.strokeStyle = drag.kind === 'defense' ? '#3a4a5a' : '#a87b12'; c.lineWidth = 3.5; c.setLineDash([10, 6]);
+  if (drag.kind === 'area') { c.fillStyle = 'rgba(58,74,90,.15)'; c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.closePath(); c.fill(); }
+  c.strokeStyle = drag.kind === 'front' ? '#a87b12' : '#3a4a5a'; c.lineWidth = 3.5; c.setLineDash([10, 6]);
   c.beginPath(); pts.forEach((q, k) => k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke(); c.setLineDash([]);
   const a = pts[pts.length - 1], gen = lineGeneral(), n = gen ? units.filter(u => u.gen === gen.id).length : targets().filter(u => !immobile(u)).length;
-  const label = (drag.kind === 'defense' ? 'Линия обороны' : 'Линия фронта') + (gen ? ' · армия ' + gen.name : '') + (n ? ' · ' + n + ' отр.' : ' · новые отряды');
+  const label = (drag.kind === 'defense' ? 'Линия обороны' : drag.kind === 'area' ? 'Область обороны' : 'Линия фронта') + (gen ? ' · армия ' + gen.name : '') + (n ? ' · ' + n + ' отр.' : ' · новые отряды');
   c.font = `600 12px ${FONT_UI}`; c.textAlign = 'left'; c.textBaseline = 'middle';
   const tw = c.measureText(label).width + 14;
   c.fillStyle = 'rgba(255,255,255,.94)'; c.beginPath(); c.roundRect(a.x + 14, a.y - 11, tw, 22, 11); c.fill();
@@ -6753,10 +6829,10 @@ let spawnSide = 0, ctrlDown = false;
 // front — a stroke along the border makes a front line, held by the selected units or by new ones
 let unitMode = 'place';
 function setUnitMode(m, quiet) {
-  unitMode = m === 'move' || m === 'front' || m === 'defense' ? m : 'place';
+  unitMode = m === 'move' || m === 'front' || m === 'defense' || m === 'area' ? m : 'place';
   renderSidePick(); requestUi();
   if (tool === 'units') { cv.style.cursor = toolCursor(); $('#hint').textContent = HINTS.units; renderToolHead('units'); }
-  if (!quiet) { toast(unitMode === 'move' ? 'Двигать войска: выделите их щелчком или рамкой, тяните или отдайте приказ ПКМ' : unitMode === 'front' ? 'Линия фронта: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё' : unitMode === 'defense' ? 'Линия обороны: выберите генерала внизу и проведите линию где угодно на своей земле — армия займёт её' : 'Ставить войска: щелчок по карте ставит отряд'); scheduleSave(); }
+  if (!quiet) { toast(unitMode === 'move' ? 'Двигать войска: выделите их щелчком или рамкой, тяните или отдайте приказ ПКМ' : unitMode === 'front' ? 'Линия фронта: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё' : unitMode === 'defense' ? 'Линия обороны: выберите генерала внизу и проведите линию где угодно на своей земле — армия займёт её' : unitMode === 'area' ? 'Область обороны: выберите генерала внизу и обведите область — армия расположится по ней' : 'Ставить войска: щелчок по карте ставит отряд'); scheduleSave(); }
 }
 function spawnOwner(g, ctrl) {
   const land = cellOwner(g.x, g.y), fixed = spawnSide && countries[spawnSide - 1] ? spawnSide : 0;
@@ -6785,9 +6861,9 @@ function renderSidePick() {
   box.textContent = '';
   // the two modes of the tool come first
   const seg = document.createElement('div'); seg.className = 'umode'; seg.setAttribute('role', 'radiogroup');
-  for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['move', 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>'], ['front', 'Фронт', 'G', '<path d="M3 15c3-5 5 1 9-4s6 2 9-3"/><path d="M6 19l1.5-3M12 16l1.5-3M18 13l1.5-3"/>'], ['defense', 'Оборона', 'V', '<path d="M3 14c3-3 6-3 9 0s6 3 9 0" stroke-dasharray="3 3"/><path d="M12 4l6 3v4c0 4-3 6-6 7-3-1-6-3-6-7V7z"/>']]) {
+  for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['move', 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>'], ['front', 'Фронт', 'G', '<path d="M3 15c3-5 5 1 9-4s6 2 9-3"/><path d="M6 19l1.5-3M12 16l1.5-3M18 13l1.5-3"/>'], ['defense', 'Оборона', 'V', '<path d="M3 14c3-3 6-3 9 0s6 3 9 0" stroke-dasharray="3 3"/><path d="M12 4l6 3v4c0 4-3 6-6 7-3-1-6-3-6-7V7z"/>'], ['area', 'Область', 'N', '<path d="M5 7l6-3 8 4-1 9-8 3-6-5z" stroke-dasharray="3 2.5"/><circle cx="11" cy="12" r="1.6"/>']]) {
     const b = document.createElement('button'); b.className = unitMode === m ? 'on' : ''; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitMode === m); b.dataset.um = m;
-    b.title = (m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её') + ' (' + key + ')';
+    b.title = (m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : m === 'defense' ? 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её' : 'Область обороны: выберите генерала внизу и обведите область — его армия равномерно расположится по ней') + ' (' + key + ')';
     b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>';
     b.append(name); const kb = document.createElement('kbd'); kb.textContent = key; b.append(kb);
     b.addEventListener('click', () => setUnitMode(m));
@@ -6807,20 +6883,20 @@ function renderSidePick() {
     }
     return;
   }
-  if (unitMode === 'front' || unitMode === 'defense') {
+  if (unitMode === 'front' || unitMode === 'defense' || unitMode === 'area') {
     const t = document.createElement('span'); t.className = 'lbl';
     const gen = lineGeneral(), n = gen ? units.filter(u => u.gen === gen.id).length : targets().filter(u => !immobile(u)).length;
     if (selFront) {
       const k = frontUnits(selFront).length;
       const fg = selFront.gen && genById(selFront.gen);
-      t.textContent = (selFront.kind === 'defense' ? 'Линия обороны' : 'Фронт') + (fg ? ' · армия ' + fg.name : '') + ': ' + k + ' ' + plural(k, 'отряд', 'отряда', 'отрядов') + ' · ' + (selFront.kind === 'defense' ? 'держит линию' : selFront.mode === 'attack' ? 'наступает' : 'обороняется');
+      t.textContent = (selFront.kind === 'defense' ? 'Линия обороны' : selFront.kind === 'area' ? 'Область обороны' : 'Фронт') + (fg ? ' · армия ' + fg.name : '') + ': ' + k + ' ' + plural(k, 'отряд', 'отряда', 'отрядов') + ' · ' + (selFront.kind === 'defense' ? 'держит линию' : selFront.kind === 'area' ? 'держит область' : selFront.mode === 'attack' ? 'наступает' : 'обороняется');
       box.append(t);
-      if (selFront.kind !== 'defense') { const at = document.createElement('button'); at.textContent = 'Наступать'; at.className = selFront.mode === 'attack' ? 'on' : ''; at.addEventListener('click', () => setFrontMode(frontUnits(selFront), 'attack')); box.append(at); }
+      if (selFront.kind === 'front') { const at = document.createElement('button'); at.textContent = 'Наступать'; at.className = selFront.mode === 'attack' ? 'on' : ''; at.addEventListener('click', () => setFrontMode(frontUnits(selFront), 'attack')); box.append(at); }
       const hd = document.createElement('button'); hd.textContent = 'Оборона'; hd.className = selFront.mode === 'hold' ? 'on' : ''; hd.addEventListener('click', () => setFrontMode(frontUnits(selFront), 'hold')); box.append(hd);
       const dl = document.createElement('button'); dl.textContent = 'Убрать линию'; dl.title = 'Убрать линию фронта, отряды остаются (Delete)'; dl.addEventListener('click', () => deleteFront(selFront)); box.append(dl);
       return;
     }
-    const where = unitMode === 'defense' ? 'Проведите линию обороны на своей земле' : 'Протяните линию вдоль границы';
+    const where = unitMode === 'defense' ? 'Проведите линию обороны на своей земле' : unitMode === 'area' ? 'Обведите область обороны' : 'Протяните линию вдоль границы';
     t.textContent = gen ? 'Армия ' + gen.name + ' (' + n + ' отр.) · ' + where.toLowerCase() + (n ? '' : ' — армия получит новые отряды') : n ? where + ' — ' + n + ' ' + plural(n, 'отряд встанет', 'отряда встанут', 'отрядов встанут') + ' на неё' : where + ' — новые отряды заполнят её. Выберите генерала внизу, чтобы рисовать его армией. Ставить за:';
     box.append(t);
     if (gen) { const cl = document.createElement('button'); cl.textContent = 'Без генерала'; cl.title = 'Рисовать линию без армии: выбранными или новыми отрядами'; cl.addEventListener('click', () => { closeGen(); renderSidePick(); }); box.append(cl); }
@@ -7035,12 +7111,12 @@ cv.addEventListener('pointerdown', e => {
   } else if (tool === 'units') {
     const hs = hierOn() && forms.length ? hitShown(g) : null;
     const u = hs ? hs.unit || hs.leaves[0] : hitUnit(g), grp = hs && hs.leaves ? hs.leaves : u ? [u] : [];
-    if (unitMode === 'front' || unitMode === 'defense') {
-      // a click picks units or a line; a stroke makes a new line
+    if (unitMode === 'front' || unitMode === 'defense' || unitMode === 'area') {
+      // a click picks units or a line; a stroke makes a new line (or the outline of an area)
       if (u) { if (e.shiftKey) { const cur = targets(); setSel(cur.concat(grp.filter(v => !cur.includes(v))), u); } else setSel(grp, u); selFront = null; renderSidePick(); return; }
       const f = hitFront(g);
       if (f) { selFront = f; setSel(frontUnits(f)); renderSidePick(); return; }
-      drag = { mode: 'fline', pts: [g], len: 0, kind: unitMode === 'defense' ? 'defense' : 'front' }; return;
+      drag = { mode: 'fline', pts: [g], len: 0, kind: unitMode }; return;
     }
     if (e.shiftKey) {
       if (u) {
@@ -7064,8 +7140,11 @@ cv.addEventListener('pointerdown', e => {
       if (!inside) return;
       const owner = spawnOwner(g, e.ctrlKey || e.metaKey);
       pushHist();
+      // with a general picked below, the new units are his: they go to his line, if he holds one
+      const pg = lineGeneral(), giveGen = us => { if (pg && pg.owner === owner) for (const v of us) v.gen = pg.id; };
       if (placeCount > 1) {
         const made = placeBatch(g, owner, placeCount, (e.ctrlKey || e.metaKey) && owner !== cellOwner(g.x, g.y));
+        giveGen(made);
         if (!made.length) { hist.pop(); updUndo(); toast('Здесь нет земли страны «' + countries[owner - 1].name + '», чтобы поставить войска.'); return; }
         setSel(made, made[0]); unitsChanged();
         toast('Поставлено отрядов: ' + made.length + ' (' + countries[owner - 1].name + ')' + (made.length < placeCount ? ' — больше не поместилось на этой земле' : '') + '. «Двигать» (E) — приказы всем сразу');
@@ -7079,6 +7158,7 @@ cv.addEventListener('pointerdown', e => {
         return;
       }
       const nu = { x: g.x, y: g.y, era, type: unitType, owner, ech: unitEch, label: '' };
+      giveGen([nu]);
       units.push(nu); selectUnit(nu); unitsChanged();
     }
   } else if (tool === 'region') {
@@ -7118,7 +7198,7 @@ cv.addEventListener('pointermove', e => {
   hover = W ? toGrid(p) : null;
   updWhere();
   if (!drag) {
-    if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? (unitMode === 'front' || unitMode === 'defense' ? 'pointer' : 'move') : unitMode === 'move' ? (hitFront(hover) ? 'pointer' : 'default') : unitMode === 'front' || unitMode === 'defense' ? (hitFront(hover) ? 'pointer' : 'crosshair') : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
+    if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? (unitMode === 'front' || unitMode === 'defense' || unitMode === 'area' ? 'pointer' : 'move') : unitMode === 'move' ? (hitFront(hover) ? 'pointer' : 'default') : unitMode === 'front' || unitMode === 'defense' || unitMode === 'area' ? (hitFront(hover) ? 'pointer' : 'crosshair') : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
     updateRegionHover();
     requestUi(); return;
   }
@@ -7164,7 +7244,7 @@ cv.addEventListener('pointermove', e => {
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
   }
 });
-const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' ? (unitMode === 'move' ? 'default' : unitMode === 'front' || unitMode === 'defense' ? 'crosshair' : 'copy') : tool === 'cities' ? 'copy' : 'crosshair';
+const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' ? (unitMode === 'move' ? 'default' : unitMode === 'front' || unitMode === 'defense' || unitMode === 'area' ? 'crosshair' : 'copy') : tool === 'cities' ? 'copy' : 'crosshair';
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
@@ -7220,7 +7300,7 @@ function endPointer(e) {
     return;
   }
   if (drag.mode === 'unit') {
-    if (drag.moved) { for (const m of drag.group) delete m.v.fl; if (unitsPushBorder) edited(); unitsChanged(); } else { hist.pop(); updUndo(); }
+    if (drag.moved) { for (const m of drag.group) if (m.v.fl || m.v.gen) m.v.man = true; if (unitsPushBorder) edited(); unitsChanged(); } else { hist.pop(); updUndo(); }
     drag = null; return;
   }
   let wasEdit = drag.mode === 'warp' || drag.mode === 'paint';
@@ -7290,7 +7370,7 @@ window.addEventListener('keydown', e => {
   if (tools[e.code]) { if ((tools[e.code] === 'arrows' && !game.arrows) || (tools[e.code] === 'cities' && !game.cities)) return; setTool(tools[e.code]); return; }
   if (tool === 'arrows' && selArrow && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); return; }
   if (tool === 'cities' && selCity && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteCity(); return; }
-  if (tool === 'units' && (unitMode === 'front' || unitMode === 'defense') && selFront && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteFront(selFront); return; }
+  if (tool === 'units' && (unitMode === 'front' || unitMode === 'defense' || unitMode === 'area') && selFront && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteFront(selFront); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && selGen) { closeGen(); return; }
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
@@ -7303,7 +7383,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyC' && tool === 'units') { setPlaceCount(PLACE_COUNTS[(PLACE_COUNTS.indexOf(placeCount) + 1) % PLACE_COUNTS.length]); if (unitMode !== 'place') setUnitMode('place', true); return; }
-  if (e.code === 'KeyQ' || e.code === 'KeyE' || e.code === 'KeyG' || e.code === 'KeyV') { if (tool !== 'units') setTool('units'); setUnitMode({ KeyE: 'move', KeyG: 'front', KeyV: 'defense' }[e.code] || 'place'); return; }
+  if (e.code === 'KeyQ' || e.code === 'KeyE' || e.code === 'KeyG' || e.code === 'KeyV' || e.code === 'KeyN') { if (tool !== 'units') setTool('units'); setUnitMode({ KeyE: 'move', KeyG: 'front', KeyV: 'defense', KeyN: 'area' }[e.code] || 'place'); return; }
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
