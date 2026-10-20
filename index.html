@@ -715,6 +715,60 @@ body.wx-mud main::after { content: ''; position: absolute; inset: 0; z-index: 3;
 body.staff #mapcv { filter: sepia(.42) saturate(.78) contrast(1.06) brightness(1.02); }
 body.staff .paper { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: multiply; opacity: .55;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55  0 0 0 0 .47  0 0 0 0 .33  0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+/* --- Ctrl+K, the tour --- */
+.cmdk { position: fixed; inset: 0; z-index: 300; background: rgb(4 6 9 / .55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.cmdk .cbox { width: min(640px, calc(100% - 24px)); background: var(--panel); border: 1px solid var(--line2); border-radius: 18px; box-shadow: 0 30px 90px rgb(0 0 0 / .6); overflow: hidden; display: flex; flex-direction: column; max-height: 70vh; }
+.cmdk label { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.cmdk input { flex: 1; background: transparent; border: 0; outline: 0; color: var(--ink); font: 500 16px var(--f-ui); }
+.cmdk kbd { font: 600 10.5px var(--f-mono); padding: 3px 6px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.cmdk ul { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.cmdk li { display: grid; grid-template-columns: 26px 1fr; grid-template-rows: auto auto; column-gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.cmdk li i { grid-row: span 2; font-style: normal; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--bg); color: var(--accent); font-size: 13px; }
+.cmdk li b { font: 600 13.5px var(--f-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cmdk li small { color: var(--muted); font-size: 11.5px; }
+.cmdk li.on { background: var(--accent-soft); } .cmdk li.on i { background: var(--accent); color: var(--accent-ink); }
+.cmdk li.none { display: block; color: var(--muted); padding: 18px; text-align: center; cursor: default; }
+.cmdk footer { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+.tour { position: fixed; inset: 0; z-index: 250; pointer-events: none; }
+.tour .thole { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgb(4 6 9 / .62), 0 0 0 2px var(--accent); transition: all .35s cubic-bezier(.2, .8, .2, 1); }
+.tour .tcard { position: fixed; width: 320px; pointer-events: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgb(0 0 0 / .5); transition: left .35s, top .35s; display: flex; flex-direction: column; gap: 6px; }
+.tour .tcard small { color: var(--accent); font: 700 11px var(--f-ui); letter-spacing: .08em; text-transform: uppercase; }
+.tour .tcard b { font: 700 17px var(--f-ui); } .tour .tcard p { margin: 0 0 6px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.tour .tcard div { display: flex; justify-content: space-between; gap: 8px; }
+/* --- a phone: the map fills the screen, the tools are a bar along the bottom, the panel a sheet over the map --- */
+@media (max-width: 760px) {
+  body, body.nopanel { display: block; height: 100dvh; }
+  main { position: fixed; inset: 0 0 calc(62px + env(safe-area-inset-bottom, 0px)) 0; }
+  .rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: calc(62px + env(safe-area-inset-bottom, 0px)); padding: 7px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+    flex-direction: row; gap: 4px; border: 0; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  .rail-tools { flex-direction: row; overflow-x: auto; }
+  .rail-tools button, .rail-btn { width: 46px; height: 46px; }
+  .rail-gap { display: none; }
+  #panel, body.nopanel #panel { position: fixed; z-index: 19; left: 0; right: 0; top: auto; bottom: calc(62px + env(safe-area-inset-bottom, 0px)); height: min(62dvh, 560px); width: auto;
+    border-radius: 20px 20px 0 0; border: 1px solid var(--line); border-bottom: 0; background: var(--panel); box-shadow: 0 -16px 40px rgb(0 0 0 / .45); display: flex;
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1), visibility 0s; }
+  body.nopanel #panel { transform: translateY(105%); visibility: hidden; transition: transform .25s, visibility 0s .25s; }
+  #panel::before { content: ''; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 4px; background: var(--line2); }
+  .ptabs { padding-top: 16px; }
+  .hud { top: calc(8px + env(safe-area-inset-top, 0px)); left: 8px !important; right: 8px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .hud::-webkit-scrollbar { display: none; }
+  .hud > .hscore, .hud .hgroup:has(#tglPush), .hud .hwar .pw, .hud .hctext, .hud .hrec .tl, .hud .tgl .tl, .hspeed { display: none !important; }
+  .hud > button, .hud .hclock, .hud .hgroup { height: 40px; }
+  .hbtn { width: 40px; height: 40px; }
+  .hdate small { display: none; } .hdate b { font-size: 12px; }
+  .sidepick, body:not(.nopanel) .sidepick { top: calc(56px + env(safe-area-inset-top, 0px)); left: 8px; right: 8px; transform: none; max-width: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .sidepick .usize { display: none; }
+  .gstrip, body:not(.nopanel) .gstrip { left: 8px; right: 8px; bottom: 8px; padding: 4px 8px; }
+  .gstrip .gside label { display: none; }
+  .playbar, body:not(.nopanel) .playbar { left: 8px; right: 8px; width: auto; transform: none; bottom: calc(var(--strip-h, 60px) + 14px); gap: 4px; }
+  .playbar .pbt { width: auto; flex: 1; } .playbar input[type=range], .playbar small, #pbCompare, #pbVideo { display: none; }
+  .recbar, body:not(.nopanel) .recbar { left: 8px; bottom: calc(var(--strip-h, 60px) + 72px); }
+  .objbox { top: auto; bottom: calc(var(--strip-h, 60px) + 130px); right: 8px; width: 200px; }
+  .stagecap, body:not(.nopanel) .stagecap { left: 50%; top: 18%; }
+  .mapctl { display: none; }
+  .layerspop { right: 8px; left: 8px; width: auto; }
+  #toast { bottom: calc(var(--strip-h, 60px) + 80px) !important; max-width: calc(100% - 24px); }
+  .tour .tcard { width: calc(100% - 24px); left: 12px !important; }
+}
 </style>
 </head>
 <body>
@@ -1051,6 +1105,7 @@ body.staff .paper { display: block; position: absolute; inset: 0; z-index: 1; po
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="hbtn" id="btnCmd" title="Поиск: войны, этапы, города, места и команды (Ctrl+K)" aria-label="Поиск"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
     <button class="hcountry" id="hudCountry" title="Страны: выбрать, за кого играть (щелчок колёсиком по стране на карте — тоже)"><span class="hflag" id="hudFlag"></span><span class="hctext"><small>Играю за</small><b id="hudCName">—</b></span></button>
     <div class="hclock" id="hudClock">
       <button class="hplay" id="hudPlay" title="Время: пуск или пауза (P)" aria-label="Время: пуск или пауза"><svg class="i-play" width="16" height="16" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><svg class="i-pause" width="16" height="16" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg></button>
@@ -1156,6 +1211,8 @@ body.staff .paper { display: block; position: absolute; inset: 0; z-index: 1; po
   </div>
   <div id="toast" role="status" aria-live="polite"></div>
 </main>
+<div class="cmdk" id="cmdk" hidden role="dialog" aria-label="Поиск и команды"><div class="cbox"><label><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input placeholder="Война, этап, город, место или команда…" aria-label="Что найти" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></label><ul role="listbox"></ul><footer><span>↑↓ выбрать</span><span>Enter открыть</span><span>Ctrl+K в любой момент</span></footer></div></div>
+<div class="tour" id="tour" hidden><div class="thole"></div><div class="tcard" role="dialog" aria-label="Обучение"><small></small><b></b><p></p><div><button data-t="skip">Пропустить</button><button class="primary" data-t="next">Дальше</button></div></div></div>
 <div class="menu" id="menu" hidden>
   <canvas id="menuBg" aria-hidden="true"></canvas>
   <div class="menu-shade"></div>
@@ -5159,6 +5216,113 @@ $('#btnLayers').addEventListener('click', e => { const p = $('#layersPop'); p.hi
 $('#layersPop').addEventListener('click', e => { const b = e.target.closest('[data-ly]'); if (!b) return; if (b.dataset.ly === 'sup') { setSupShow(!supShow); renderLayersPop(); } else setLayer(b.dataset.ly, !layers[b.dataset.ly]); e.stopPropagation(); });
 addEventListener('click', e => { const p = $('#layersPop'); if (p && !p.hidden && !p.contains(e.target)) p.hidden = true; });
 layersInit();
+// ---------- Ctrl+K: one line for everything ----------
+// Wars and their stages, the cities of the map, the tools and switches of the game, and any place on Earth: type a
+// few letters, pick with the arrows and Enter.
+const CMD_ACTIONS = [
+  ['Граница: резина', 'инструмент · тянуть фронт', () => { setTool('warp'); setWarpMode('rubber', true); }],
+  ['Граница: натиск', 'инструмент', () => { setTool('warp'); setWarpMode('push', true); }],
+  ['Войска', 'инструмент · ставить и двигать дивизии', () => setTool('units')],
+  ['Снимок карты', 'картинка в высоком разрешении с легендой', () => exportHiRes(3)],
+  ['Запись', 'каждая правка — кадр, потом повтор и видео', () => recToggle()],
+  ['Рельеф', 'слой карты', () => setLayer('relief', !layers.relief)],
+  ['Реки', 'слой карты', () => setLayer('rivers', !layers.rivers)],
+  ['Штабная карта', 'стиль карты', () => setLayer('staff', !layers.staff)],
+  ['Снабжение', 'карта снабжения', () => setSupShow(!supShow)],
+  ['Бои: пуск / пауза', 'клавиша P', () => setBattles(!battlesOn)],
+  ['Проиграть войну по этапам', 'для войн с этапами', () => playStart()],
+  ['Обучение', 'пройти заново', () => tourStart(true)],
+  ['Главное меню', 'Esc', () => openMenu(true)],
+  ['Спрятать или показать панель', 'клавиша H', () => setPanel(document.body.classList.contains('nopanel'))]
+];
+const norm = t => t.toLowerCase().replace(/ё/g, 'е');
+function cmdItems(q) {
+  const t = norm(q.trim()), out = [];
+  const hit = s => !t || norm(s).includes(t) || t.split(/\s+/).every(w => norm(s).includes(w));
+  for (const [n, sub, fn] of CMD_ACTIONS) if (hit(n + ' ' + sub)) out.push({ k: 'act', n, sub, fn });
+  if (t) {
+    for (const c of cities) if (hit(c.name)) out.push({ k: 'city', n: c.name, sub: 'город на карте · ' + c.vp + ' оч. · ' + ownerName(cityOwner(c)), fn: () => cmdLook(c.x, c.y) });
+    const seen = new Set();
+    for (const w of WARS) {
+      const label = w.name + ' ' + (w.date || '') + ' ' + (w.stage || '');
+      if (!hit(label) || seen.has(w.id)) continue; seen.add(w.id);
+      const same = curWarId && w.series && stageList(curWarId).some(x => x.id === w.id);
+      out.push({ k: 'war', n: w.name, sub: (w.series ? 'этап · ' : 'сценарий · ') + (w.date || ''), fn: () => same ? morphTo(w.id) : startScenario(w.id, w.player || 1) });
+      if (out.length > 60) break;
+    }
+    out.push({ k: 'geo', n: 'Найти на карте: «' + q.trim() + '»', sub: 'поиск места на Земле', fn: () => geoSearch(q.trim()) });
+  }
+  return out.slice(0, 40);
+}
+function cmdLook(x, y) { userView = true; const r = stage.getBoundingClientRect(), s = Math.max(view.s, 2); view.s = s; view.x = r.width / 2 - x * s; view.y = r.height / 2 - y * s; requestDraw(); viewChanged(); }
+let cmdSel = 0, cmdList = [];
+function cmdOpen() {
+  const el = $('#cmdk'); el.hidden = false; const i = el.querySelector('input'); i.value = ''; cmdRender(''); setTimeout(() => i.focus(), 0);
+}
+function cmdClose() { $('#cmdk').hidden = true; }
+function cmdRender(q) {
+  cmdList = cmdItems(q); cmdSel = 0;
+  const ul = $('#cmdk ul'); ul.textContent = '';
+  const ICON = { act: '⚡', city: '◉', war: '⚔', geo: '⌖' };
+  cmdList.forEach((it, k) => {
+    const li = document.createElement('li'); li.className = k === cmdSel ? 'on' : ''; li.setAttribute('role', 'option');
+    li.innerHTML = '<i></i><b></b><small></small>';
+    li.querySelector('i').textContent = ICON[it.k]; li.querySelector('b').textContent = it.n; li.querySelector('small').textContent = it.sub;
+    li.addEventListener('mousemove', () => { if (cmdSel !== k) { cmdSel = k; cmdMark(); } });
+    li.addEventListener('click', () => cmdGo(k));
+    ul.append(li);
+  });
+  if (!cmdList.length) { const li = document.createElement('li'); li.className = 'none'; li.textContent = 'Ничего не нашлось'; ul.append(li); }
+}
+function cmdMark() { $('#cmdk ul').querySelectorAll('li').forEach((li, k) => { li.classList.toggle('on', k === cmdSel); if (k === cmdSel) li.scrollIntoView({ block: 'nearest' }); }); }
+function cmdGo(k) { const it = cmdList[k]; if (!it) return; cmdClose(); if (!document.getElementById('menu').hidden && it.k !== 'war') closeMenu(); it.fn(); }
+{
+  const el = $('#cmdk'), inp = el.querySelector('input');
+  inp.addEventListener('input', () => cmdRender(inp.value));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { cmdSel = Math.min(cmdList.length - 1, cmdSel + 1); cmdMark(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { cmdSel = Math.max(0, cmdSel - 1); cmdMark(); e.preventDefault(); }
+    else if (e.key === 'Enter') { cmdGo(cmdSel); e.preventDefault(); }
+    else if (e.key === 'Escape') { cmdClose(); e.preventDefault(); e.stopPropagation(); }
+  });
+  el.addEventListener('pointerdown', e => { if (e.target === el) cmdClose(); });
+  addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyK')) { e.preventDefault(); el.hidden ? cmdOpen() : cmdClose(); } }, true);
+  $('#btnCmd').addEventListener('click', cmdOpen);
+}
+// ---------- the first game: a short tour ----------
+// Six steps over the real interface, each lighting up the part it is about; shown once, and again from the menu.
+const TOUR = [
+  ['#rail', 'Инструменты', 'Слева — инструменты. Граница (1) тянет линию фронта, кисть и заливка рисуют земли, войска (7) ставят и двигают дивизии.'],
+  ['#panel', 'Панель', 'Здесь настройки инструмента, страны, войны и файлы. Клавиша H прячет панель — карта займёт весь экран.'],
+  ['.hclock', 'Время', 'Пуск и пауза — кнопка или клавиша P. Пока идёт время, армии наступают, обороняются и окружают.'],
+  ['#liveBar, #rail [data-tool="warp"]', 'Резина', 'Возьмитесь за линию фронта и тяните: фронт поползёт за рукой, с разрывами и стрелкой наступления. Войска на пути сопротивляются.'],
+  ['#btnLayers', 'Слои', 'Рельеф, реки, карта снабжения и штабный стиль — здесь. Горы и реки влияют на бой.'],
+  ['#btnCmd', 'Поиск', 'Ctrl+K — любая война, этап, город, место на Земле или команда одной строкой.']
+];
+let tourK = -1;
+function tourStart(force) {
+  if (!force && LS.get('mezha-tour', '') === 'done') return;
+  tourK = 0; $('#tour').hidden = false; tourShow();
+}
+function tourShow() {
+  const [sel, title, text] = TOUR[tourK], el = $('#tour'), card = el.querySelector('.tcard'), hole = el.querySelector('.thole');
+  let t = null; for (const s of sel.split(',')) { const q = document.querySelector(s.trim()); if (q && q.offsetParent !== null && q.getBoundingClientRect().width) { t = q; break; } }
+  const r = t ? t.getBoundingClientRect() : { left: innerWidth / 2 - 60, top: innerHeight / 2 - 30, width: 120, height: 60 };
+  Object.assign(hole.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
+  card.querySelector('b').textContent = title; card.querySelector('p').textContent = text;
+  card.querySelector('small').textContent = (tourK + 1) + ' из ' + TOUR.length;
+  card.querySelector('[data-t="next"]').textContent = tourK === TOUR.length - 1 ? 'Готово' : 'Дальше';
+  const cw = 320, ch = card.offsetHeight || 160;
+  let x = r.left + r.width + 18, y = r.top;
+  if (x + cw > innerWidth - 12) x = Math.max(12, r.left - cw - 18);
+  if (r.width > innerWidth * .5) { x = innerWidth / 2 - cw / 2; y = r.top + r.height + 18; }
+  y = clamp(y, 12, innerHeight - ch - 12);
+  card.style.left = x + 'px'; card.style.top = y + 'px';
+}
+function tourEnd() { $('#tour').hidden = true; tourK = -1; LS.set('mezha-tour', 'done'); }
+$('#tour [data-t="next"]').addEventListener('click', () => { if (++tourK >= TOUR.length) tourEnd(); else tourShow(); });
+$('#tour [data-t="skip"]').addEventListener('click', tourEnd);
+addEventListener('resize', () => { if (tourK >= 0) tourShow(); });
 // ---------- the front in motion: effects of a border drag ----------
 // While the border is pulled the land it takes is lit in the taker's colour under moving hatching, the leading edge
 // glows, shells burst and smoke drifts along it, a broad arrow runs from where the front was grabbed to the hand and
@@ -10309,7 +10473,10 @@ document.querySelectorAll('#tools button').forEach(b => b.addEventListener('clic
 $('#toolDesc').addEventListener('click', () => document.querySelector('.toolhead').classList.toggle('open'));
 $('#railPanel').addEventListener('click', () => setPanel(document.body.classList.contains('nopanel')));
 showTab(LS.get('mezha-tab', 'tool'));
-setPanel(LS.get('mezha-panel', '1') === '1');
+// on a phone the panel is a sheet over the map: closed at the start, opened by its button in the bar below
+const phone = () => matchMedia('(max-width: 760px)').matches;
+setPanel(!phone() && LS.get('mezha-panel', '1') === '1');
+if (phone()) { const st = $('#genStrip'); if (st && !st.classList.contains('folded')) $('#genFold').click(); }
 
 const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Войска', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', pan: 'Двигать карту' };
 function renderToolHead(t) {
@@ -10442,6 +10609,7 @@ function closeMenu() {
   const m = $('#menu');
   if (m.hidden) return;
   m.hidden = true; menuPaused = false; firstRun = false;
+  setTimeout(() => { if (W) tourStart(); }, 700);
   if (menuWasBattles && battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
   menuWasBattles = false;
   renderHud(); requestDraw();
