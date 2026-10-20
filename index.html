@@ -610,7 +610,7 @@ body:not(.nopanel) .status > #hint { display: none; }
   #toast { border-radius: 12px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }
 /* with the panel open the HUD has the width of the stage less the panel: it folds as it would on a narrower stage */
-@media (min-width: 761px) and (max-width: 1714px) { body:not(.nopanel) .hud .tgl .tl { display: none; } }
+@media (min-width: 761px) and (max-width: 1714px) { body:not(.nopanel) .hud .tgl .tl, body:not(.nopanel) .hud .hrec .tl { display: none; } }
 @media (min-width: 761px) and (max-width: 1654px) { body:not(.nopanel) .hdate small { display: none; } body:not(.nopanel) .hdate { min-width: 0; } }
 @media (min-width: 761px) and (max-width: 1564px) { body:not(.nopanel) .hscore small { display: none; } body:not(.nopanel) .hscore .hbar { grid-row: 1 / span 2; } }
 @media (min-width: 761px) and (max-width: 1514px) { body:not(.nopanel) .hpockets .pw, body:not(.nopanel) .hwar .pw { display: none; } }
@@ -4730,10 +4730,16 @@ function warpFollow() {
   drag.pending = false;
   const t = drag.tp || drag.p, dx = t.x - drag.p.x, dy = t.y - drag.p.y, d = Math.hypot(dx, dy) * view.s;
   if (d < .5) return;
-  const k = d < 3 ? 1 : .45;
+  // held by troops, the grip gives way only as fast as the balance of forces at it allows
+  const rs = fxResist && units.length && drag.wm !== 'smooth' ? resistAt() : null;
+  drag.res = rs;
+  const pace = rs ? resistPace(rs) : 1;
+  const k = (d < 3 && pace >= 1 ? 1 : .45) * pace;
   drag.p = { x: drag.p.x + dx * k, y: drag.p.y + dy * k };
+  if (rs) resistPay(rs, Math.hypot(dx, dy) * k);
   warpStep();
   if (k < 1) { drag.pending = true; requestAnimationFrame(warpFollow); }
+  if (rs && rs.D.length) fxKick();
 }
 function warpStep() {
   if (!drag || drag.mode !== 'warp') return;
@@ -4759,6 +4765,52 @@ function growBox(b) {
   fxMark(b);
   const u = drag.ub;
   drag.ub = u ? [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])] : b.slice();
+}
+// ---------- resistance: a front held by troops gives way slowly ----------
+// With troops on the map the rubber front is not free: the divisions of the side being pushed within reach of the
+// grip hold it, those of the side pushing press it. The grip then follows the hand only as fast as the balance
+// of the two allows (a band shows how far behind it is), the defenders lose organisation and strength for every
+// stretch the front is pushed through them, fall back with the line once broken, and are struck off the map when
+// destroyed; the attackers pay too, less.
+let fxResist = true;
+function resistAt() {
+  const R = BR(), g = drag.p, t = drag.tp || g;
+  let dx = t.x - g.x, dy = t.y - g.y, l = Math.hypot(dx, dy);
+  if (l < .5) { if (!drag.rdir) return null; [dx, dy] = drag.rdir; l = 1; } else { dx /= l; dy /= l; drag.rdir = [dx, dy]; l = 1; }
+  const own2 = (x, y) => { const gx = Math.floor(x), gy = Math.floor(y); return gx >= 0 && gy >= 0 && gx < W && gy < H ? own[gy * W + gx] : 0; };
+  const dfd = own2(g.x + dx * R * .55, g.y + dy * R * .55), atk = own2(g.x - dx * R * .55, g.y - dy * R * .55);
+  if (!dfd || !atk || dfd === atk || dfd === 255 || atk === 255) return null;
+  let def = 0, att = 0; const D = [], A = [], r2 = (R * 1.3) ** 2, a2 = (R * 1.7) ** 2;
+  for (const u of units) {
+    const d2 = (u.x - g.x) ** 2 + (u.y - g.y) ** 2;
+    if (u.owner === dfd || (allied(u.owner, dfd) && !allied(u.owner, atk))) { if (d2 < r2) { def += defendValue(u); D.push(u); } }
+    else if (u.owner === atk || allied(u.owner, atk)) { if (d2 < a2) { att += attackValue(u); A.push(u); } }
+  }
+  if (!D.length) return { f: 1, D, A, dfd, atk };
+  return { f: att ? att / (att + def * 1.25) : .18, D, A, dfd, atk };
+}
+// how fast the grip follows the hand: an even fight a third of the speed, a crushing edge full speed
+const resistPace = r => clamp(r.f * r.f * 1.6, .05, 1);
+// the front has been pushed mv cells through the defenders: the cost of it on both sides
+function resistPay(r, mv) {
+  if (!r || !r.D.length || mv <= 0) return;
+  const p = mv / BR(), w = 1 - r.f + .25;
+  for (const u of r.D) { u.org = Math.max(0, orgOf(u) - 70 * p * w); u.hp = hpOf(u) - 9 * p * w; u.fighting = true; }
+  for (const u of r.A) { u.org = Math.max(0, orgOf(u) - 22 * p * r.f); u.hp = hpOf(u) - 2.5 * p * (1 - r.f + .1); u.fighting = true; }
+  drag.fought = true;
+}
+// after the drag: the destroyed are struck off, as after a battle
+function resistSettle() {
+  if (!drag || !drag.fought) return;
+  for (const u of units) u.fighting = false;
+  const dead = units.filter(u => hpOf(u) <= 0);
+  if (!dead.length) return;
+  noteLosses(dead);
+  units = units.filter(u => hpOf(u) > 0); pruneForms();
+  selUnits = selUnits.filter(u => !dead.includes(u)); if (dead.includes(selUnit)) selUnit = null;
+  toast(dead.length > 4 ? 'Разгромлено дивизий: ' + dead.length : 'Разгромлены: ' + dead.map(u => unitName(u) + ' (' + ownerName(u.owner) + ')').join(', '));
+  dead.forEach(u => logEvent('Разгромлена ' + unitName(u) + ' (' + ownerName(u.owner) + ')', u.owner));
+  renderCountries(); renderUnitPanel();
 }
 // ---------- the front in motion: effects of a border drag ----------
 // While the border is pulled the land it takes is lit in the taker's colour under moving hatching, the leading edge
@@ -4838,7 +4890,8 @@ function fxUpdate() {
 function fxSpawn(fresh, now) {
   const P = fx.parts, E = fx.edgePts;
   if (!E.length || !fresh) return;
-  const want = Math.min(3, Math.ceil(Math.sqrt(fresh) / 8));
+  const held = drag && drag.res && drag.res.D.length ? 2 : 1;
+  const want = Math.min(3 * held, Math.ceil(Math.sqrt(fresh) / 8) * held);
   for (let k = 0; k < want && P.length < 90; k++) {
     const j = (Math.random() * E.length / 2 | 0) * 2;
     const big = Math.random() < .3;
@@ -4920,7 +4973,7 @@ function fxFrame(now) {
   else if (fxArrow && !fx.live && fx.arrow && fade > 0) fxDrawArrow(now, fade);
   if (fxArrow && fx.arrows) for (const a of fx.arrows) fxDrawArrow(now, fx.live ? Math.min(1, (now - fx.t0) / 350) : fade, a);
   fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (fx.live && drag && drag.mode === 'warp') fxBadge();
+  if (fx.live && drag && drag.mode === 'warp') { fxTension(now); fxBadge(); }
   if (fx.live || fade > 0 || P.length) fxKick(); else { fx.ub = null; }
 }
 function fxDrawArrow(now, alpha, arrow) {
@@ -4978,7 +5031,8 @@ function fxBadge() {
   const c = rgb[fx.side] || [224, 168, 62];
   const t1 = m ? (dist * m / 1000 < 10 ? (dist * m / 1000).toFixed(1) : Math.round(dist * m / 1000)) + ' км' : Math.round(dist) + ' кл.';
   const t2 = fx.cells ? '+' + (m ? fmtKm2(fx.cells * m * m / 1e6) : fx.cells + ' кл.') : '';
-  const name = fx.side && countries[fx.side - 1] ? countries[fx.side - 1].name : '';
+  const rs = drag.res, held = rs && rs.D.length;
+  const name = (fx.side && countries[fx.side - 1] ? countries[fx.side - 1].name : '') + (held ? ' · ⚔ ' + rs.D.length + ' ' + plural(rs.D.length, 'дивизия держит', 'дивизии держат', 'дивизий держат') + ' · темп ' + Math.round(resistPace(rs) * 100) + '%' : '');
   fxc.font = '700 13px ' + FONT_UI; const w1 = fxc.measureText('▲ ' + t1).width;
   fxc.font = '600 11.5px ' + FONT_UI; const w2 = t2 ? fxc.measureText(t2).width : 0, w3 = name ? fxc.measureText(name).width : 0;
   const w = Math.max(w1 + w2 + (t2 ? 14 : 0), w3) + 28, h = name ? 40 : 26;
@@ -4992,6 +5046,17 @@ function fxBadge() {
   fxc.fillStyle = '#fff'; fxc.font = '700 13px ' + FONT_UI; fxc.fillText('▲ ' + t1, bx + 12, by + 13);
   if (t2) { fxc.fillStyle = '#ffd27a'; fxc.font = '600 11.5px ' + FONT_UI; fxc.fillText(t2, bx + 26 + w1, by + 13.5); }
   if (name) { fxc.fillStyle = 'rgba(255,255,255,.6)'; fxc.font = '600 11.5px ' + FONT_UI; fxc.fillText(name, bx + 12, by + 30); }
+}
+// the band between the hand and the grip when troops hold the front back
+function fxTension(now) {
+  const t = drag.tp; if (!t || !drag.res || !drag.res.D.length) return;
+  const ax = drag.p.x * view.s + view.x, ay = drag.p.y * view.s + view.y, bx = t.x * view.s + view.x, by = t.y * view.s + view.y;
+  const L = Math.hypot(bx - ax, by - ay); if (L < 12) return;
+  fxc.save(); fxc.lineCap = 'round';
+  fxc.strokeStyle = 'rgba(255,90,70,.75)'; fxc.lineWidth = 3; fxc.setLineDash([8, 6]); fxc.lineDashOffset = -now / 30;
+  fxc.beginPath(); fxc.moveTo(ax, ay); fxc.lineTo(bx, by); fxc.stroke(); fxc.setLineDash([]);
+  fxc.fillStyle = 'rgba(255,90,70,.9)'; fxc.beginPath(); fxc.arc(bx, by, 5, 0, 6.283); fxc.fill();
+  fxc.restore();
 }
 function fmtKm2(a) { return (a < 10 ? a.toFixed(1) : Math.round(a).toLocaleString('ru-RU')) + ' км²'; }
 // the sum of a drag, said once it is let go
@@ -6101,6 +6166,7 @@ function renderLiveBar() {
   if (warpMode === 'rubber') seg(Object.entries(WARP_PROFILES).map(([k, p]) => [k, p.name, { arc: 'Фронт выгибается плавной дугой', wedge: 'Узкий клин — прорыв на узком участке', wall: 'Широкий вал — весь участок фронта идёт ровно' }[k]]), warpProfile,
     k => { warpProfile = k; LS.set('mezha-wprof', k); grabCache = null; renderLiveBar(); requestUi(); }, 'Профиль фронта');
   const tg = (on, t, tip, fn) => { const b = document.createElement('button'); b.className = 'ftg' + (on ? ' on' : ''); b.setAttribute('aria-pressed', on); b.title = tip; b.textContent = t; b.addEventListener('click', fn); box.append(b); };
+  tg(fxResist, 'Сопротивление', 'Войска у фронта держат его: тянуть их участок медленнее, обороняющиеся теряют силу и отходят', () => { fxResist = !fxResist; LS.set('mezha-resist', fxResist ? '1' : '0'); renderLiveBar(); });
   tg(fxOn, 'Эффекты', 'Подсветка занятой земли, огонь на линии фронта, разрывы', () => { fxOn = !fxOn; LS.set('mezha-fx', fxOn ? '1' : '0'); renderLiveBar(); fxKick(); });
   if (fxOn) {
     tg(fxArrow, 'Стрелка', 'Стрелка наступления от места, где взяли фронт', () => { fxArrow = !fxArrow; LS.set('mezha-fxarrow', fxArrow ? '1' : '0'); renderLiveBar(); });
@@ -9023,7 +9089,7 @@ cv.addEventListener('pointerdown', e => {
     const o = inside ? own[gy * W + gx] : 0;
     if (warpMode === 'push' && !o) { toast('Натиск начинают с земли наступающей страны.'); return; }
     pushHist(); own0.set(own);
-    drag = { mode: 'warp', p0: g, g0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null, live: liveFront ? liveUnits() : null };
+    drag = { mode: 'warp', p0: g, g0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null, live: liveFront ? liveUnits() : fxResist && units.length ? units.filter(u => !immobile(u)) : null };
     if (hideCursor) cv.style.cursor = 'none';
     fxBegin(drag);
     $('#hint').textContent = warpMode === 'smooth' ? 'Сглаживаете линию фронта.' : o ? (warpMode === 'push' ? 'Наступает: ' : 'Тянете в пользу: ') + countries[o - 1].name : HINTS.warp;
@@ -9191,7 +9257,7 @@ function endPointer(e) {
   if (drag.mode === 'pan') viewChanged();
   if (drag.mode === 'warp') {
     if (drag.tp) drag.p = drag.tp;
-    warpStep(); fxEnd(); if (drag.wm !== 'smooth') { cleanBox(drag.ub); fxSummary(); } $('#hint').textContent = HINTS.warp;
+    warpStep(); fxEnd(); resistSettle(); if (drag.wm !== 'smooth') { cleanBox(drag.ub); fxSummary(); } $('#hint').textContent = HINTS.warp;
     if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
   }
   if (drag.mode === 'box') {
@@ -10267,7 +10333,7 @@ function scenarioPreview(w) {
 // holds a stretch of 4–15 km (more on a very long front, so that there are never more than the setting); each
 // side's divisions are shared out into armies of up to 24, every army under a general, holding its own stretch as a
 // front line. «Плотно» in the settings puts 20 m units shoulder to shoulder instead, for fights over streets.
-fxOn = LS.get('mezha-fx', '1') === '1'; fxSound = LS.get('mezha-fxsound', '1') === '1'; fxArrow = LS.get('mezha-fxarrow', '1') === '1';
+fxResist = LS.get('mezha-resist', '1') === '1'; fxOn = LS.get('mezha-fx', '1') === '1'; fxSound = LS.get('mezha-fxsound', '1') === '1'; fxArrow = LS.get('mezha-fxarrow', '1') === '1';
 warpProfile = WARP_PROFILES[LS.get('mezha-wprof', 'arc')] ? LS.get('mezha-wprof', 'arc') : 'arc';
 liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
