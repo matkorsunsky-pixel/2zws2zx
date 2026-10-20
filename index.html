@@ -678,6 +678,31 @@ body:not(.nopanel) .recbar { left: calc(var(--pw, 336px) + 24px); }
 .recbar.live .rdot { background: var(--danger); animation: recpulse 1.1s ease-in-out infinite; }
 .recbar .rct { font: 600 12.5px var(--f-ui); margin-right: 4px; white-space: nowrap; }
 .recbar button { padding: 6px 10px; font-size: 12px; font-weight: 600; border-radius: 9px; }
+/* --- weather, goals --- */
+.hud .hwx { display: flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; font: 600 12.5px var(--f-ui); color: var(--muted); }
+.hud .hwx i { font-style: normal; font-size: 16px; }
+.hud .hwx.snow { color: #cfe6ff; } .hud .hwx.mud { color: #d9b07a; }
+body.wx-snow main::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: .5;
+  background-image: radial-gradient(2px 2px at 20px 30px, #fff, transparent), radial-gradient(1.5px 1.5px at 80px 120px, #fff, transparent), radial-gradient(2.5px 2.5px at 150px 60px, #fff, transparent), radial-gradient(1.5px 1.5px at 210px 170px, #fff, transparent);
+  background-size: 240px 220px; animation: snowfall 9s linear infinite; }
+body.wx-mud main::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgb(80 55 20 / .22)); }
+@keyframes snowfall { to { background-position: 40px 220px, -30px 220px, 20px 220px, -10px 220px; } }
+@media (prefers-reduced-motion: reduce) { body.wx-snow main::after { animation: none; } }
+.objbox { position: absolute; z-index: 4; top: 214px; right: 62px; width: 230px; padding: 4px 4px 8px;
+  background: var(--glass); border: 1px solid var(--gline, var(--line)); border-radius: 14px; box-shadow: var(--gshadow, var(--shadow)); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.objbox .ot { width: 100%; justify-content: space-between; border: 0; background: transparent; padding: 8px 10px; }
+.objbox .ot b { font: 700 13px var(--f-ui); } .objbox .ot small { color: var(--muted); font-size: 11.5px; }
+.objbox.fold ul { display: none; }
+.objbox ul { list-style: none; margin: 0; padding: 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.objbox li { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.objbox li i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line2); }
+.objbox li.ok i { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 2px var(--panel); }
+.objbox li small { color: var(--gold); font: 600 11px var(--f-mono); }
+.objdone { position: absolute; z-index: 9; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); text-align: center; padding: 26px 24px 20px;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 20px; box-shadow: 0 30px 80px rgb(0 0 0 / .55); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.objdone b { font: 700 28px var(--f-brand); color: var(--accent); } .objdone.lose { border-color: var(--danger); } .objdone.lose b { color: var(--danger); }
+.objdone .stars { font-size: 34px; color: var(--gold); letter-spacing: .15em; }
+.objdone p { margin: 0; color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -988,6 +1013,8 @@ body:not(.nopanel) .recbar { left: calc(var(--pw, 336px) + 24px); }
     <button data-rc="play" title="Повторить запись: граница пройдёт все записанные правки">▶ Повтор</button>
     <button data-rc="video" title="Повторить и снять видео (WebM)">Видео</button>
     <button data-rc="clear" title="Удалить запись" aria-label="Удалить запись">✕</button></div>
+  <div class="objbox" id="objBox" hidden><button class="ot"><b>Цели</b><small></small></button><ul></ul></div>
+  <div class="objdone" id="objDone" hidden role="dialog" aria-label="Итог"><b></b><div class="stars"></div><p></p><button class="primary">Продолжить</button></div>
   <div class="stagecap" id="stageCap" aria-live="polite"><b></b><span></span></div>
   <div class="playbar" id="playBar" hidden role="toolbar" aria-label="Этапы войны">
     <button id="pbPrev" class="pbb" title="Предыдущий этап" aria-label="Предыдущий этап"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
@@ -1013,6 +1040,7 @@ body:not(.nopanel) .recbar { left: calc(var(--pw, 336px) + 24px); }
         <button data-sp="1" aria-label="Скорость 1"></button><button data-sp="2" aria-label="Скорость 2"></button><button data-sp="3" aria-label="Скорость 3"></button><button data-sp="4" aria-label="Скорость 4"></button><button data-sp="5" aria-label="Скорость 5"></button>
       </div>
     </div>
+    <div class="hwx" id="hudWx" hidden title="Погода: распутица и зима замедляют марш и удары"><i></i><span></span></div>
     <div class="hscore" id="hudScore" hidden title="Победные очки за города"><small>Победные очки</small><div class="hbar" id="hudBar"></div><b id="hudVp"></b></div>
     <button class="hwar" id="hudWar" title="Войны и мир: объявить войну, заключить мир"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5L13 3h3v3l-3.5 3.5"/><path d="M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg><span id="hudWarN">Мир</span></button>
     <button class="hpockets" id="hudPockets" hidden title="Котлы: открыть список"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="3 2.4"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><span id="hudPocketN">0</span></button>
@@ -1021,6 +1049,9 @@ body:not(.nopanel) .recbar { left: calc(var(--pw, 336px) + 24px); }
     <button class="tgl" id="tglPush" aria-pressed="true" title="Если включено, войска при движении отодвигают границу (клавиша B)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c5 0 5-12 10-12"/><path d="M13 12h8"/><path d="M18 9l3 3-3 3"/></svg>
       <span class="tl">Войска двигают</span> <b>вкл</b></button>
+    <button class="tgl" id="tglSup" aria-pressed="false" title="Карта снабжения: где оно слабеет и где его нет">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+      <span class="tl">Снабжение</span> <b>выкл</b></button>
     <button class="tgl" id="tglRegion" aria-pressed="false" hidden title="Заливка по регионам Земли (клавиша R)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>
       <span class="tl">Регионы</span> <b>выкл</b></button>
@@ -4328,7 +4359,7 @@ async function applyWar(id, opts = {}) {
     logEvent('Сценарий: ' + w.name);
     mapTitle = w.name;
     curWarId = w.id;
-    if (!opts.keepView) { compareStop(); playStop(); }
+    if (!opts.keepView) { compareStop(); playStop(); objectives = null; renderObjectives(); $('#objDone').hidden = true; }
     renderPlayBar();
     if (opts.keepView) { requestDraw(); return; }
     // look at the theatre of war
@@ -4457,6 +4488,7 @@ function drawMap() {
     if (!geo) { m.fillStyle = 'rgba(0,0,0,.18)'; m.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
     if (vecMode) drawVectorMap(m);
     else { m.imageSmoothingEnabled = true; m.drawImage(over, 0, 0); }
+    drawSupplyMap(m);
     if (geo) drawRegionFrame(m);
     drawVecLabels(m);
     drawTerritoryLabels(m);
@@ -4811,6 +4843,205 @@ function resistSettle() {
   toast(dead.length > 4 ? 'Разгромлено дивизий: ' + dead.length : 'Разгромлены: ' + dead.map(u => unitName(u) + ' (' + ownerName(u.owner) + ')').join(', '));
   dead.forEach(u => logEvent('Разгромлена ' + unitName(u) + ' (' + ownerName(u.owner) + ')', u.owner));
   renderCountries(); renderUnitPanel();
+}
+// ---------- logistics: supply thins out with distance from the hubs ----------
+// Every city a side holds, every headquarters and all land more than 500 km behind the front is a hub; supply runs from it through land the side and its
+// allies hold. Within 450 km of a hub a division is fully supplied, beyond that its strength in battle falls
+// to a third at 1350 km; cut off in a pocket it is out of supply as before. The «Снабжение» map shows it.
+const SUP_FULL = 450, SUP_FADE = 900;
+let supLvl = null, supBusy = 0, supShow = false, supCv = null, supT = 0;
+function supplyCompute() {
+  if (!own || !W) return;
+  // distances in thirds of a cell (3 straight, 4 diagonal: round, not diamond-shaped), in two sweeps over the
+  // grid, each cell taking the nearest hub of its side among the neighbours already swept
+  const n = W * H, dist = new Uint32Array(n).fill(0xffffffff), so = new Uint8Array(n);
+  const seed = (x, y, o) => { const gx = Math.floor(x), gy = Math.floor(y); if (gx < 0 || gy < 0 || gx >= W || gy >= H) return; const i = gy * W + gx; if (!own[i] || !allied(own[i], o)) return; dist[i] = 0; so[i] = o; };
+  for (const c of cities) { const o = cityOwner(c); if (o && o !== 255) seed(c.x, c.y, o); }
+  for (const u of units) if (unitDef(u).def[2] === 'hq') seed(u.x, u.y, u.owner);
+  // the deep rear supplies itself: land more than 500 km from any front line is a hub too
+  const km0 = geo ? metersPerCell() / 1000 : 1, war = new Uint8Array(65536);
+  for (let a = 1; a <= countries.length; a++) for (let b = 1; b <= countries.length; b++) if (a !== b && atWar(a, b)) war[a << 8 | b] = 1;
+  const fd = new Uint32Array(n).fill(0xffffffff);
+  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
+    const o = own[i]; if (!o || o === 255) continue;
+    if ((x < W - 1 && war[o << 8 | own[i + 1]]) || (x > 0 && war[o << 8 | own[i - 1]]) || (y < H - 1 && war[o << 8 | own[i + W]]) || (y > 0 && war[o << 8 | own[i - W]])) fd[i] = 0;
+  }
+  const rl = (i, j, w) => { if (fd[j] !== 0xffffffff && fd[j] + w < fd[i]) fd[i] = fd[j] + w; };
+  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) { if (x > 0) rl(i, i - 1, 3); if (y > 0) { rl(i, i - W, 3); if (x > 0) rl(i, i - W - 1, 4); if (x < W - 1) rl(i, i - W + 1, 4); } }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1, i = y * W + x; x >= 0; x--, i--) { if (x < W - 1) rl(i, i + 1, 3); if (y < H - 1) { rl(i, i + W, 3); if (x < W - 1) rl(i, i + W + 1, 4); if (x > 0) rl(i, i + W - 1, 4); } }
+  const deep = 500 * 3 / km0;
+  for (let i = 0; i < n; i++) if (own[i] && own[i] !== 255 && fd[i] > deep) { dist[i] = 0; so[i] = own[i]; }
+  const ok = (i, o) => own[i] && own[i] !== 255 && allied(own[i], o) && !(pocket && pocket[i]);
+  const relax = (i, j, w) => { const d = dist[j]; if (d === 0xffffffff || d + w >= dist[i]) return; if (ok(i, so[j])) { dist[i] = d + w; so[i] = so[j]; } };
+  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
+    if (!own[i]) continue;
+    if (x > 0) relax(i, i - 1, 3);
+    if (y > 0) { relax(i, i - W, 3); if (x > 0) relax(i, i - W - 1, 4); if (x < W - 1) relax(i, i - W + 1, 4); }
+  }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1, i = y * W + x; x >= 0; x--, i--) {
+    if (!own[i]) continue;
+    if (x < W - 1) relax(i, i + 1, 3);
+    if (y < H - 1) { relax(i, i + W, 3); if (x < W - 1) relax(i, i + W + 1, 4); if (x > 0) relax(i, i + W - 1, 4); }
+  }
+  const km = geo ? metersPerCell() / 1000 : 1, lv = supLvl && supLvl.length === n ? supLvl : new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const d = dist[i]; lv[i] = d === 0xffffffff ? 0 : Math.max(1, Math.round(255 * clamp(1 - Math.max(0, d / 3 * km - SUP_FULL) / SUP_FADE, .3, 1))); }
+  supLvl = lv;
+  if (supShow) supPaint();
+}
+function supplySoon() { if (supBusy) return; supBusy = setTimeout(() => { supBusy = 0; supplyCompute(); requestDraw(); }, 400); }
+// a division's supply, 0.3 … 1 (on land of no hub at all: as far from one as can be)
+function supplyOf(u) {
+  if (!game.supply || !supLvl) return 1;
+  const gx = Math.floor(u.x), gy = Math.floor(u.y);
+  if (gx < 0 || gy < 0 || gx >= W || gy >= H) return 1;
+  const v = supLvl[gy * W + gx];
+  return v ? v / 255 : allied(own[gy * W + gx], u.owner) ? .3 : 1;
+}
+// the supply map of the player's side: yellow where it thins, red where it is short, clear where it is full
+function supPaint() {
+  if (!supLvl) return;
+  if (!supCv || supCv.width !== W || supCv.height !== H) { supCv = document.createElement('canvas'); supCv.width = W; supCv.height = H; }
+  const im = new ImageData(W, H), d = im.data, me = player || 1;
+  for (let i = 0; i < W * H; i++) {
+    const o = own[i]; if (!o || o === 255 || !allied(o, me)) continue;
+    const v = supLvl[i] / 255, p = i * 4;
+    if (!supLvl[i]) { d[p] = 230; d[p + 1] = 40; d[p + 2] = 40; d[p + 3] = 150; continue; }
+    if (v > .97) continue;
+    const t = (1 - v) / .7;
+    d[p] = 255; d[p + 1] = Math.round(220 - 170 * t); d[p + 2] = 40; d[p + 3] = Math.round(60 + 110 * t);
+  }
+  supCv.getContext('2d').putImageData(im, 0, 0);
+}
+function drawSupplyMap(c) {
+  if (!supShow || !supCv) return;
+  c.save(); c.globalAlpha = .55; c.imageSmoothingEnabled = true; c.drawImage(supCv, 0, 0); c.restore();
+}
+function setSupShow(on) {
+  supShow = on; $('#tglSup').setAttribute('aria-pressed', on); $('#tglSup b').textContent = on ? 'вкл' : 'выкл';
+  if (on) { supplyCompute(); toast('Снабжение: жёлтым — снабжение слабеет (дальше 450 км от городов и штабов), красным — его нет.'); }
+  layerSig = ''; requestDraw();
+}
+$('#tglSup').addEventListener('click', () => setSupShow(!supShow));
+// ---------- the seasons: mud in spring and autumn, snow in winter ----------
+// North of 44° the roads turn to mud in March–April and October–November and freeze in December–February; south of
+// the equator the year is turned round. Mud halves the march and blunts attacks, winter slows both less.
+const WEATHER = { dry: { n: 'Сухо', k: 1, a: 1, i: '☀' }, mud: { n: 'Распутица', k: .55, a: .8, i: '🌧' }, snow: { n: 'Зима', k: .75, a: .85, i: '❄' } };
+function seasonAt(t, lat) {
+  if (!game.weather || !t) return 'dry';
+  let m = new Date(t).getUTCMonth();
+  if (lat < 0) m = (m + 6) % 12;
+  const a = Math.abs(lat);
+  if (a < 40) return 'dry';
+  if (m === 11 || m <= 1) return a >= 44 ? 'snow' : 'mud';
+  if ((m === 2 || m === 3 || m === 9 || m === 10) && a >= 44) return 'mud';
+  return 'dry';
+}
+const gridLat = y => geo ? latAtY(geo.y0 + y * geoWpcY()) : 50;
+const weatherOf = u => WEATHER[seasonAt(gameDate, gridLat(u.y))];
+let wxShown = '';
+function renderWeather() {
+  const el = $('#hudWx'); if (!el) return;
+  const cy = W ? toGrid({ x: stage.clientWidth / 2, y: stage.clientHeight / 2 }).y : 0;
+  const s = W && game.calendar ? seasonAt(gameDate, gridLat(cy)) : 'dry', w = WEATHER[s];
+  el.hidden = !W || !game.calendar || !game.weather;
+  el.querySelector('i').textContent = w.i; el.querySelector('span').textContent = w.n + (s === 'dry' ? '' : ' · марш ' + Math.round(w.k * 100) + '%');
+  el.className = 'hwx ' + s;
+  if (wxShown !== s) { wxShown = s; document.body.classList.toggle('wx-snow', s === 'snow' && !!game.weather); document.body.classList.toggle('wx-mud', s === 'mud' && !!game.weather); }
+}
+// ---------- the goals of a stage ----------
+// A campaign gives the player's side two things to hold and two to take, chosen from the cities near the front by
+// their worth, and two months of play to do it in. Every day they are checked; at the end, or when all are done,
+// the stage is won with one to three stars, or lost.
+let objectives = null;
+function makeObjectives() {
+  objectives = null;
+  if (!player || !cities.length || !wars.length) return renderObjectives();
+  const near = (c, side) => { const R = Math.max(8, 250000 / (geo ? metersPerCell() : 1)); for (let k = 0; k < 24; k++) { const a = k * Math.PI / 12; for (const f of [.35, .7, 1]) { const x = Math.floor(c.x + Math.cos(a) * R * f), y = Math.floor(c.y + Math.sin(a) * R * f); if (x >= 0 && y >= 0 && x < W && y < H && own[y * W + x] && side(own[y * W + x])) return true; } } return false; };
+  const mine = o => allied(o, player), foe = o => o && o !== 255 && atWar(o, player);
+  const hold = cities.filter(c => cityOwner(c) === player && near(c, foe)).sort((a, b) => b.vp - a.vp).slice(0, 2);
+  const take = cities.filter(c => foe(cityOwner(c)) && near(c, mine)).sort((a, b) => b.vp - a.vp).slice(0, 2);
+  if (!hold.length && !take.length) return renderObjectives();
+  objectives = { start: gameDate, until: gameDate + 60 * 864e5, list: [...hold.map(c => ({ kind: 'hold', c })), ...take.map(c => ({ kind: 'take', c }))], result: null };
+  renderObjectives();
+}
+function objTick() {
+  const o = objectives; if (!o || o.result) return;
+  for (const g of o.list) g.ok = g.kind === 'hold' ? allied(cityOwner(g.c), player) : allied(cityOwner(g.c), player);
+  const takes = o.list.filter(g => g.kind === 'take'), holds = o.list.filter(g => g.kind === 'hold');
+  const allTaken = takes.length && takes.every(g => g.ok), lost = holds.some(g => !g.ok);
+  if (gameDate >= o.until || (allTaken && !lost)) {
+    const stars = (holds.every(g => g.ok) ? 1 : 0) + takes.filter(g => g.ok).length + (allTaken && gameDate < o.until ? 0 : 0);
+    o.result = { stars: Math.min(3, stars), win: stars >= 2 || (allTaken && !lost) };
+    objResult();
+  }
+  renderObjectives();
+}
+function renderObjectives() {
+  const box = $('#objBox'); if (!box) return;
+  const o = objectives;
+  box.hidden = !o;
+  if (!o) return;
+  const days = Math.max(0, Math.ceil((o.until - gameDate) / 864e5));
+  box.querySelector('.ot small').textContent = o.result ? (o.result.win ? 'Победа' : 'Поражение') : 'осталось ' + days + ' ' + plural(days, 'день', 'дня', 'дней');
+  const ul = box.querySelector('ul'); ul.textContent = '';
+  for (const g of o.list) {
+    const li = document.createElement('li'); li.className = (g.kind === 'hold' ? allied(cityOwner(g.c), player) : allied(cityOwner(g.c), player)) ? 'ok' : '';
+    li.innerHTML = '<i></i>'; li.append((g.kind === 'hold' ? 'Удержать ' : 'Взять ') + g.c.name);
+    const vp = document.createElement('small'); vp.textContent = g.c.vp + ' оч.'; li.append(vp);
+    ul.append(li);
+  }
+}
+function objResult() {
+  const r = objectives.result, d = $('#objDone');
+  d.querySelector('b').textContent = r.win ? 'Победа' : 'Поражение';
+  d.querySelector('.stars').textContent = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
+  d.querySelector('p').textContent = objectives.list.map(g => (allied(cityOwner(g.c), player) ? '✓ ' : '✗ ') + (g.kind === 'hold' ? 'удержать ' : 'взять ') + g.c.name).join(' · ');
+  d.hidden = false; d.classList.toggle('lose', !r.win);
+  setBattles(false);
+  logEvent((r.win ? 'Победа' : 'Поражение') + ': ' + '★'.repeat(r.stars));
+}
+$('#objDone button').addEventListener('click', () => { $('#objDone').hidden = true; });
+$('#objBox .ot').addEventListener('click', () => $('#objBox').classList.toggle('fold'));
+// ---------- the enemy's command: blows at the weak spots, and pincers ----------
+// When an army of the AI is ready to attack it does not push its whole line: it looks along it for the stretch the
+// enemy holds most thinly and aims its line of advance a day's march behind it; two of its armies whose weak spots
+// lie close together aim at one point between them, to close a pocket.
+function aiWeakSpot(f) {
+  const ls = frontUnits(f).filter(u => !immobile(u));
+  if (!ls.length) return null;
+  let best = null, bn = Infinity;
+  const step = Math.max(1, Math.floor(ls.length / 30));
+  for (let k = 0; k < ls.length; k += step) {
+    const u = ls[k], R = bodyS(u) * 5;
+    let n = 0; forNear(u, R, v => { if (atWar(v.owner, f.owner) && Math.hypot(v.x - u.x, v.y - u.y) < R) n += orgOf(v) / 100 * hpOf(v) / 100; });
+    // the way into enemy land from here
+    let dx = 0, dy = 0;
+    for (let j = 0; j < 16; j++) { const a = j * Math.PI / 8, cx = Math.cos(a), cy = Math.sin(a), o = cellOwner(u.x + cx * R * .8, u.y + cy * R * .8); if (o && atWar(o, f.owner)) { dx += cx; dy += cy; } }
+    const l = Math.hypot(dx, dy); if (!l) continue;
+    if (n < bn) { bn = n; best = { u, dx: dx / l, dy: dy / l, depth: bodyS(u) * 14 }; }
+  }
+  return best;
+}
+function aiAim(f, x, y, dx, dy, w) {
+  const nx = -dy, ny = dx;
+  f.goal = [{ x: clamp(x - nx * w, 0, W), y: clamp(y - ny * w, 0, H) }, { x: clamp(x, 0, W), y: clamp(y, 0, H) }, { x: clamp(x + nx * w, 0, W), y: clamp(y + ny * w, 0, H) }];
+}
+function aiPlanBlows(owner) {
+  const fs = fronts.filter(f => f.kind === 'front' && f.owner === owner && f.mode === 'attack' && !f.aiAimed);
+  const spots = fs.map(f => ({ f, s: aiWeakSpot(f) })).filter(e => e.s);
+  const used = new Set();
+  for (let a = 0; a < spots.length; a++) for (let b = a + 1; b < spots.length; b++) {
+    const A = spots[a], B = spots[b];
+    if (used.has(A) || used.has(B)) continue;
+    const d = Math.hypot(A.s.u.x - B.s.u.x, A.s.u.y - B.s.u.y);
+    if (d > A.s.depth * 4) continue;
+    const mx = (A.s.u.x + B.s.u.x) / 2 + (A.s.dx + B.s.dx) * A.s.depth * .5, my = (A.s.u.y + B.s.u.y) / 2 + (A.s.dy + B.s.dy) * A.s.depth * .5;
+    const o = cellOwner(mx, my); if (!o || !atWar(o, owner)) continue;
+    aiAim(A.f, mx, my, A.s.dx, A.s.dy, A.s.depth * .3); aiAim(B.f, mx, my, B.s.dx, B.s.dy, B.s.depth * .3);
+    A.f.aiAimed = B.f.aiAimed = true; used.add(A); used.add(B);
+    logEvent(ownerName(owner) + ': клещи — две армии бьют навстречу друг другу', owner);
+  }
+  for (const e of spots) if (!used.has(e)) { const s = e.s; aiAim(e.f, s.u.x + s.dx * s.depth, s.u.y + s.dy * s.depth, s.dx, s.dy, s.depth * .35); e.f.aiAimed = true; }
 }
 // ---------- the front in motion: effects of a border drag ----------
 // While the border is pulled the land it takes is lit in the taker's colour under moving hatching, the leading edge
@@ -7040,9 +7271,9 @@ function captureAlong(a, b, R, val) {
 // as in Hearts of Iron; small units (under a kilometre) and units on a picture map by their size, so a platoon of
 // 20 m crosses a street, not a province, in a moment
 function marchCells(u) {
-  const S = unitCellsAt(u.y);
-  if (geoStore && unitSize >= 1) return S / unitSize * 2.2 * hoursPerTick * battleSpeed;
-  return (geoStore ? Math.max(S * .9, S / unitSize * 1.5) : S * .9) * battleSpeed / 6;
+  const S = unitCellsAt(u.y), wk = weatherOf(u).k;
+  if (geoStore && unitSize >= 1) return S / unitSize * 2.2 * hoursPerTick * battleSpeed * wk;
+  return (geoStore ? Math.max(S * .9, S / unitSize * 1.5) : S * .9) * battleSpeed / 6 * wk;
 }
 function moveUnit(u, nx, ny, step) {
   const from = { x: u.x, y: u.y };
@@ -7062,11 +7293,11 @@ const ORG_PER_H = 2.6, HP_PER_H = .12, REST_AT = 12, GO_AT = 55;
 const inBattle = new Set();               // the units that fought in the last tick
 function attackValue(a) {
   const f = a.fl && frontById(a.fl);
-  return unitPower(a) * (.35 + .65 * orgOf(a) / 100) * (1 + .35 * (f ? f.plan || 0 : 0));
+  return unitPower(a) * (.35 + .65 * orgOf(a) / 100) * (1 + .35 * (f ? f.plan || 0 : 0)) * supplyOf(a) * weatherOf(a).a;
 }
 function defendValue(b) {
   const f = b.fl && frontById(b.fl);
-  return unitPower(b) * (.25 + .75 * orgOf(b) / 100) * (1 + .5 * (b.ent || 0)) * (f && f.kind !== 'front' ? 1.1 : 1) * (allied(cellOwner(b.x, b.y), b.owner) ? 1.1 : 1);
+  return supplyOf(b) * unitPower(b) * (.25 + .75 * orgOf(b) / 100) * (1 + .5 * (b.ent || 0)) * (f && f.kind !== 'front' ? 1.1 : 1) * (allied(cellOwner(b.x, b.y), b.owner) ? 1.1 : 1);
 }
 // one hour (times h) of a battle of attacker a against defender b
 function fight(a, b, h) {
@@ -7145,7 +7376,7 @@ function battleTick() {
   }
   if (game.ai) aiFronts(h);
   if (goalCheck()) startMarch();
-  if (game.calendar) gameDate += hoursPerTick * 3600e3;
+  if (game.calendar) { const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; if (Math.floor(gameDate / 864e5) !== d0) { objTick(); renderWeather(); } }
   if (game.reinforce) reinforceTick(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
@@ -7221,7 +7452,8 @@ const GAME_SYSTEMS = [
   ['orders', 'Приказы на марш', 'Выберите отряды и нажмите ПКМ по карте: они сами пойдут к точке.'],
   ['arrows', 'Стрелки наступления', 'Инструмент «Стрелки» (8): рисуйте планы ударов.'],
   ['cities', 'Города и победные очки', 'Инструмент «Города» (9): ключевые точки, за которые идёт борьба.'],
-  ['supply', 'Снабжение', 'Окружённые и оторвавшиеся от своих отряды слабеют и теряют силы.'],
+  ['supply', 'Снабжение', 'Окружённые слабеют и теряют силы; дальше 450 км от своих городов и штабов дивизии слабее в бою (до трети на 1350 км).'],
+  ['weather', 'Погода и сезоны', 'Распутица весной и осенью вдвое замедляет марш и ослабляет удары, зима — меньше. Севернее 44°.'],
   ['fog', 'Туман войны', 'Войска противника видны только рядом с вашими отрядами и землями.'],
   ['ai', 'ИИ противника', 'Во время боёв чужие отряды сами наступают на ваши войска и города.'],
   ['log', 'Хроника', 'Журнал событий: разгромы, взятые города, котлы.'],
@@ -7229,7 +7461,7 @@ const GAME_SYSTEMS = [
   ['reinforce', 'Подкрепления', 'Армия, потерявшая дивизии в котле или в бою, получает новые: по одной в сутки они выходят из тыла на опустевший участок фронта, пока армия не станет такой, как была.'],
   ['collapse', 'Ликвидация котлов', 'Пока идут бои, окружённый котёл держится три дня и ещё по полтора дня на каждый отряд внутри, потом сдаётся: земля отходит окружившим, отряды попадают в плен.'],
 ];
-let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
+let game = { calendar: true, orders: true, arrows: true, cities: true, supply: true, weather: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 // front lines (see «front lines» below): { id, owner, mode: 'hold' | 'attack', pts: [{ x, y, nx, ny }] on the border, n toward own land }
@@ -8361,7 +8593,7 @@ function aiFronts(h) {
     for (const u of ls) { org += orgOf(u); if (u.rest) resting++; }
     org /= ls.length;
     if (f.mode === 'attack') {
-      if (org < 30 || resting > ls.length * .6) { applyFrontMode(f, 'hold'); logEvent(ownerName(f.owner) + ': наступление выдохлось, войска переходят к обороне', f.owner); }
+      if (org < 30 || resting > ls.length * .6) { f.aiAimed = false; f.goal = null; applyFrontMode(f, 'hold'); logEvent(ownerName(f.owner) + ': наступление выдохлось, войска переходят к обороне', f.owner); }
       continue;
     }
     if (org < 80 || (f.plan || 0) < .55) continue;
@@ -8373,6 +8605,8 @@ function aiFronts(h) {
     // attack when not much weaker than the enemy facing it, or when the enemy is worn out (a counterblow)
     if (!foes || ls.length >= foes * .8 || eorg < 45) { if (applyFrontMode(f, 'attack')) logEvent(ownerName(f.owner) + ' переходит в наступление', f.owner); }
   }
+  // the armies that attack aim at the weak spots of the enemy, in pairs where they can close a ring
+  for (const o of new Set(fronts.filter(f => f.kind === 'front' && f.mode === 'attack' && !(player && allied(f.owner, player))).map(f => f.owner))) aiPlanBlows(o);
 }
 let aiClock = 0;
 // --- reinforcements ---
@@ -8560,6 +8794,7 @@ function updateSupply() {
   const cut = [];
   for (const u of units) {
     const was = !!u.oos, now = game.supply ? !inSupply(u) : false;
+    if (u === units[0]) supplySoon();
     if (now) u.oos = true; else delete u.oos;
     if (now && !was) cut.push(u);
   }
@@ -10510,6 +10745,7 @@ async function startScenario(id, pl) {
       if (n) toast(denseDeploy() ? 'Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.' : 'На фронте ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + ' в армиях генералов. Выберите армию внизу: «Выполнить план» — наступление, P — время.');
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
+    makeObjectives(); supplyCompute(); renderWeather();
   } finally { btn.disabled = false; btn.textContent = 'В бой'; }
   closeMenu(); renderHud(); scheduleSave();
 }
