@@ -609,6 +609,9 @@ body:not(.nopanel) .status > #hint { display: none; }
 .hud.f4 .hbar { width: 60px; } .hud.f4 .hpockets .pw, .hud.f4 .hwar .pw { display: none; } .hud.f4 > .hcountry { min-width: 0; }
 .hud.f5 .hctext { display: none; } .hud.f5 #btnHiRes { display: none; }
 .hud.f6 > .hscore { display: none !important; } .hud.f6 .hspeed { display: none; }
+.hud.f7 .tgl b, .hud.f7 #hudWar .wl { display: none; } .hud.f7 .hmode button { padding: 0 8px; font-size: 11.5px; }
+.hud.f8 #btnRec, .hud.f8 .hgroup:has(#btnUndo) { display: none; }
+.hud.f9 { flex-wrap: wrap; }
 /* the border tool's bar: modes, the shape of the front, effects */
 .livebar .fseg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
 .livebar .fseg button { padding: 6px 11px; font-weight: 600; font-size: 12.5px; border-color: transparent; background: transparent; border-radius: 8px; }
@@ -1055,6 +1058,39 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
   .mbtn { grid-template-columns: 36px 1fr auto; padding: 10px 12px 10px 10px; } .mbtn .mi { width: 36px; height: 36px; }
   .gcard { width: 84px; }
 }
+
+/* --- watching and playing --- */
+.hud .hmode { gap: 2px; padding: 4px; }
+.hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
+body:not(.mode-watch) .hud #hudModeP, body.mode-watch .hud #hudModeW { background: var(--grad-accent); color: var(--accent-ink); box-shadow: 0 3px 10px rgb(229 173 72 / .3), inset 0 1px 0 rgb(255 255 255 / .35); }
+body.mode-watch #tools button:not([data-tool="pan"]), body.mode-watch #tools .rail-sep, body.mode-watch #railPanel, body.mode-watch #panel,
+body.mode-watch #hudClock, body.mode-watch #hudWar, body.mode-watch #hudPockets, body.mode-watch #hudScore, body.mode-watch #hudWx, body.mode-watch #tglPush,
+body.mode-watch .hud .hgroup:has(#btnUndo), body.mode-watch #btnRec, body.mode-watch #genStrip, body.mode-watch #armyBar, body.mode-watch #objBox,
+body.mode-watch #sidePick, body.mode-watch #liveBar, body.mode-watch #geditor, body.mode-watch .status #hint { display: none !important; }
+body.mode-watch .hud { left: 10px !important; }
+body.mode-watch #stage { --strip-h: 0px !important; }
+body.mode-watch .playbar { left: 50% !important; width: min(820px, calc(100% - 24px)) !important; bottom: 18px; }
+body.mode-watch .stagecap { left: 50% !important; }
+.watchcard { position: absolute; z-index: 5; left: 14px; top: calc(68px + env(safe-area-inset-top, 0px)); width: min(380px, calc(100% - 28px)); max-height: calc(100% - 180px); overflow-y: auto;
+  padding: 16px 18px 16px; display: flex; flex-direction: column; gap: 5px; border-radius: 20px; border: 1px solid var(--gline, var(--line)); border-left: 3px solid var(--accent);
+  background: var(--glass); box-shadow: var(--gshadow, var(--shadow)); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); animation: popin .25s var(--ease); }
+.watchcard small { font: 650 10.5px var(--f-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); padding-right: 30px; }
+.watchcard b { font: 600 20px/1.2 var(--f-brand); letter-spacing: .01em; }
+.watchcard .wdate { font: 500 12.5px var(--f-mono); color: var(--muted); }
+.watchcard p { margin: 6px 0 4px; font-size: 13.5px; line-height: 1.55; color: color-mix(in srgb, var(--ink) 85%, var(--muted)); }
+.watchcard .wbtns { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.watchcard .wbtns span { font-size: 11.5px; color: var(--muted); }
+.watchcard .wfold { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; padding: 0; justify-content: center; border-radius: 9px; box-shadow: none; }
+.watchcard.fold p, .watchcard.fold .wbtns { display: none; }
+.watchcard.fold .wfold { transform: rotate(180deg); }
+.cmode { grid-column: auto; margin-bottom: 2px; }
+.cmode button { flex-direction: column; gap: 2px; padding: 10px 8px; }
+.cmode button b { font-size: 14px; } .cmode button small { font-size: 11.5px; color: var(--m-muted); }
+.cmode button.on small { color: #3b2a08; }
+@media (max-width: 760px) {
+  .watchcard { top: auto; bottom: 90px; left: 8px; right: 8px; width: auto; max-height: 40vh; }
+  body.mode-watch .playbar { bottom: 12px; }
+}
 </style>
 </head>
 <body>
@@ -1374,6 +1410,8 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
   <div class="paper" aria-hidden="true"></div>
   <div class="objbox" id="objBox" hidden><button class="ot"><b>Цели</b><small></small></button><ul></ul></div>
   <div class="objdone" id="objDone" hidden role="dialog" aria-label="Итог"><b></b><div class="stars"></div><p></p><button class="primary">Продолжить</button></div>
+  <div class="watchcard" id="watchCard" hidden><button class="wfold" id="wcFold" aria-label="Свернуть" title="Свернуть или развернуть">▾</button><small></small><b></b><span class="wdate"></span><p></p>
+    <div class="wbtns"><button class="primary" id="wcPlay">Играть с этого этапа</button><span>Пробел — пуск, ← → — этапы</span></div></div>
   <div class="stagecap" id="stageCap" aria-live="polite"><b></b><span></span></div>
   <div class="playbar" id="playBar" hidden role="toolbar" aria-label="Этапы войны">
     <button id="pbPrev" class="pbb" title="Предыдущий этап" aria-label="Предыдущий этап"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
@@ -1392,6 +1430,7 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <button class="hbtn" id="btnCmd" title="Поиск: войны, этапы, города, места и команды (Ctrl+K)" aria-label="Поиск"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+    <div class="hgroup hmode" id="hudMode" hidden role="group" aria-label="Режим"><button id="hudModeW" title="Смотреть войну по этапам, без войск">Смотреть</button><button id="hudModeP" title="Своя игра: войска, время, бои">Играть</button></div>
     <button class="hcountry" id="hudCountry" title="Страны: выбрать, за кого играть (щелчок колёсиком по стране на карте — тоже)"><span class="hflag" id="hudFlag"></span><span class="hctext"><small>Играю за</small><b id="hudCName">—</b></span></button>
     <div class="hclock" id="hudClock">
       <button class="hplay" id="hudPlay" title="Время: пуск или пауза (P)" aria-label="Время: пуск или пауза"><svg class="i-play" width="16" height="16" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><svg class="i-pause" width="16" height="16" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg></button>
@@ -1512,7 +1551,8 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
     </div>
     <nav class="mnav" aria-label="Главное меню">
       <button class="mbtn main" id="mContinue"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16l13-8z" fill="currentColor" stroke="none"/></svg></i><b id="mContinueT">Продолжить</b><small id="mContinueS"></small></button>
-      <button class="mbtn" id="mCampaign"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg></i><b>Новая кампания</b><small id="mCampaignS">Войны от 1812 года до наших дней</small></button>
+      <button class="mbtn" id="mWatch"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></i><b>Смотреть войны</b><small>Хроники по этапам: фронт движется сам</small></button>
+      <button class="mbtn" id="mCampaign"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg></i><b>Своя игра</b><small id="mCampaignS">Войны от 1812 года до наших дней</small></button>
       <button class="mbtn" id="mSandbox"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></i><b>Песочница</b><small>Чистая Земля, весь мир или своя карта</small></button>
       <button class="mbtn" id="mSave" hidden><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg></i><b>Сохранить проект</b><small>Файл .json со всей картой, войсками и хроникой</small></button>
       <button class="mbtn" id="mLoad"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></i><b>Загрузить проект</b><small>Открыть сохранённый файл .json</small></button>
@@ -1530,6 +1570,7 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
     <div class="camp">
       <div class="clist" id="campList"></div>
       <div class="cdetail" id="campDetail">
+        <div class="seg cmode" id="campModeSeg" role="radiogroup" aria-label="Режим"><button data-m="watch" role="radio"><b>Смотреть</b><small>война по этапам, без войск</small></button><button data-m="play" role="radio"><b>Играть</b><small>войска, время, бои, цели</small></button></div>
         <div class="cprev"><canvas id="campPrev"></canvas><div class="cload" id="campLoad">Рисую карту…</div></div>
         <div><h3 id="campName"></h3><div class="cdate" id="campDate"></div></div>
         <p id="campInfo"></p>
@@ -1615,6 +1656,7 @@ const HINTS = {
 };
 
 // ---------- state ----------
+let watchMode = false;   // watching a war by its stages, not playing it (setMode)
 let W = 0, H = 0;
 const base = document.createElement('canvas');
 const bctx = base.getContext('2d', { willReadFrequently: true });
@@ -5035,7 +5077,7 @@ async function applyWar(id, opts = {}) {
     checkCities(true); saveImage(); renderGeoPanel(); syncGameControls();
     logEvent('Сценарий: ' + w.name);
     mapTitle = w.name;
-    curWarId = w.id;
+    curWarId = w.id; $('#hudMode').hidden = false;
     if (!opts.keepView) { compareStop(); playStop(); objectives = null; renderObjectives(); $('#objDone').hidden = true; }
     renderPlayBar();
     if (opts.keepView) { requestDraw(); return; }
@@ -6349,7 +6391,8 @@ function renderPlayBar() {
   const bar = $('#playBar');
   if (!bar) return;
   const ws = stageList(curWarId), k = ws.findIndex(x => x.id === curWarId);
-  bar.hidden = ws.length < 2 || !W;
+  bar.hidden = ws.length < 2 || !W || !watchMode;
+  renderWatchCard();
   if (bar.hidden) return;
   const w = ws[k];
   bar.querySelector('.pbt b').textContent = new Date(w.date + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -8206,8 +8249,11 @@ function fight(a, b, h) {
 const frontById = id => fronts.find(f => f.id === id);
 // is a unit set on attacking, and able to
 const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <= 0;
+// the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
+function calendarTick() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; if (Math.floor(gameDate / 864e5) !== d0) { objTick(); renderWeather(); renderHud(); } }
 function battleTick() {
-  if (!own || !units.length) return;
+  if (!own) return;
+  if (!units.length) { calendarTick(); return; }
   engaged = []; inBattle.clear();
   const h = hoursPerTick;
   if (!gridOk() || units.length < 20000 || performance.now() - bgrid.t > 300) buildBattleGrid();
@@ -8249,7 +8295,7 @@ function battleTick() {
   }
   if (game.ai) aiFronts(h);
   if (goalCheck()) startMarch();
-  if (game.calendar) { const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; if (Math.floor(gameDate / 864e5) !== d0) { objTick(); renderWeather(); } }
+  calendarTick();
   if (game.reinforce) reinforceTick(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
@@ -10122,6 +10168,7 @@ function drawSpawnGhost(c) {
   c.restore();
 }
 function setTool(t) {
+  if (watchMode && t !== 'pan') return;
   tool = t;
   renderLiveBar();
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -10470,6 +10517,14 @@ window.addEventListener('keydown', e => {
   if (menuOpen()) { if (e.code === 'Escape') { e.preventDefault(); menuEsc(); } return; }
   const t = e.target;
   if (t && (t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && !['range', 'checkbox', 'color', 'file'].includes(t.type)))) return;
+  // watching: the keys only steer the chronicle — space or P plays and pauses, the arrows step through the stages
+  if (watchMode && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.code === 'Space' || e.code === 'KeyP') { e.preventDefault(); play.on ? playStop() : playStart(); return; }
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); playStop(); playStep(e.code === 'ArrowRight' ? 1 : -1); return; }
+    if (e.code === 'Escape') { openMenu(true); return; }
+    if (e.code === 'Enter') { $('#wcPlay').click(); return; }
+    return;
+  }
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'я')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && (k === 'y' || k === 'н')) { e.preventDefault(); redo(); return; }
@@ -11107,7 +11162,7 @@ function setSpeed(k) {
 const setTxt = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 let hudVpSig = '';
 // the HUD folds itself: while its chips overflow, it drops their labels step by step (classes f1…f6)
-const HUD_FOLD = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'];
+const HUD_FOLD = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9'];
 let hudFoldPending = false;
 function fitHud() {
   hudFoldPending = false;
@@ -11156,7 +11211,7 @@ function renderHud() {
 $('#hudMenu').addEventListener('click', () => openMenu(true));
 $('#railMenu').addEventListener('click', () => openMenu(true));
 $('#hudCountry').addEventListener('click', () => { setPanel(true); showTab('countries'); });
-$('#hudPlay').addEventListener('click', () => { setBattles(!battlesOn); renderHud(); });
+$('#hudPlay').addEventListener('click', () => { if (watchMode) { play.on ? playStop() : playStart(); return; } setBattles(!battlesOn); renderHud(); });
 document.querySelectorAll('#hudSpeed button').forEach((b, k) => b.addEventListener('click', () => setSpeed(k)));
 $('#hudPockets').addEventListener('click', () => { setPanel(true); showTab('war'); $('#pockets').scrollIntoView({ block: 'center' }); });
 
@@ -11205,7 +11260,7 @@ function openMenu(ingame) {
   $('#mSave').hidden = !ingame || $('#btnProj').hidden;
   const ga = $('#btnGetApp'); $('#mApp').hidden = !ga || ga.hidden;
   const nw = WARS.filter(w => !w.peace).length;
-  $('#mCampaignS').textContent = nw + ' ' + plural(nw, 'война', 'войны', 'войн') + ' от 1812 года до наших дней';
+  $('#mCampaignS').textContent = nw + ' ' + plural(nw, 'война', 'войны', 'войн') + ': войска, время, бои и цели';
   showScreen(null);
   renderMenuState();
   renderChronicles();
@@ -11229,8 +11284,11 @@ function menuEsc() {
 $('#mContinue').addEventListener('click', closeMenu);
 // a mouse click leaves no focus on HUD and toolbar buttons, so keys typed afterwards go to the map, not to the button
 document.addEventListener('click', e => { const bt = e.target.closest && e.target.closest('.hud button, .rail button, .mapctl button, .ptabs button'); if (bt && e.detail) bt.blur(); });
-$('#mCampaign').addEventListener('click', () => { showScreen('scrCampaign'); renderCampaign(); });
-$('#mChronAll').addEventListener('click', () => { campEra = -1; campQuery = ''; showScreen('scrCampaign'); renderCampaign(); });
+const openCamp = mode => { campMode = mode; showScreen('scrCampaign'); renderCampaign(); };
+$('#mCampaign').addEventListener('click', () => openCamp('play'));
+$('#mWatch').addEventListener('click', () => openCamp('watch'));
+document.querySelectorAll('#campModeSeg button').forEach(b => b.addEventListener('click', () => { campMode = b.dataset.m; LS.set('mezha-campmode', campMode); renderCampDetail(); }));
+$('#mChronAll').addEventListener('click', () => { campEra = -1; campQuery = ''; openCamp('watch'); });
 // sliders paint the part of the track left of the thumb in the accent: --p is that share; values set from code are caught by a slow sweep
 function paintRange(r) { const a = r.min === '' ? 0 : +r.min, b = r.max === '' ? 100 : +r.max, p = ((+r.value - a) / ((b - a) || 1) * 100).toFixed(1) + '%'; if (r._p !== p) { r._p = p; r.style.setProperty('--p', p); } }
 document.addEventListener('input', e => { if (e.target.type === 'range') paintRange(e.target); }, true);
@@ -11258,7 +11316,7 @@ function renderChronicles() {
     const st = document.createElement('span'); st.className = 'mstr';
     for (const c of seriesColors(ws)) { const i = document.createElement('i'); i.style.background = c; st.append(i); }
     b.append(y, t, n, d, st);
-    b.addEventListener('click', () => { campSel = (WARS.find(x => x.id === seriesSel[sid]) || ws[ws.length - 1]).id; campEra = -1; campQuery = ''; showScreen('scrCampaign'); renderCampaign(); });
+    b.addEventListener('click', () => { campSel = (WARS.find(x => x.id === seriesSel[sid]) || ws[ws.length - 1]).id; campEra = -1; campQuery = ''; openCamp('watch'); });
     rib.append(b);
   }
   const nw = WARS.filter(w => !w.peace).length;
@@ -11288,7 +11346,7 @@ $('#sbSample').addEventListener('click', () => { loadSample(); mapTitle = 'Уч�
 $('#sbFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (/\.json$/i.test(f.name)) loadProjectFile(f); else { freshWorld(); loadImageFile(f); } mapTitle = f.name.replace(/\.[^.]+$/, ''); closeMenu(); });
 
 // campaign: the wars by era, a map of the theatre, and the side to play
-let campSel = null, campPlayer = 1, campEra = -1, campQuery = '';
+let campSel = null, campPlayer = 1, campEra = -1, campQuery = '', campMode = 'play';
 const ERA_GROUPS = [[0, 1900, 'XIX век'], [1900, 1923, 'Империи и революции'], [1923, 1946, 'Вторая мировая'], [1946, 1992, 'Холодная война'], [1992, 3000, 'Новейшее время']];
 function renderCampaign(listOnly) {
   const list = $('#campList'), keepFocus = document.activeElement && document.activeElement.id === 'campQ';
@@ -11388,7 +11446,7 @@ function renderStages(w) {
   // the whole war as a film: from the first stage to the last, without troops
   const film = document.createElement('button'); film.className = 'cfilm';
   film.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg> Смотреть войну целиком · ' + ws.length + ' этапов';
-  film.addEventListener('click', async () => { const keep = campTroops; campTroops = false; await startScenario(ws[0].id, campPlayer); campTroops = keep; setTimeout(playStart, 900); });
+  film.addEventListener('click', async () => { await startScenario(ws[0].id, campPlayer, 'watch'); setTimeout(playStart, 900); });
   box.append(row, lab, sel, film);
 }
 function renderCampDetail() {
@@ -11425,10 +11483,15 @@ function renderCampDetail() {
     const lab = document.createElement('div'); lab.className = 'cside'; const sm = document.createElement('small'); sm.textContent = 'Любая страна мира'; lab.append(sm, sel); box.append(lab);
   }
   const hasWar = scenarioWars(w).length > 0;
-  $('#campTroopsBox').hidden = !hasWar;
+  $('#campTroopsBox').hidden = !hasWar || campMode === 'watch';
+  document.querySelectorAll('#campModeSeg button').forEach(b => { const on = b.dataset.m === campMode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('#campGo').textContent = campMode === 'watch' ? 'Смотреть' : 'В бой';
+  $('#scrCampaign .mhead h2').textContent = campMode === 'watch' ? 'Смотреть войну' : 'Своя игра';
+  $('#scrCampaign .mhead p').textContent = campMode === 'watch' ? 'Выберите войну и этап, с которого начать' : 'Выберите войну, этап и сторону';
+  const fb = $('#campStages .cfilm'); if (fb) fb.hidden = campMode !== 'watch';
   document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const pc = w.countries[campPlayer - 1];
-  $('#campAs').innerHTML = ''; $('#campAs').append('Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
+  $('#campAs').innerHTML = ''; $('#campAs').append(campMode === 'watch' ? 'Взгляд со стороны: ' : 'Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
   drawCampPreview(w);
 }
 let prevTok = 0;
@@ -11680,13 +11743,16 @@ function deploySize() {
   return true;
 }
 let campTroops = LS.get('mezha-troops', '1') === '1';
-async function startScenario(id, pl) {
+async function startScenario(id, pl, mode) {
+  const watch = mode === 'watch' || (mode === undefined && watchMode);
   const btn = $('#campGo'); btn.disabled = true; btn.textContent = 'Готовлю карту…';
+  playStop(); setBattles(false);
+  if (!watch && watchMode) setMode(false);
   try {
     $('#warSel').value = id; renderWarPanel();
     await applyWar(id);
     if (pl && countries[pl - 1]) takeControl(pl);
-    if (campTroops && wars.length) {
+    if (!watch && campTroops && wars.length) {
       // the theatre at its own detail first, so the troops stand on the borders as they are drawn
       btn.textContent = 'Расставляю войска…';
       clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
@@ -11695,10 +11761,38 @@ async function startScenario(id, pl) {
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
     makeObjectives(); supplyCompute(); renderWeather();
-  } finally { btn.disabled = false; btn.textContent = 'В бой'; }
+  } finally { btn.disabled = false; btn.textContent = campMode === 'watch' ? 'Смотреть' : 'В бой'; }
+  setMode(watch);
   closeMenu(); renderHud(); scheduleSave();
 }
-$('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer));
+$('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
+// ---------- two ways in: watching a war stage by stage, or playing it ----------
+// Watching: the map without troops, the chronicle's bar, a card with the stage's story; nothing on the map can be
+// changed, and the play button runs the stages instead of the battles. Playing: troops, time, battles and goals;
+// «Играть с этого этапа» takes the stage on the screen into a game of your own.
+let panelWas = null;
+function setMode(watch) {
+  watchMode = !!watch; LS.set('mezha-mode', watchMode ? 'watch' : 'play');
+  document.body.classList.toggle('mode-watch', watchMode);
+  if (watchMode) { if (panelWas === null) panelWas = !document.body.classList.contains('nopanel'); setBattles(false); setTool('pan'); setPanel(false); if (selGen) closeGen(); }
+  else { playStop(); if (tool === 'pan') setTool('warp'); if (panelWas !== null) { if (panelWas) setPanel(true); panelWas = null; } }
+  renderPlayBar(); renderHud(); requestDraw();
+}
+function renderWatchCard() {
+  const box = $('#watchCard'); if (!box) return;
+  const w = curWarId && WARS.find(x => x.id === curWarId);
+  box.hidden = !watchMode || !w || !W;
+  if (box.hidden) return;
+  const S = w.series && SERIES[w.series];
+  box.querySelector('small').textContent = S ? S.name : 'Просмотр';
+  box.querySelector('b').textContent = w.stage || w.name.split(' — ')[0];
+  box.querySelector('.wdate').textContent = new Date(w.date + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  box.querySelector('p').textContent = warInfo(w);
+}
+$('#wcPlay').addEventListener('click', () => { const keep = campTroops; campTroops = true; startScenario(curWarId, player || 1, 'play').finally(() => { campTroops = keep; }); });
+$('#wcFold').addEventListener('click', () => $('#watchCard').classList.toggle('fold'));
+$('#hudModeW').addEventListener('click', () => { if (watchMode || !curWarId) return; if (units.length && !confirm('Перейти в просмотр? Текущая партия закончится — её можно сохранить в файл в меню.')) return; startScenario(curWarId, player || 1, 'watch'); });
+$('#hudModeP').addEventListener('click', () => { if (watchMode) $('#wcPlay').click(); });
 document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === '1'; LS.set('mezha-troops', campTroops ? '1' : '0'); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
@@ -12091,7 +12185,7 @@ renderWarPanel();
 const skipMenu = /[?&]nomenu/.test(location.search);
 // the menu must never stand between the player and the game: if it fails to open, the game still loads
 if (!skipMenu) { try { openMenu(false); } catch (e) { console.error(e); $('#menu').hidden = true; menuPaused = false; } }
-restoreSaved().then(ok => { firstRun = !ok; if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
+restoreSaved().then(ok => { firstRun = !ok; if (ok && vsrc && vsrc.def.war && WARS.find(w => w.id === vsrc.def.war)) { curWarId = vsrc.def.war; $('#hudMode').hidden = false; if (LS.get('mezha-mode', 'play') === 'watch') setMode(true); } if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
 })();
 </script>
 </body>
