@@ -628,6 +628,43 @@ body:not(.nopanel) .status > #hint { display: none; }
 .livebar .ftg.on::before { background: var(--ok); box-shadow: 0 0 0 3px rgb(92 194 141 / .2); }
 .livebar .fsep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
 @media (prefers-reduced-motion: reduce) { #panel, body.nopanel #panel { transition: none; } }
+/* --- the stages in motion: the play bar, the caption, the before/after curtain --- */
+.cstages .cfilm { justify-content: center; padding: 10px; font-weight: 700; background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
+.cstages .cfilm:hover { background: var(--accent); color: var(--accent-ink); }
+.playbar { position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(var(--strip-h, 96px) + 18px);
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; width: min(760px, calc(100% - 24px));
+  background: var(--glass); border: 1px solid var(--gline, var(--line)); border-radius: 16px; box-shadow: var(--gshadow, var(--shadow));
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
+body:not(.nopanel) .playbar { left: calc(50% + (var(--pw, 336px) + 12px) / 2); width: min(760px, calc(100% - var(--pw, 336px) - 40px)); }
+.playbar .pbb { width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: 10px; background: transparent; border-color: transparent; flex: none; }
+.playbar .pbmain { width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 16px rgb(224 168 62 / .35); }
+.playbar .pbmain:hover { background: var(--accent); filter: brightness(1.08); }
+.playbar .pbmain .i-pause, .playbar .pbmain[aria-pressed="true"] .i-play { display: none; }
+.playbar .pbmain[aria-pressed="true"] .i-pause { display: block; }
+.playbar .pbt { display: flex; flex-direction: column; min-width: 0; width: 210px; flex: none; line-height: 1.2; }
+.playbar .pbt b { font: 700 13.5px var(--f-ui); font-variant-numeric: tabular-nums; }
+.playbar .pbt span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playbar input[type=range] { flex: 1; min-width: 60px; }
+.playbar small { font: 600 11px var(--f-mono); color: var(--muted); flex: none; }
+.playbar .pbs { padding: 6px 9px; font-size: 12px; font-weight: 600; flex: none; border-radius: 9px; }
+.playbar .pbs[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stagecap { position: absolute; z-index: 4; left: 50%; top: 22%; transform: translate(-50%, 8px); text-align: center; pointer-events: none; opacity: 0;
+  display: flex; flex-direction: column; gap: 4px; color: #fff; text-shadow: 0 2px 18px rgb(0 0 0 / .8), 0 1px 3px rgb(0 0 0 / .9); }
+body:not(.nopanel) .stagecap { left: calc(50% + (var(--pw, 336px) + 12px) / 2); }
+.stagecap b { font: 700 clamp(22px, 3.2vw, 40px)/1.05 var(--f-brand); letter-spacing: .02em; }
+.stagecap span { font: 600 clamp(13px, 1.3vw, 17px) var(--f-ui); opacity: .92; max-width: 60vw; }
+.stagecap.show { animation: capin 3.2s ease both; }
+@keyframes capin { 0% { opacity: 0; transform: translate(-50%, 10px); } 12% { opacity: 1; transform: translate(-50%, 0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -6px); } }
+.cmpview { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.cmpview canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cmpview .cmph { position: absolute; top: 0; bottom: 0; width: 34px; margin-left: -17px; cursor: ew-resize; pointer-events: auto; touch-action: none; display: grid; place-items: center; }
+.cmpview .cmph::before { content: ''; position: absolute; top: 0; bottom: 0; left: 16px; width: 2px; background: #fff; box-shadow: 0 0 12px rgb(0 0 0 / .6); }
+.cmpview .cmph i { width: 34px; height: 34px; border-radius: 50%; background: #fff; box-shadow: 0 4px 14px rgb(0 0 0 / .45); position: relative; }
+.cmpview .cmph i::before { content: '‹ ›'; position: absolute; inset: 0; display: grid; place-items: center; color: #222; font: 700 14px var(--f-ui); }
+.cmpview .cmpl { position: absolute; top: 196px; padding: 5px 10px; border-radius: 8px; background: rgb(0 0 0 / .7); color: #fff; font: 600 12px var(--f-ui); }
+.cmpview .cmpa { left: calc(var(--pw, 0px) + 30px); } body.nopanel .cmpview .cmpa { left: 16px; } .cmpview .cmpb { right: 60px; }
+.cmpview .cmpx { position: absolute; top: 190px; right: 16px; pointer-events: auto; width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 50%; }
+@media (prefers-reduced-motion: reduce) { .stagecap.show { animation-duration: .01s; } }
 </style>
 </head>
 <body>
@@ -933,6 +970,18 @@ body:not(.nopanel) .status > #hint { display: none; }
   <canvas id="mapcv" aria-hidden="true"></canvas>
   <canvas id="view"></canvas>
   <canvas id="fx" aria-hidden="true"></canvas>
+  <div class="cmpview" id="cmpView" hidden><canvas></canvas><div class="cmph" role="slider" aria-label="Шторка: было и стало" tabindex="0"><i></i></div><span class="cmpl cmpa"></span><span class="cmpl cmpb"></span><button class="cmpx" aria-label="Закрыть сравнение">✕</button></div>
+  <div class="stagecap" id="stageCap" aria-live="polite"><b></b><span></span></div>
+  <div class="playbar" id="playBar" hidden role="toolbar" aria-label="Этапы войны">
+    <button id="pbPrev" class="pbb" title="Предыдущий этап" aria-label="Предыдущий этап"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+    <button id="pbPlay" class="pbb pbmain" aria-pressed="false" aria-label="Проиграть"><svg class="i-play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg><svg class="i-pause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+    <button id="pbNext" class="pbb" title="Следующий этап" aria-label="Следующий этап"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+    <div class="pbt"><b></b><span></span></div>
+    <input type="range" id="pbRange" min="0" max="1" value="0" aria-label="Этап">
+    <small id="pbN"></small>
+    <button id="pbSpeed" class="pbs" title="Скорость проигрывания">1×</button>
+    <button id="pbCompare" class="pbs" aria-pressed="false" title="Было и стало: шторка между этим этапом и следующим">Сравнить</button>
+  </div>
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
@@ -2538,7 +2587,7 @@ function allocGrid(w, h) {
   pockets = []; exclaves = []; vec = null; dirty = [];
 }
 let settleT = 0;
-function viewChanged() { if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
+function viewChanged() { if (cmp && cmp.view !== view.x + ',' + view.y + ',' + view.s) compareStop(); if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
 function maybeReload() {
   if (!geoStore || !win) return;
   if (drag || pointers.size) { viewChanged(); return; }
@@ -4215,7 +4264,8 @@ function anchorCities(list) {
     storeWrite(L9, cx - R, cy - R, w2, w2, mask, null, o);
   }
 }
-async function applyWar(id) {
+// keepView: open the scenario over the map on screen without moving the camera (the stages of a series)
+async function applyWar(id, opts = {}) {
   const w = WARS.find(x => x.id === id);
   if (!w || warBusy) return;
   warBusy = true;
@@ -4223,7 +4273,14 @@ async function applyWar(id) {
   try {
     const R = decodeRegions();
     setBattles(false);
-    startEarthStore();
+    // the camera in world terms (the working window is rebuilt below, and the view is kept in its cells)
+    const keep = opts.keepView && win ? (n0 => ({ x: (-view.x / view.s + win.cx0) / n0, y: (-view.y / view.s + win.cy0) / n0, S: view.s * n0 }))(worldCells(win.L)) : null;
+    // over the map on screen the working window stays as it is (same place, same detail): only the tiles are
+    // emptied so they are filled again from the new scenario
+    const light = keep && geoStore;
+    if (light) { vsrc = null; srcChanged(); storeReset(); clearTileDB(); occStore = new Map(); loadOcc(); }
+    else startEarthStore();
+    if (keep && !light) { const n1 = worldCells(win.L); view.s = keep.S / n1; view.x = -(keep.x * n1 - win.cx0) * view.s; view.y = -(keep.y * n1 - win.cy0) * view.s; userView = true; }
     countries = w.countries.map(c => ({ name: c.name, color: c.color, side: c.side }));
     active = 1; player = w.player || 1;
     recolor();
@@ -4248,6 +4305,10 @@ async function applyWar(id) {
     checkCities(true); saveImage(); renderGeoPanel(); syncGameControls();
     logEvent('Сценарий: ' + w.name);
     mapTitle = w.name;
+    curWarId = w.id;
+    if (!opts.keepView) { compareStop(); playStop(); }
+    renderPlayBar();
+    if (opts.keepView) { requestDraw(); return; }
     // look at the theatre of war
     const r = stage.getBoundingClientRect(), top = hudInset(), strip = $('#genStrip').offsetHeight + top, v = w.view;
     const gx0 = lonToX(v[1]) * n - win.cx0, gx1 = lonToX(v[3]) * n - win.cx0, gy0 = latToY(v[2]) * n - win.cy0, gy1 = latToY(v[0]) * n - win.cy0;
@@ -4346,7 +4407,7 @@ function drawMap() {
   const vecMode = geoStore || view.s >= VEC_ZOOM;
   // territory changed under the curves: retrace them in the background; the layer below is kept until then
   // (not while a border is being dragged: the dragged area is painted from cells over the layer meanwhile)
-  const editing = drag && (drag.mode === 'warp' || drag.mode === 'paint');
+  const editing = (drag && (drag.mode === 'warp' || drag.mode === 'paint')) || !!morph;
   if (vecMode && editing && !preview) startPreview();
   if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && !editing) vecAsync(...vec.win);
   const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
@@ -4834,19 +4895,22 @@ function fxFrame(now) {
   // the arrow of the advance, from where the front was grabbed to the hand
   if (fxArrow && drag && drag.mode === 'warp' && drag.wm !== 'smooth' && fx.live) fxDrawArrow(now, 1);
   else if (fxArrow && !fx.live && fx.arrow && fade > 0) fxDrawArrow(now, fade);
+  if (fxArrow && fx.arrows) for (const a of fx.arrows) fxDrawArrow(now, fx.live ? Math.min(1, (now - fx.t0) / 350) : fade, a);
   fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (fx.live && drag && drag.mode === 'warp') fxBadge();
   if (fx.live || fade > 0 || P.length) fxKick(); else { fx.ub = null; }
 }
-function fxDrawArrow(now, alpha) {
-  const a = fx.live ? { x: fx.g0.x, y: fx.g0.y, hx: drag.p.x, hy: drag.p.y } : fx.arrow;
-  if (fx.live) fx.arrow = a;
-  const ax = a.x * view.s + view.x, ay = a.y * view.s + view.y, bx = a.hx * view.s + view.x, by = a.hy * view.s + view.y;
+function fxDrawArrow(now, alpha, arrow) {
+  const a = arrow || (fx.live ? { x: fx.g0.x, y: fx.g0.y, hx: drag.p.x, hy: drag.p.y } : fx.arrow);
+  if (fx.live && !arrow) fx.arrow = a;
+  // the arrow of a stage grows with the land it stands for
+  const gr = arrow && morph ? (t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)(Math.min(1, (now - morph.t0) / morph.ms)) : 1;
+  const ax = a.x * view.s + view.x, ay = a.y * view.s + view.y, bx = (a.x + (a.hx - a.x) * gr) * view.s + view.x, by = (a.y + (a.hy - a.y) * gr) * view.s + view.y;
   const L = Math.hypot(bx - ax, by - ay);
   if (L < 26) return;
   const ux = (bx - ax) / L, uy = (by - ay) / L, nx = -uy, ny = ux;
-  const c = rgb[fx.side] || [224, 168, 62];
-  const wd = clamp(BR() * view.s * .32, 10, 34), head = Math.min(L * .45, wd * 2.1);
+  const c = rgb[a.side || fx.side] || [224, 168, 62];
+  const wd = arrow ? clamp(Math.hypot(a.hx - a.x, a.hy - a.y) * view.s * .16, 12, 40) : clamp(BR() * view.s * .32, 10, 34), head = Math.min(L * .45, wd * 2.1);
   // a gentle bend: the control point a little to the side, as the arrows on staff maps sweep
   const bend = L * .12, mx = (ax + bx) / 2 + nx * bend, my = (ay + by) / 2 + ny * bend;
   const pt = t => { const s = 1 - t; return [s * s * ax + 2 * s * t * mx + t * t * bx, s * s * ay + 2 * s * t * my + t * t * by]; };
@@ -4943,6 +5007,202 @@ function fxRumble(v) {
     fxRum = { s, g };
   }
   fxRum.g.gain.setTargetAtTime(Math.min(.5, v * .9), fxAc.currentTime, .12);
+}
+// ---------- the war in motion: playing the stages of a series one into the next ----------
+// A stage is opened without moving the camera; the land that changed hands since the one before does not jump but
+// spreads from the old front line, cell by cell in order of its distance from it, with the effects of a pulled
+// front and an arrow for every big advance. The ▶ bar under the map plays the whole series like a film.
+let morph = null, curWarId = null;
+function stageList(id) {
+  const w = WARS.find(x => x.id === id);
+  return w && w.series ? WARS.filter(x => x.series === w.series).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0) : [];
+}
+// open a stage over the one on screen; resolves when the land has finished moving
+async function morphTo(id, ms = 1700) {
+  if (warBusy || !own) return;
+  morphStop();
+  const A0 = own.slice(), W0 = W, H0 = H, win0 = { ...win }, names0 = countries.map(c => c.name);
+  await applyWar(id, { keepView: true });
+  // the countries of two stages need not come in the same order: the old land is renumbered by name
+  const remap = new Uint8Array(256); for (let k = 0; k < 256; k++) remap[k] = k;
+  names0.forEach((nm, k) => { const j = countries.findIndex(c => c.name === nm); remap[k + 1] = j >= 0 ? j + 1 : 255; });
+  for (let i = 0; i < A0.length; i++) A0[i] = remap[A0[i]];
+  // the working window is rebuilt with the scenario and may sit a little differently: the old land is carried over
+  // into the new window's cells (scaled if its level of detail changed); outside the old window it is the new land
+  const B = own.slice(), n = W * H, ch = [];
+  let A = A0;
+  if (W !== W0 || H !== H0 || win.cx0 !== win0.cx0 || win.cy0 !== win0.cy0 || win.L !== win0.L) {
+    A = B.slice();
+    const f = worldCells(win0.L) / worldCells(win.L);
+    for (let y = 0; y < H; y++) {
+      const oy = Math.floor((y + .5 + win.cy0) * f) - win0.cy0;
+      if (oy < 0 || oy >= H0) continue;
+      for (let x = 0; x < W; x++) {
+        const ox = Math.floor((x + .5 + win.cx0) * f) - win0.cx0;
+        if (ox >= 0 && ox < W0) A[y * W + x] = A0[oy * W0 + ox];
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) if (A[i] !== B[i]) ch.push(i);
+  stageCaption(id);
+  if (!ch.length) return;
+  // distance of every changed cell from the old front: a search spreading from the cells that touch land the new
+  // owner already held, through changed cells going to the same owner; the parts it cannot reach come last
+  const dist = new Uint16Array(n).fill(65535), comp = new Int32Array(n).fill(-1), q = new Int32Array(ch.length);
+  let qh = 0, qt = 0;
+  const nb = i => { const x = i % W; return [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i >= W ? i - W : -1, i < n - W ? i + W : -1]; };
+  for (const i of ch) for (const j of nb(i)) if (j >= 0 && A[j] === B[j] && B[j] === B[i] && B[i]) { dist[i] = 0; q[qt++] = i; break; }
+  let maxD = 0;
+  while (qh < qt) {
+    const i = q[qh++], d = dist[i] + 1;
+    for (const j of nb(i)) if (j >= 0 && dist[j] === 65535 && A[j] !== B[j] && B[j] === B[i]) { dist[j] = d; if (d > maxD) maxD = d; q[qt++] = j; }
+  }
+  for (const i of ch) if (dist[i] === 65535) dist[i] = maxD + 1;
+  ch.sort((a, b) => dist[a] - dist[b]);
+  // the big advances, for the arrows: pieces of land going to one owner, from their part on the old front to their
+  // far end
+  const parts = [];
+  for (const i0 of ch) {
+    if (comp[i0] >= 0 || !B[i0]) continue;
+    const id = parts.length, st = [i0]; comp[i0] = id;
+    const pc = { owner: B[i0], size: 0, cells: [] };
+    while (st.length) { const i = st.pop(); pc.size++; if (pc.cells.length < 40000) pc.cells.push(i); for (const j of nb(i)) if (j >= 0 && comp[j] < 0 && A[j] !== B[j] && B[j] === B[i0]) { comp[j] = id; st.push(j); } }
+    parts.push(pc);
+  }
+  const arrows = parts.filter(p => p.size >= Math.max(120, ch.length * .04)).sort((a, b) => b.size - a.size).slice(0, 4).map(p => {
+    let m = 0; for (const i of p.cells) if (dist[i] <= maxD) m = Math.max(m, dist[i]);
+    let sx = 0, sy = 0, sn = 0, hx = 0, hy = 0, hn = 0;
+    for (const i of p.cells) { const d = dist[i], x = i % W, y = (i / W) | 0; if (d <= Math.max(1, m * .15)) { sx += x; sy += y; sn++; } if (d >= m * .8) { hx += x; hy += y; hn++; } }
+    return sn && hn ? { x: sx / sn, y: sy / sn, hx: hx / hn, hy: hy / hn, side: p.owner } : null;
+  }).filter(Boolean);
+  own.set(A); addDirty(0, 0, W, H);
+  // the whole window is shown from its cells while the land moves (the traced curves are of the old stage)
+  if (preview) preview = null;
+  morph = { B, ch, dist, k: 0, t0: performance.now(), ms, maxD: maxD + 1, done: null };
+  fxBeginMorph(A, arrows);
+  drawMap(); previewGrow(0, 0, W, H);
+  return new Promise(res => { morph.done = res; requestAnimationFrame(morphFrame); });
+}
+function morphFrame(now) {
+  const m = morph;
+  if (!m) return;
+  const t = Math.min(1, (now - m.t0) / m.ms), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, lim = e * m.maxD;
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  while (m.k < m.ch.length && (t >= 1 || m.dist[m.ch[m.k]] <= lim)) {
+    const i = m.ch[m.k++], x = i % W, y = (i / W) | 0;
+    own[i] = m.B[i];
+    if (x < x0) x0 = x; if (x >= x1) x1 = x + 1; if (y < y0) y0 = y; if (y >= y1) y1 = y + 1;
+  }
+  if (x1 > x0) { addDirty(x0, y0, x1, y1); previewGrow(x0, y0, x1, y1); fxMark([x0, y0, x1, y1]); requestDrawFast(); }
+  if (t < 1) { requestAnimationFrame(morphFrame); return; }
+  morphStop();
+}
+function morphStop() {
+  const m = morph;
+  if (!m) return;
+  for (; m.k < m.ch.length; m.k++) own[m.ch[m.k]] = m.B[m.ch[m.k]];
+  morph = null;
+  addDirty(0, 0, W, H);
+  fxEnd();
+  if (preview) setTimeout(() => { if (preview) { preview.until = vecVersion; requestDrawFast(); } }, 0);
+  requestDraw(); scheduleCommit();
+  if (m.done) m.done();
+}
+// the effects of a stage change: the same as a pulled front, with the arrows of the advances found above
+function fxBeginMorph(A, arrows) {
+  if (!fxOn || !own) { fx = null; return; }
+  fxBegin({ p0: { x: 0, y: 0 }, val: 0 });
+  if (!fx) return;
+  fx.start.set(A); fx.arrows = arrows; fx.morph = true;
+}
+// a caption over the map: the date and what happened, fading in and out
+function stageCaption(id) {
+  const w = WARS.find(x => x.id === id), el = $('#stageCap');
+  if (!w || !el) return;
+  const d = new Date(w.date + 'T00:00:00Z');
+  el.querySelector('b').textContent = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  el.querySelector('span').textContent = w.stage || w.name.split(' — ').slice(1).join(' — ');
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  renderPlayBar();
+}
+// the film: every next stage in turn, holding each a moment
+const play = { on: false, speed: 1, timer: 0 };
+async function playStep(dir) {
+  const ws = stageList(curWarId), k = ws.findIndex(x => x.id === curWarId), nx = ws[k + dir];
+  if (!nx) { playStop(); return false; }
+  await morphTo(nx.id, 1700 / play.speed);
+  return true;
+}
+async function playStart() {
+  if (play.on) return;
+  const ws = stageList(curWarId);
+  if (ws.length < 2) return;
+  if (ws[ws.length - 1].id === curWarId) await morphTo(ws[0].id, 600);
+  play.on = true; renderPlayBar();
+  while (play.on) {
+    if (!await playStep(1)) break;
+    await new Promise(r => { play.timer = setTimeout(r, 1300 / play.speed); });
+  }
+}
+function playStop() { play.on = false; clearTimeout(play.timer); renderPlayBar(); }
+function renderPlayBar() {
+  const bar = $('#playBar');
+  if (!bar) return;
+  const ws = stageList(curWarId), k = ws.findIndex(x => x.id === curWarId);
+  bar.hidden = ws.length < 2 || !W;
+  if (bar.hidden) return;
+  const w = ws[k];
+  bar.querySelector('.pbt b').textContent = new Date(w.date + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  bar.querySelector('.pbt span').textContent = w.stage || '';
+  bar.querySelector('#pbPlay').setAttribute('aria-pressed', play.on);
+  bar.querySelector('#pbPlay').title = play.on ? 'Пауза (Пробел)' : 'Проиграть войну по этапам';
+  bar.querySelector('#pbPrev').disabled = k <= 0; bar.querySelector('#pbNext').disabled = k >= ws.length - 1;
+  const r = bar.querySelector('#pbRange'); r.max = ws.length - 1; r.value = k;
+  bar.querySelector('#pbN').textContent = (k + 1) + ' / ' + ws.length;
+  bar.querySelector('#pbSpeed').textContent = play.speed + '×';
+}
+$('#pbPlay').addEventListener('click', () => play.on ? playStop() : playStart());
+$('#pbPrev').addEventListener('click', () => { playStop(); playStep(-1); });
+$('#pbNext').addEventListener('click', () => { playStop(); playStep(1); });
+$('#pbSpeed').addEventListener('click', () => { play.speed = play.speed === 1 ? 2 : play.speed === 2 ? 4 : play.speed === 4 ? .5 : 1; renderPlayBar(); });
+$('#pbRange').addEventListener('change', e => { playStop(); const ws = stageList(curWarId), x = ws[+e.target.value]; if (x && x.id !== curWarId) morphTo(x.id); });
+$('#pbRange').addEventListener('input', e => { const ws = stageList(curWarId), x = ws[+e.target.value]; if (x) $('#playBar .pbt span').textContent = x.stage || ''; });
+$('#pbCompare').addEventListener('click', () => compareStart());
+// ---------- before and after: a curtain across the map ----------
+// The map as it is now is kept as a picture; the chosen stage is opened under it, and a handle dragged across the
+// screen shows the old picture on the left and the new map on the right. Moving the map closes the comparison.
+let cmp = null;
+async function compareStart() {
+  if (cmp) { compareStop(); return; }
+  const ws = stageList(curWarId), k = ws.findIndex(x => x.id === curWarId);
+  if (ws.length < 2) return;
+  const nx = ws[k + 1] || ws[k - 1];
+  playStop();
+  const snap = document.createElement('canvas'); snap.width = cv.width; snap.height = cv.height;
+  const sc = snap.getContext('2d'); sc.drawImage(mapCv, 0, 0); sc.drawImage(cv, 0, 0);
+  const from = WARS.find(x => x.id === curWarId);
+  await applyWar(nx.id, { keepView: true }); stageCaption(nx.id);
+  const el = $('#cmpView'); el.hidden = false;
+  const img = el.querySelector('canvas'); img.width = snap.width; img.height = snap.height; img.getContext('2d').drawImage(snap, 0, 0);
+  el.querySelector('.cmpa').textContent = from.stage || from.date;
+  el.querySelector('.cmpb').textContent = nx.stage || nx.date;
+  cmp = { view: view.x + ',' + view.y + ',' + view.s, x: .5 };
+  compareSet(.5);
+  $('#pbCompare').setAttribute('aria-pressed', 'true');
+}
+function compareSet(f) {
+  if (!cmp) return;
+  cmp.x = clamp(f, 0, 1);
+  const el = $('#cmpView');
+  el.querySelector('canvas').style.clipPath = 'inset(0 ' + (100 - cmp.x * 100) + '% 0 0)';
+  el.querySelector('.cmph').style.left = cmp.x * 100 + '%';
+}
+function compareStop() { cmp = null; $('#cmpView').hidden = true; $('#pbCompare').setAttribute('aria-pressed', 'false'); }
+{
+  const h = $('#cmpView .cmph');
+  h.addEventListener('pointerdown', e => { h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove', e => { if (!h.hasPointerCapture(e.pointerId)) return; const r = stage.getBoundingClientRect(); compareSet((e.clientX - r.left) / r.width); });
+  $('#cmpView .cmpx').addEventListener('click', compareStop);
 }
 // Push: the ring is a bulldozer. Every cell it passes over goes to the side the push started from;
 // the land behind the front is not stretched, the front simply advances where the ring goes.
@@ -5424,7 +5684,7 @@ function editedSoon() {
 let commitIdle = 0;
 function scheduleCommit() {
   if (!geoStore || commitIdle) return;
-  const run = () => { commitIdle = 0; if (drag && (drag.mode === 'warp' || drag.mode === 'paint')) { scheduleCommit(); return; } commitWindow(); };
+  const run = () => { commitIdle = 0; if ((drag && (drag.mode === 'warp' || drag.mode === 'paint')) || morph) { scheduleCommit(); return; } commitWindow(); };
   commitIdle = window.requestIdleCallback ? requestIdleCallback(run, { timeout: 15000 }) : setTimeout(run, 3000);
 }
 // called after every finished edit
@@ -9657,7 +9917,11 @@ function renderStages(w) {
   let og = null, yr = '';
   ws.forEach((x, j) => { const y = x.date.slice(0, 4); if (y !== yr) { yr = y; og = document.createElement('optgroup'); og.label = y; sel.append(og); } const o = document.createElement('option'); o.value = j; o.textContent = x.name.split(' — ')[1]; og.append(o); });
   sel.value = k; sel.addEventListener('change', () => go(+sel.value));
-  box.append(row, lab, sel);
+  // the whole war as a film: from the first stage to the last, without troops
+  const film = document.createElement('button'); film.className = 'cfilm';
+  film.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg> Смотреть войну целиком · ' + ws.length + ' этапов';
+  film.addEventListener('click', async () => { const keep = campTroops; campTroops = false; await startScenario(ws[0].id, campPlayer); campTroops = keep; setTimeout(playStart, 900); });
+  box.append(row, lab, sel, film);
 }
 function renderCampDetail() {
   const w = WARS.find(x => x.id === campSel);
