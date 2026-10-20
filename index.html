@@ -248,13 +248,6 @@ main.drop::after { content: "Отпустите, чтобы открыть ка�
 .hbtn { width: 42px; height: 42px; padding: 0; justify-content: center; }
 .hud > .hcountry { height: 42px; padding: 0 12px 0 6px; gap: 9px; min-width: 132px; max-width: 240px; flex: 0 1 auto; overflow: hidden; }
 main { container-type: size; container-name: stage; }
-@container stage (max-width: 1300px) { .hud .tgl .tl { display: none; } }
-@container stage (max-width: 1240px) { .hdate small { display: none; } .hdate { min-width: 0; } }
-@container stage (max-width: 1150px) { .hscore small { display: none; } .hscore .hbar { grid-row: 1 / span 2; } }
-@container stage (max-width: 1100px) { .hpockets .pw, .hwar .pw { display: none; } }
-@container stage (max-width: 1000px) { .hud .hbar { width: 64px; } .hud > .hcountry { min-width: 110px; } }
-@container stage (max-width: 960px) { .hud > .hscore { display: none !important; } .hctext small { display: none; } }
-@container stage (max-width: 860px) { .hud .hctext { display: none; } .hud > .hcountry { min-width: 0; } }
 @container stage (max-width: 800px) { .hud { flex-wrap: wrap; } .sidepick { top: calc(114px + env(safe-area-inset-top, 0px)); } }
 @container stage (max-width: 600px) { .hspeed { display: none; } }
 .hflag { width: 30px; height: 30px; border-radius: 8px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25), 0 0 0 2px rgb(255 255 255 / .06); background: var(--muted); }
@@ -609,15 +602,13 @@ body:not(.nopanel) .status > #hint { display: none; }
   .armybar { border-radius: 14px; }
   #toast { border-radius: 12px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }
-/* with the panel open the HUD has the width of the stage less the panel: it folds as it would on a narrower stage */
-@media (min-width: 761px) and (max-width: 1714px) { body:not(.nopanel) .hud .tgl .tl, body:not(.nopanel) .hud .hrec .tl { display: none; } }
-@media (min-width: 761px) and (max-width: 1654px) { body:not(.nopanel) .hdate small { display: none; } body:not(.nopanel) .hdate { min-width: 0; } }
-@media (min-width: 761px) and (max-width: 1564px) { body:not(.nopanel) .hscore small { display: none; } body:not(.nopanel) .hscore .hbar { grid-row: 1 / span 2; } }
-@media (min-width: 761px) and (max-width: 1514px) { body:not(.nopanel) .hpockets .pw, body:not(.nopanel) .hwar .pw { display: none; } }
-@media (min-width: 761px) and (max-width: 1414px) { body:not(.nopanel) .hud .hbar { width: 64px; } body:not(.nopanel) .hud > .hcountry { min-width: 110px; } }
-@media (min-width: 761px) and (max-width: 1374px) { body:not(.nopanel) .hud > .hscore { display: none !important; } body:not(.nopanel) .hctext small { display: none; } }
-@media (min-width: 761px) and (max-width: 1274px) { body:not(.nopanel) .hud .hctext { display: none; } body:not(.nopanel) .hud > .hcountry { min-width: 0; } }
-@media (min-width: 761px) and (max-width: 1214px) { body:not(.nopanel) .hud { flex-wrap: wrap; } }
+/* the HUD folds itself (fitHud): while its chips do not fit it drops their labels, one step at a time */
+.hud.f1 .tgl .tl, .hud.f1 .hrec .tl { display: none; }
+.hud.f2 .hdate small { display: none; } .hud.f2 .hdate { min-width: 0; } .hud.f2 .hwx span { display: none; }
+.hud.f3 .hscore small, .hud.f3 .hctext small { display: none; } .hud.f3 .hscore .hbar { grid-row: 1 / span 2; }
+.hud.f4 .hbar { width: 60px; } .hud.f4 .hpockets .pw, .hud.f4 .hwar .pw { display: none; } .hud.f4 > .hcountry { min-width: 0; }
+.hud.f5 .hctext { display: none; } .hud.f5 #btnHiRes { display: none; }
+.hud.f6 > .hscore { display: none !important; } .hud.f6 .hspeed { display: none; }
 /* the border tool's bar: modes, the shape of the front, effects */
 .livebar .fseg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
 .livebar .fseg button { padding: 6px 11px; font-weight: 600; font-size: 12.5px; border-color: transparent; background: transparent; border-radius: 8px; }
@@ -768,6 +759,301 @@ body.staff .paper { display: block; position: absolute; inset: 0; z-index: 1; po
   .layerspop { right: 8px; left: 8px; width: auto; }
   #toast { bottom: calc(var(--strip-h, 60px) + 80px) !important; max-width: calc(100% - 24px); }
   .tour .tcard { width: calc(100% - 24px); left: 12px !important; }
+}
+/* ===== v3: one design system from the start menu to the smallest button =====
+   Brass on graphite: surfaces in three steps of depth, one accent with a gradient, rounded glass over the map,
+   controls drawn by hand (sliders, switches, lists) so that every one of them looks part of the same instrument. */
+:root {
+  --bg: #0a0d11; --panel: #11151b; --panel2: #171c23; --ink: #ecebe6; --muted: #8d96a1; --line: #222932; --line2: #343d48;
+  --accent: #e5ad48; --accent-2: #f5c96e; --accent-ink: #1a1205; --accent-soft: rgb(229 173 72 / .14); --chip: #161b22;
+  --danger: #ff6650; --ok: #4fc48a; --gold: #edbb52;
+  --grad-accent: linear-gradient(180deg, #f6c868 0%, #e3a540 55%, #d29530 100%);
+  --grad-chip: linear-gradient(180deg, rgb(255 255 255 / .05), rgb(255 255 255 / .012));
+  --r1: 8px; --r2: 11px; --r3: 15px; --r4: 20px;
+  --ring: 0 0 0 3px rgb(229 173 72 / .35);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+:root[data-theme="light"] {
+  --bg: #e9e5dc; --panel: #f8f6f1; --panel2: #f0ece4; --ink: #1b1e22; --muted: #646b74; --line: #ddd7cb; --line2: #c9c1b2; --chip: #ffffff;
+  --accent: #b07818; --accent-2: #c98d24; --accent-ink: #fff; --accent-soft: rgb(176 120 24 / .12); --danger: #c0412f; --ok: #2c8a59; --gold: #9a6f0f;
+  --grad-accent: linear-gradient(180deg, #d39b35 0%, #b67c1b 60%, #a56f14 100%);
+  --grad-chip: linear-gradient(180deg, rgb(255 255 255 / .9), rgb(255 255 255 / .5));
+  --ring: 0 0 0 3px rgb(176 120 24 / .28);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #e9e5dc; --panel: #f8f6f1; --panel2: #f0ece4; --ink: #1b1e22; --muted: #646b74; --line: #ddd7cb; --line2: #c9c1b2; --chip: #ffffff;
+    --accent: #b07818; --accent-2: #c98d24; --accent-ink: #fff; --accent-soft: rgb(176 120 24 / .12); --danger: #c0412f; --ok: #2c8a59; --gold: #9a6f0f;
+    --grad-accent: linear-gradient(180deg, #d39b35 0%, #b67c1b 60%, #a56f14 100%);
+    --grad-chip: linear-gradient(180deg, rgb(255 255 255 / .9), rgb(255 255 255 / .5));
+    --ring: 0 0 0 3px rgb(176 120 24 / .28);
+  }
+}
+body { font-feature-settings: "ss01", "cv11"; -webkit-font-smoothing: antialiased; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+/* --- buttons: one base, a primary, a quiet ghost; every one presses in --- */
+:where(button, .btn) {
+  background: var(--grad-chip), var(--chip); border-radius: var(--r2); border-color: var(--line);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .045), 0 1px 1px rgb(0 0 0 / .18);
+  transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s, transform .12s var(--ease), filter .15s;
+}
+:where(button, .btn):hover { border-color: color-mix(in srgb, var(--accent) 32%, var(--line2)); }
+:where(button, .btn):active:not(:disabled) { transform: translateY(1px) scale(.985); }
+button:focus-visible, .btn:focus-within, input:focus-visible, select:focus-visible { outline: 0; box-shadow: var(--ring); }
+button.primary, .btn.primary, .bigbtn, .objdone button {
+  background: var(--grad-accent); border-color: color-mix(in srgb, var(--accent) 70%, #000); color: var(--accent-ink); font-weight: 650;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 6px 18px rgb(229 173 72 / .26);
+}
+button.primary:hover, .btn.primary:hover, .bigbtn:hover { background: var(--grad-accent); filter: brightness(1.07) saturate(1.05); border-color: color-mix(in srgb, var(--accent) 70%, #000); }
+button.danger, .dform button { background: linear-gradient(180deg, #ff7a64, #e2452f); border-color: #b8331f; color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 6px 18px rgb(255 102 80 / .25); }
+
+/* --- fields: sliders with a filled track, switches for checkboxes, lists with a chevron --- */
+input[type=range] { -webkit-appearance: none; appearance: none; height: 22px; background: transparent; cursor: pointer; --p: 50%; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--accent) 0 var(--p), var(--line2) var(--p) 100%); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #f7f2e7;
+  border: 3px solid var(--accent); box-shadow: 0 2px 6px rgb(0 0 0 / .45); transition: transform .12s var(--ease); }
+input[type=range]:hover::-webkit-slider-thumb, input[type=range]:active::-webkit-slider-thumb { transform: scale(1.18); }
+input[type=range]::-moz-range-track { height: 4px; border-radius: 4px; background: var(--line2); }
+input[type=range]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--accent); }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #f7f2e7; border: 3px solid var(--accent); }
+input[type=range]:focus-visible { box-shadow: none; } input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: var(--ring); }
+input[type=checkbox] { -webkit-appearance: none; appearance: none; flex: none; width: 30px; height: 18px; margin: 1px 0 0; border-radius: 10px; position: relative; cursor: pointer;
+  background: var(--line2); transition: background-color .18s; box-shadow: inset 0 1px 2px rgb(0 0 0 / .35); }
+input[type=checkbox]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #f3efe6; box-shadow: 0 1px 3px rgb(0 0 0 / .4); transition: transform .18s var(--ease); }
+input[type=checkbox]:checked { background: var(--accent); }
+input[type=checkbox]:checked::after { transform: translateX(12px); }
+input[type=checkbox]:disabled { opacity: .45; }
+select { -webkit-appearance: none; appearance: none; padding: 8px 30px 8px 10px; border-radius: var(--r1); background-color: var(--chip);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238d96a1' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; transition: border-color .15s; }
+select:hover { border-color: var(--line2); }
+select option, select optgroup { background: var(--panel); color: var(--ink); }
+input:not([type]), input[type=text], input[type=url], input[type=search] { border-radius: var(--r1); transition: border-color .15s, box-shadow .15s; }
+
+/* --- the tool rail --- */
+@media (min-width: 761px) {
+  .rail { background: linear-gradient(180deg, #0f1318, #0a0d11); }
+  :root[data-theme="light"] .rail { background: linear-gradient(180deg, #f4f1ea, #e9e5dc); }
+  .rail-logo { width: 44px; height: 44px; border-radius: 14px; background: linear-gradient(145deg, rgb(229 173 72 / .22), rgb(229 173 72 / .06)); box-shadow: inset 0 0 0 1px rgb(229 173 72 / .3); }
+  .rail-logo:hover { box-shadow: inset 0 0 0 1px var(--accent), 0 0 22px rgb(229 173 72 / .25); }
+  .rail-tools button, .rail-btn { border-radius: 13px; box-shadow: none; }
+  .rail-tools button.on { background: var(--grad-accent); color: var(--accent-ink); box-shadow: 0 6px 18px rgb(229 173 72 / .32), inset 0 1px 0 rgb(255 255 255 / .35); }
+  .rail-tools button.on::before { content: ''; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+  .rail [data-tip]:hover::after { background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--ink); border: 1px solid var(--line2); border-radius: 9px; font-weight: 600;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: tipin .14s var(--ease); }
+}
+@keyframes tipin { from { opacity: 0; transform: translate(-4px, -50%); } }
+
+/* --- the panel: tabs as one pill control, headed sections, quieter cards --- */
+@media (min-width: 761px) {
+  #panel { border-radius: var(--r4); }
+  .ptabs { margin: 10px 10px 4px; padding: 3px; gap: 2px; border: 1px solid var(--gline); border-radius: 13px; background: rgb(0 0 0 / .22); }
+  :root[data-theme="light"] .ptabs { background: rgb(0 0 0 / .05); }
+  .ptabs button { border-radius: 10px; padding: 8px 2px; font-size: 11.5px; box-shadow: none; }
+  .ptabs button.on { background: var(--grad-chip), var(--panel2); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .35), inset 0 0 0 1px var(--line2); }
+  .ptabs button.on::after { display: block; left: 38%; right: 38%; bottom: 3px; height: 2px; }
+  .pane { padding: 12px 16px 28px; gap: 20px; }
+}
+h2 { font: 650 10.5px/1 var(--f-ui); letter-spacing: .14em; color: var(--muted); }
+section > h2::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line2), transparent); margin-left: 4px; }
+.toolhead { border-radius: var(--r3); padding: 14px; }
+.toolhead .ticon { width: 40px; height: 40px; border-radius: 12px; background: var(--grad-accent); box-shadow: 0 6px 16px rgb(229 173 72 / .3), inset 0 1px 0 rgb(255 255 255 / .35); }
+.wmodes { border-radius: 13px; background: rgb(0 0 0 / .2); border-color: var(--gline, var(--line)); }
+.wmodes button { box-shadow: none; }
+.wmodes button.on { background: var(--grad-chip), var(--panel2); box-shadow: inset 0 0 0 1px var(--accent), 0 4px 14px rgb(229 173 72 / .15); }
+.presets button, .sizer button { border-radius: 9px; }
+.presets button.on, .utype.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.utype { border-radius: 10px; padding: 5px 6px 5px 4px; }
+.unitsel, .pocket { border-radius: 12px; background: rgb(0 0 0 / .18); border: 1px solid var(--gline, var(--line)); }
+:root[data-theme="light"] .unitsel, :root[data-theme="light"] .pocket { background: rgb(0 0 0 / .03); }
+.country { border-radius: 10px; }
+.country.on { box-shadow: inset 3px 0 0 var(--accent); }
+.check { align-items: center; }
+.check input { margin-top: 0; }
+.gsys { padding: 6px 0; }
+.gsys input { margin-top: 1px; }
+
+/* --- HUD: chips of one height, glass, a brass play button --- */
+@media (min-width: 761px) {
+  .hud { gap: 8px; }
+  .hud > button, .hud .hclock, .hud .hgroup, .hud .hscore, .hud .hwx, .mapctl { border-radius: 15px; }
+  .hud > .hcountry { flex: none; }
+  .hbtn, .hud > .hcountry, .hclock, .hscore, .hwar, .hpockets, .hgroup, .hud .hwx { height: 44px; }
+  .hbtn { width: 44px; }
+  .hud .hwx { background: var(--glass); border: 1px solid var(--gline); box-shadow: var(--gshadow); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+  .hgroup button { height: 34px; border-radius: 11px; box-shadow: none; }
+  .hgroup button[aria-pressed="true"] { color: var(--ink); }
+  .mapctl button { border-radius: 10px; box-shadow: none; }
+}
+.hplay { width: 34px; height: 34px; border-radius: 11px; background: var(--grad-accent); box-shadow: 0 4px 12px rgb(229 173 72 / .3), inset 0 1px 0 rgb(255 255 255 / .35); }
+.hplay:hover { background: var(--grad-accent); }
+.hplay[aria-pressed="true"] { background: linear-gradient(180deg, #ff7a64, #e2452f); box-shadow: 0 0 0 0 rgb(255 102 80 / .5); animation: liveglow 1.8s ease-in-out infinite; }
+@keyframes liveglow { 50% { box-shadow: 0 0 0 6px rgb(255 102 80 / 0), 0 0 18px rgb(255 102 80 / .45); } }
+.hflag { border-radius: 9px; }
+.hctext small, .hscore small { letter-spacing: .12em; }
+.hbar { height: 5px; }
+.hspeed button { border-radius: 2px; box-shadow: none; }
+.hud .tgl b { border-radius: 6px; }
+.hwar.on { box-shadow: var(--gshadow), 0 0 0 1px rgb(255 102 80 / .35), 0 0 22px rgb(255 102 80 / .18) !important; }
+#zoom { font-size: 10.5px; }
+/* the tool's bar under the HUD */
+.sidepick { border-radius: 16px; gap: 4px; }
+.sidepick button { border-radius: 10px; box-shadow: none; }
+.sidepick button.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.sidepick .umode, .livebar .fseg { border-radius: 12px; background: rgb(0 0 0 / .22); border-color: var(--gline, var(--line)); }
+.sidepick .umode button.on, .livebar .fseg button.on, .sidepick .usize button.ech.on, .sidepick .usize button.pc.on { background: var(--grad-accent); color: var(--accent-ink); border-color: transparent; box-shadow: 0 3px 10px rgb(229 173 72 / .3), inset 0 1px 0 rgb(255 255 255 / .35); }
+.sidepick .usize { border-top-color: var(--gline, var(--line)); }
+.sidepick .usize button.ech, .sidepick .usize button.pc { border-radius: 9px; background: rgb(0 0 0 / .2); }
+
+/* --- the bottom of the stage: a slim generals' dock, the play bar over it, the status kept out of their way --- */
+@media (min-width: 761px) {
+  .gstrip { padding: 6px 8px 6px 12px; gap: 10px; border-radius: 18px; }
+  .gcards { gap: 6px; padding: 2px 0; }
+  .gcard { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-rows: auto auto; gap: 1px 9px; align-items: center; justify-items: start;
+    width: 168px; padding: 5px 10px 5px 5px; border-radius: 13px; text-align: left; background: rgb(0 0 0 / .18); border-color: var(--gline); box-shadow: none; }
+  .gcard:hover { background: rgb(255 255 255 / .05); }
+  .gcard.on { background: color-mix(in srgb, var(--side, var(--accent)) 16%, transparent); border-color: color-mix(in srgb, var(--side, var(--accent)) 70%, transparent); }
+  .gcard .gphoto { grid-row: span 2; width: 38px; height: 44px; border-radius: 9px; font-size: 13px; }
+  .gcard .gname { max-width: 100%; font-size: 12.5px; }
+  .gcard .gmeta { font-size: 10.5px; }
+  .gside label { font-size: 10px; letter-spacing: .14em; }
+  .gside select { min-width: 140px; padding-top: 7px; padding-bottom: 7px; }
+  .gadd { border-radius: 12px; font-weight: 600; }
+  .gfold { border-radius: 12px; }
+}
+#stage:has(#playBar:not([hidden])) .status .attrib, #stage:has(#playBar:not([hidden])) .status #where { display: none; }
+.status > div { border-radius: 11px; border-color: var(--gline, var(--line)); background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+#toast { background: color-mix(in srgb, var(--panel) 88%, transparent); color: var(--ink); border: 1px solid var(--line2); border-radius: 14px; padding: 10px 16px;
+  box-shadow: 0 14px 40px rgb(0 0 0 / .45); font-weight: 550; transform: translate(-50%, 6px); transition: opacity .2s, transform .25s var(--ease); }
+#toast.show { transform: translate(-50%, 0); }
+#stage:has(#playBar:not([hidden])) #toast { bottom: calc(var(--strip-h, 96px) + 96px); }
+.playbar { border-radius: 18px; padding: 7px 12px 7px 7px; }
+.playbar .pbmain { background: var(--grad-accent); box-shadow: 0 6px 16px rgb(229 173 72 / .35), inset 0 1px 0 rgb(255 255 255 / .35); }
+.playbar .pbb:not(.pbmain) { box-shadow: none; }
+.playbar .pbs { border-radius: 10px; }
+.playbar .pbs[aria-pressed="true"] { background: var(--grad-accent); }
+.armybar { border-radius: 16px; background: var(--glass); border-color: var(--gline, var(--line)); box-shadow: var(--gshadow, var(--shadow)); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.armybar button { border-radius: 10px; }
+.armybar button.go { background: linear-gradient(180deg, #42b066, #2b8746); border-color: #24753c; }
+.armybar button.go.on { background: linear-gradient(180deg, #ff7a64, #d63a26); border-color: #b8331f; }
+.geditor { border-radius: 18px; background: var(--glass); border: 1px solid var(--gline, var(--line)); border-top: 3px solid var(--side, var(--accent)); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--gshadow, var(--shadow)); }
+
+/* --- dialogs over the map --- */
+.diplo, .layerspop, .objdone, .cmdk .cbox, .tour .tcard {
+  background: color-mix(in srgb, var(--panel) 90%, transparent); border: 1px solid var(--line2); border-radius: var(--r4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); box-shadow: 0 30px 80px rgb(0 0 0 / .5), inset 0 1px 0 rgb(255 255 255 / .05);
+  animation: popin .22s var(--ease);
+}
+.objdone { border-color: var(--accent); animation: popin2 .3s var(--ease); }
+.tour .tcard { border-color: color-mix(in srgb, var(--accent) 60%, var(--line2)); }
+@keyframes popin { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+@keyframes popin2 { from { opacity: 0; transform: translate(-50%, -46%) scale(.96); } }
+.diplo { top: calc(64px + env(safe-area-inset-top, 0px)); }
+.diplo header b, .objdone b { letter-spacing: .02em; }
+.dlist li { border-radius: 12px; background: rgb(0 0 0 / .18); }
+.cmdk li { border-radius: 11px; }
+.cmdk li.on i { background: var(--grad-accent); }
+.layerspop button { box-shadow: none; }
+.layerspop button.on i { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .diplo, .layerspop, .objdone, .cmdk .cbox, .tour .tcard { animation: none; } .hplay[aria-pressed="true"] { animation: none; } }
+
+/* --- the start menu: a brand column with tiles, the chronicles of the wars as a ribbon, the last game in a corner --- */
+.menu { --m-gold: #e9b04c; --m-card: rgb(16 21 27 / .78); }
+.menu::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.menu-shade { background:
+  linear-gradient(90deg, rgb(5 7 10 / .97) 0%, rgb(5 7 10 / .86) 28%, rgb(5 7 10 / .2) 60%, rgb(5 7 10 / .3) 100%),
+  linear-gradient(0deg, rgb(5 7 10 / .9) 0%, transparent 34%),
+  radial-gradient(ellipse at 68% 40%, transparent 30%, rgb(5 7 10 / .55) 100%); }
+.menu-shade::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgb(255 255 255 / .018) 0 1px, transparent 1px 4px); }
+.menu-main { width: min(500px, 100%); gap: clamp(18px, 3.4vh, 34px); z-index: 1; }
+.mlogo h1 { background: linear-gradient(180deg, #fbf6ea 30%, #cfc4ad); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .16em; }
+.mlogo .mmark svg { filter: drop-shadow(0 0 14px rgb(233 176 76 / .45)); }
+.mlogo .mline { width: 84px; background: linear-gradient(90deg, var(--m-gold), transparent); }
+.mlogo .mtag { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.mlogo .mtag span { font: 600 10.5px var(--f-mono); color: #c9c2b4; padding: 4px 8px; border-radius: 7px; background: rgb(255 255 255 / .05); border: 1px solid var(--m-line); }
+.mlogo .mtag b { color: var(--m-gold); font-weight: 700; }
+.mnav { gap: 6px; }
+.mbtn { display: grid; grid-template-columns: 40px 1fr auto; grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px; align-items: center;
+  padding: 11px 14px 11px 11px; border-radius: 15px; background: rgb(255 255 255 / .025); border: 1px solid transparent; box-shadow: none; }
+.mbtn::before { display: none; }
+.mbtn .mi { grid-row: span 2; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #d9d2c3;
+  background: rgb(255 255 255 / .05); border: 1px solid var(--m-line); transition: background-color .15s, color .15s, transform .2s var(--ease); }
+.mbtn b { font-size: 16.5px; }
+.mbtn small { grid-column: 2; }
+.mbtn::after { content: '›'; grid-row: 1 / span 2; grid-column: 3; font: 400 22px var(--f-ui); color: rgb(255 255 255 / .25); transition: transform .2s var(--ease), color .15s; }
+.mbtn:hover, .mbtn:focus-visible { background: rgb(255 255 255 / .06); border-color: rgb(255 255 255 / .09); transform: none; box-shadow: none; }
+.mbtn:hover .mi, .mbtn:focus-visible .mi { color: var(--m-gold); background: rgb(233 176 76 / .12); border-color: rgb(233 176 76 / .35); transform: scale(1.04); }
+.mbtn:hover::after, .mbtn:focus-visible::after { transform: translateX(3px); color: var(--m-gold); }
+.mbtn.main { padding: 15px 16px 15px 13px; margin-bottom: 6px; background: linear-gradient(135deg, rgb(233 176 76 / .2), rgb(233 176 76 / .05) 60%, transparent);
+  border-color: rgb(233 176 76 / .35); box-shadow: 0 12px 34px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .06); }
+.mbtn.main .mi { background: var(--grad-accent); color: #1a1205; border: 0; box-shadow: 0 6px 18px rgb(233 176 76 / .35); width: 44px; height: 44px; }
+.mbtn.main b { font-size: 20px; color: #fbf3e2; }
+.mbtn.main small { color: #cbbf9f; }
+.mbtn.main::after { color: var(--m-gold); }
+.mbtn.main:hover { background: linear-gradient(135deg, rgb(233 176 76 / .3), rgb(233 176 76 / .08) 60%, transparent); border-color: rgb(233 176 76 / .6); }
+.mbtn.ghost { margin-top: 6px; background: transparent; }
+.mbtn.ghost b { font-size: 14px; }
+.mfoot { color: #69727d; }
+.mstate { top: clamp(20px, 5vh, 48px); bottom: auto; border-radius: 18px; padding: 16px 18px 16px 20px; box-shadow: 0 20px 50px rgb(0 0 0 / .4); border-left: 3px solid var(--m-gold); }
+/* the chronicles: a card for every series of stages, each opens the campaign on its last stage */
+.mchron { position: absolute; z-index: 1; left: min(540px, 40vw); right: 0; bottom: clamp(18px, 4vh, 40px); display: flex; flex-direction: column; gap: 10px; }
+.mchron header { display: flex; align-items: baseline; gap: 12px; padding-right: clamp(20px, 4vw, 48px); }
+.mchron header b { font: 600 13px var(--f-brand); letter-spacing: .1em; color: #f1ead9; text-transform: uppercase; }
+.mchron header small { color: var(--m-muted); font-size: 12px; }
+.mchron header button { margin-left: auto; background: rgb(255 255 255 / .05); border: 1px solid var(--m-line); color: #d8d1c2; font-size: 12px; padding: 6px 11px; border-radius: 9px; box-shadow: none; }
+.mchron header button:hover { border-color: rgb(233 176 76 / .5); color: #fff; }
+.mrib { display: flex; gap: 10px; overflow-x: auto; padding: 4px clamp(20px, 4vw, 48px) 10px 2px; scroll-snap-type: x proximity; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.mrib::-webkit-scrollbar { height: 6px; }
+.mwar { flex: none; width: 196px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; position: relative; overflow: hidden;
+  padding: 13px 14px 16px; border-radius: 16px; background: var(--m-card); border: 1px solid var(--m-line); color: #ece8df; box-shadow: 0 10px 30px rgb(0 0 0 / .35);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: transform .2s var(--ease), border-color .15s, background-color .15s; }
+.mwar:hover, .mwar:focus-visible { transform: translateY(-4px); border-color: rgb(233 176 76 / .55); background: rgb(24 30 38 / .9); }
+.mwar .my { font: 600 18px/1 var(--f-brand); color: var(--m-gold); letter-spacing: .02em; }
+.mwar .my small { font: 500 11px var(--f-mono); color: var(--m-muted); margin-left: 4px; letter-spacing: 0; }
+.mwar b { font: 600 13.5px/1.25 var(--f-ui); min-height: 34px; }
+.mwar > small { font: 500 11px var(--f-mono); color: var(--m-muted); }
+.mwar .mstr { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; display: flex; }
+.mwar .mstr i { flex: 1; }
+.mwar .mdots { display: flex; gap: 3px; margin-top: 2px; }
+.mwar .mdots i { width: 5px; height: 5px; border-radius: 50%; background: rgb(233 176 76 / .55); }
+.mwar .mdots i.more { width: auto; height: auto; background: none; font: 600 9px var(--f-mono); color: var(--m-muted); font-style: normal; }
+@media (max-height: 760px) { .mchron { display: none; } }
+@media (max-width: 1100px) { .mchron { display: none; } }
+/* sub-screens: the head as a toolbar, search and era filters over the list of wars */
+.mscreen { background: rgb(6 8 11 / .93); }
+.mhead { padding: 18px clamp(20px, 4vw, 48px) 16px; gap: 14px; }
+.mhead h2 { font-size: 20px; letter-spacing: .08em; }
+.mback { border-radius: 11px; box-shadow: none; }
+.cfilter { position: sticky; top: -18px; z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 18px 0 12px; margin: -18px 0 4px; background: #07090c; box-shadow: 0 10px 14px -8px #07090c; }
+.cfilter input { width: 100%; padding: 11px 14px 11px 38px; border-radius: 12px; background: rgb(255 255 255 / .05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239aa3ad' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat 13px center;
+  border: 1px solid var(--m-line); color: #ece8df; font: 500 14px var(--f-ui); }
+.cfilter input:focus { outline: 0; border-color: rgb(233 176 76 / .6); box-shadow: 0 0 0 3px rgb(233 176 76 / .18); }
+.cfilter .cchips { display: flex; gap: 5px; flex-wrap: wrap; }
+.cfilter .cchips button { padding: 6px 11px; font-size: 12px; border-radius: 999px; background: rgb(255 255 255 / .04); border: 1px solid var(--m-line); color: #cfcac0; box-shadow: none; }
+.cfilter .cchips button.on { background: var(--grad-accent); color: #1a1205; border-color: transparent; font-weight: 650; }
+.clist .cnone { color: var(--m-muted); padding: 20px 4px; font-size: 13px; }
+.ccard { grid-template-columns: 64px 1fr; border-radius: 14px; padding: 12px 14px 14px 12px; box-shadow: none; transition: background-color .15s, border-color .15s, transform .15s var(--ease); }
+.ccard:hover { transform: translateX(2px); }
+.ccard .cy { font-size: 17px; text-align: center; padding: 7px 0; border-radius: 10px; background: rgb(233 176 76 / .08); border: 1px solid rgb(233 176 76 / .18); }
+.ccard.on .cy { background: var(--grad-accent); color: #1a1205; border-color: transparent; }
+.ccard.cseries b::after { content: 'хроника'; margin-left: 8px; font: 650 9.5px var(--f-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--m-gold); padding: 2px 6px; border-radius: 6px; border: 1px solid rgb(233 176 76 / .4); vertical-align: 2px; }
+.cprev { border-radius: 18px; }
+.cchip { border-radius: 10px; box-shadow: none; }
+.ctroops button { border-radius: 14px; box-shadow: none; }
+.bigbtn { border-radius: 14px; padding: 15px 30px; letter-spacing: .08em; }
+.scard { border-radius: 18px; box-shadow: none; transition: transform .2s var(--ease), border-color .15s, background-color .15s; }
+.scard:hover { transform: translateY(-3px); }
+.setcard { border-radius: 18px; }
+.seg { border-radius: 12px; }
+.seg button { border-radius: 9px; box-shadow: none; }
+.seg button.on { background: var(--grad-accent); }
+.mscreen select { background-color: #10151b; color: #ece8df; }
+@media (max-width: 760px) {
+  .mbtn { grid-template-columns: 36px 1fr auto; padding: 10px 12px 10px 10px; } .mbtn .mi { width: 36px; height: 36px; }
+  .gcard { width: 84px; }
 }
 </style>
 </head>
@@ -1222,20 +1508,22 @@ body.staff .paper { display: block; position: absolute; inset: 0; z-index: 1; po
       <h1>МЕЖА</h1>
       <span class="mline"></span>
       <p>Войны и границы на настоящей карте Земли</p>
+      <div class="mtag" id="mTag"></div>
     </div>
     <nav class="mnav" aria-label="Главное меню">
-      <button class="mbtn main" id="mContinue"><b id="mContinueT">Продолжить</b><small id="mContinueS"></small></button>
-      <button class="mbtn" id="mCampaign"><b>Новая кампания</b><small id="mCampaignS">Войны от 1812 года до наших дней</small></button>
-      <button class="mbtn" id="mSandbox"><b>Песочница</b><small>Чистая Земля, весь мир или своя карта</small></button>
-      <button class="mbtn" id="mSave" hidden><b>Сохранить проект</b><small>Файл .json со всей картой, войсками и хроникой</small></button>
-      <button class="mbtn" id="mLoad"><b>Загрузить проект</b><small>Открыть сохранённый файл .json</small></button>
-      <button class="mbtn" id="mSettings"><b>Настройки</b><small>Тема, граница, бои, игровые системы</small></button>
-      <button class="mbtn" id="mHelp"><b>Как играть</b><small>Управление и горячие клавиши</small></button>
-      <button class="mbtn ghost" id="mApp"><b>Скачать программу для Windows</b><small>Работает без браузера, файлы сохраняются на ПК</small></button>
+      <button class="mbtn main" id="mContinue"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16l13-8z" fill="currentColor" stroke="none"/></svg></i><b id="mContinueT">Продолжить</b><small id="mContinueS"></small></button>
+      <button class="mbtn" id="mCampaign"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg></i><b>Новая кампания</b><small id="mCampaignS">Войны от 1812 года до наших дней</small></button>
+      <button class="mbtn" id="mSandbox"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></i><b>Песочница</b><small>Чистая Земля, весь мир или своя карта</small></button>
+      <button class="mbtn" id="mSave" hidden><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg></i><b>Сохранить проект</b><small>Файл .json со всей картой, войсками и хроникой</small></button>
+      <button class="mbtn" id="mLoad"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></i><b>Загрузить проект</b><small>Открыть сохранённый файл .json</small></button>
+      <button class="mbtn" id="mSettings"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></i><b>Настройки</b><small>Тема, граница, бои, игровые системы</small></button>
+      <button class="mbtn" id="mHelp"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg></i><b>Как играть</b><small>Управление и горячие клавиши</small></button>
+      <button class="mbtn ghost" id="mApp"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></i><b>Скачать программу для Windows</b><small>Работает без браузера, файлы сохраняются на ПК</small></button>
     </nav>
     <div class="mfoot"><span><kbd>Esc</kbd> меню в игре</span><span><kbd>P</kbd> бои</span><span>Сохранение автоматическое</span></div>
   </div>
   <div class="mstate" id="mState" hidden></div>
+  <div class="mchron" id="mChron"><header><b>Хроники войн</b><small>каждая — война по этапам, от первого дня до последнего</small><button id="mChronAll">Все войны →</button></header><div class="mrib" id="mRib"></div></div>
 
   <div class="mscreen" id="scrCampaign" hidden>
     <header class="mhead"><button class="mback" data-back>← Назад</button><h2>Новая кампания</h2><p>Выберите войну и сторону</p></header>
@@ -10818,7 +11106,19 @@ function setSpeed(k) {
 }
 const setTxt = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 let hudVpSig = '';
+// the HUD folds itself: while its chips overflow, it drops their labels step by step (classes f1…f6)
+const HUD_FOLD = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'];
+let hudFoldPending = false;
+function fitHud() {
+  hudFoldPending = false;
+  const h = $('#hud'); if (!h || !h.offsetParent) return;
+  h.classList.remove(...HUD_FOLD);
+  for (const c of HUD_FOLD) { if (h.scrollWidth <= h.clientWidth + 1) break; h.classList.add(c); }
+}
+const fitHudSoon = () => { if (!hudFoldPending) { hudFoldPending = true; requestAnimationFrame(fitHud); } };
+new ResizeObserver(fitHudSoon).observe($('#hud'));
 function renderHud() {
+  fitHudSoon();
   if (!hudReady) return;
   const c = countries[player - 1];
   $('#hudFlag').style.background = c ? c.color : '';
@@ -10889,7 +11189,7 @@ function renderMenuState() {
 }
 function showScreen(id) {
   document.querySelectorAll('#menu .mscreen').forEach(s => { s.hidden = s.id !== id; });
-  $('#menuMain').hidden = !!id; $('#mState').hidden = !!id || !W || (firstRun && !menuIngame);
+  $('#menuMain').hidden = !!id; $('#mState').hidden = !!id || !W || (firstRun && !menuIngame); $('#mChron').hidden = !!id;
   if (!id) setTimeout(() => { if (menuOpen()) $('#mContinue').focus(); }, 20);
 }
 function openMenu(ingame) {
@@ -10897,6 +11197,7 @@ function openMenu(ingame) {
   if (!m.hidden) return;
   if (drag) return;
   menuIngame = ingame;
+  $('#tour').hidden = true;
   m.classList.toggle('ingame', ingame);
   menuPaused = true;
   if (battlesOn) { menuWasBattles = true; clearInterval(battleTimer); } else menuWasBattles = false;
@@ -10907,6 +11208,7 @@ function openMenu(ingame) {
   $('#mCampaignS').textContent = nw + ' ' + plural(nw, 'война', 'войны', 'войн') + ' от 1812 года до наших дней';
   showScreen(null);
   renderMenuState();
+  renderChronicles();
   m.hidden = false;
   if (!ingame) menuBackdrop();
 }
@@ -10914,7 +11216,8 @@ function closeMenu() {
   const m = $('#menu');
   if (m.hidden) return;
   m.hidden = true; menuPaused = false; firstRun = false;
-  setTimeout(() => { if (W) tourStart(); }, 700);
+  // the tour waits under the menu and comes back with the map
+  setTimeout(() => { if (!W || menuOpen()) return; if (tourK >= 0) { $('#tour').hidden = false; tourShow(); } else tourStart(); }, 700);
   if (menuWasBattles && battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
   menuWasBattles = false;
   renderHud(); requestDraw();
@@ -10927,6 +11230,43 @@ $('#mContinue').addEventListener('click', closeMenu);
 // a mouse click leaves no focus on HUD and toolbar buttons, so keys typed afterwards go to the map, not to the button
 document.addEventListener('click', e => { const bt = e.target.closest && e.target.closest('.hud button, .rail button, .mapctl button, .ptabs button'); if (bt && e.detail) bt.blur(); });
 $('#mCampaign').addEventListener('click', () => { showScreen('scrCampaign'); renderCampaign(); });
+$('#mChronAll').addEventListener('click', () => { campEra = -1; campQuery = ''; showScreen('scrCampaign'); renderCampaign(); });
+// sliders paint the part of the track left of the thumb in the accent: --p is that share; values set from code are caught by a slow sweep
+function paintRange(r) { const a = r.min === '' ? 0 : +r.min, b = r.max === '' ? 100 : +r.max, p = ((+r.value - a) / ((b - a) || 1) * 100).toFixed(1) + '%'; if (r._p !== p) { r._p = p; r.style.setProperty('--p', p); } }
+document.addEventListener('input', e => { if (e.target.type === 'range') paintRange(e.target); }, true);
+setInterval(() => { for (const r of document.querySelectorAll('input[type=range]')) if (r.offsetParent) paintRange(r); }, 300);
+// the chronicles on the start menu: one card for every series of stages, from the oldest war to the newest
+function seriesColors(ws) {
+  const seen = new Set(), out = [];
+  for (const w of ws) for (const c of w.countries) if (c.side && !seen.has(c.side) && out.length < 4) { seen.add(c.side); out.push(c.color); }
+  return out;
+}
+function renderChronicles() {
+  const rib = $('#mRib'); rib.textContent = '';
+  const ids = Object.keys(SERIES).map(sid => [sid, WARS.filter(w => w.series === sid).sort((a, b) => a.date < b.date ? -1 : 1)]).filter(([, ws]) => ws.length).sort((a, b) => a[1][0].date < b[1][0].date ? -1 : 1);
+  let stages = 0;
+  for (const [sid, ws] of ids) {
+    const S = SERIES[sid]; stages += ws.length;
+    const b = document.createElement('button'); b.className = 'mwar'; b.title = S.info;
+    const y = document.createElement('span'); y.className = 'my'; y.textContent = S.years.split('–')[0];
+    if (S.years.includes('–')) { const e = document.createElement('small'); e.textContent = '–' + S.years.split('–')[1]; y.append(e); }
+    const t = document.createElement('b'); t.textContent = S.name;
+    const n = document.createElement('small'); n.textContent = ws.length + ' ' + plural(ws.length, 'этап', 'этапа', 'этапов');
+    const d = document.createElement('span'); d.className = 'mdots';
+    for (let k = 0; k < Math.min(ws.length, 12); k++) d.append(document.createElement('i'));
+    if (ws.length > 12) { const i = document.createElement('i'); i.className = 'more'; i.textContent = '+' + (ws.length - 12); d.append(i); }
+    const st = document.createElement('span'); st.className = 'mstr';
+    for (const c of seriesColors(ws)) { const i = document.createElement('i'); i.style.background = c; st.append(i); }
+    b.append(y, t, n, d, st);
+    b.addEventListener('click', () => { campSel = (WARS.find(x => x.id === seriesSel[sid]) || ws[ws.length - 1]).id; campEra = -1; campQuery = ''; showScreen('scrCampaign'); renderCampaign(); });
+    rib.append(b);
+  }
+  const nw = WARS.filter(w => !w.peace).length;
+  $('#mTag').innerHTML = '';
+  for (const [v, t] of [[nw, plural(nw, 'война', 'войны', 'войн')], [ids.length, plural(ids.length, 'хроника', 'хроники', 'хроник')], [stages, plural(stages, 'этап', 'этапа', 'этапов')], ['1812–' + new Date().getFullYear(), '']]) {
+    const sp = document.createElement('span'); const b = document.createElement('b'); b.textContent = v; sp.append(b, t ? ' ' + t : ''); $('#mTag').append(sp);
+  }
+}
 $('#mSandbox').addEventListener('click', () => showScreen('scrSandbox'));
 $('#mSettings').addEventListener('click', () => { showScreen('scrSettings'); renderSettings(); });
 $('#mHelp').addEventListener('click', () => { $('#helpKeys').innerHTML = document.querySelector('#panel .help').innerHTML; showScreen('scrHelp'); });
@@ -10948,10 +11288,24 @@ $('#sbSample').addEventListener('click', () => { loadSample(); mapTitle = 'Уч�
 $('#sbFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (/\.json$/i.test(f.name)) loadProjectFile(f); else { freshWorld(); loadImageFile(f); } mapTitle = f.name.replace(/\.[^.]+$/, ''); closeMenu(); });
 
 // campaign: the wars by era, a map of the theatre, and the side to play
-let campSel = null, campPlayer = 1;
+let campSel = null, campPlayer = 1, campEra = -1, campQuery = '';
 const ERA_GROUPS = [[0, 1900, 'XIX век'], [1900, 1923, 'Империи и революции'], [1923, 1946, 'Вторая мировая'], [1946, 1992, 'Холодная война'], [1992, 3000, 'Новейшее время']];
-function renderCampaign() {
-  const list = $('#campList'); list.textContent = '';
+function renderCampaign(listOnly) {
+  const list = $('#campList'), keepFocus = document.activeElement && document.activeElement.id === 'campQ';
+  list.textContent = '';
+  // search and era filters over the list
+  const fl = document.createElement('div'); fl.className = 'cfilter';
+  const q = document.createElement('input'); q.type = 'search'; q.id = 'campQ'; q.placeholder = 'Найти войну, страну или год…'; q.value = campQuery; q.setAttribute('aria-label', 'Поиск войны');
+  q.addEventListener('input', () => { campQuery = q.value; renderCampaign(true); });
+  const chips = document.createElement('div'); chips.className = 'cchips';
+  [['Все', -1], ...ERA_GROUPS.map(([, , n], k) => [n, k]), ['Мир сегодня', ERA_GROUPS.length]].forEach(([n, k]) => {
+    const b = document.createElement('button'); b.textContent = n; b.className = k === campEra ? 'on' : '';
+    b.addEventListener('click', () => { campEra = k; renderCampaign(true); list.scrollTop = 0; }); chips.append(b);
+  });
+  fl.append(q, chips); list.append(fl);
+  if (keepFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  const qn = campQuery.trim().toLowerCase();
+  const hit = w => !qn || [w.name, w.date.slice(0, 4), w.series && SERIES[w.series] ? SERIES[w.series].name : '', ...w.countries.map(c => c.name)].join(' ').toLowerCase().includes(qn);
   const wars = WARS.slice();
   const groups = ERA_GROUPS.map(([a, b, name]) => [name, wars.filter(w => !w.peace && +w.date.slice(0, 4) >= a && +w.date.slice(0, 4) < b)]);
   groups.push(['Мир сегодня', wars.filter(w => w.peace)]);
@@ -10967,6 +11321,9 @@ function renderCampaign() {
     const last = ws[ws.length - 1], gi = ERA_GROUPS.findIndex(([a, b]) => +last.date.slice(0, 4) >= a && +last.date.slice(0, 4) < b);
     if (gi >= 0) groups[gi][1].push(Object.assign(Object.create(null), { seriesCard: sid, stages: ws, date: ws[0].date }));
   }
+  let shown = 0;
+  groups.forEach(([n, ws], gi) => { if (campEra >= 0 && gi !== campEra) ws.length = 0; for (let i = ws.length - 1; i >= 0; i--) if (!(ws[i].seriesCard ? ws[i].stages.some(hit) : hit(ws[i]))) ws.splice(i, 1); shown += ws.length; });
+  if (!shown) { const p = document.createElement('p'); p.className = 'cnone'; p.textContent = 'Ничего не нашлось — попробуйте другое слово или эпоху.'; list.append(p); }
   for (const [name, ws] of groups) {
     if (!ws.length) continue;
     const h = document.createElement('h3'); h.textContent = name; list.append(h);
@@ -10979,7 +11336,7 @@ function renderCampaign() {
         const t = document.createElement('b'); t.textContent = S.name;
         const sm = document.createElement('small'); sm.textContent = S.years + ' · ' + w.stages.length + ' ' + plural(w.stages.length, 'этап', 'этапа', 'этапов');
         const st = document.createElement('span'); st.className = 'cstripe';
-        for (const c of ['#e8c840', '#c03c3c', '#b05a5a']) { const i = document.createElement('i'); i.style.background = c; st.append(i); }
+        for (const c of seriesColors(w.stages)) { const i = document.createElement('i'); i.style.background = c; st.append(i); }
         b.append(y, t, sm, st);
         b.addEventListener('click', () => { const keep = WARS.find(x => x.id === seriesSel[w.seriesCard]); campSel = keep ? keep.id : w.stages[w.stages.length - 1].id; campPlayer = WARS.find(x => x.id === campSel).player || 1; list.querySelectorAll('.ccard').forEach(x => x.classList.toggle('on', x === b)); renderCampDetail(); });
         list.append(b);
@@ -10998,6 +11355,7 @@ function renderCampaign() {
       list.append(b);
     }
   }
+  if (listOnly) return;
   const w = WARS.find(x => x.id === campSel);
   campPlayer = w.player || 1;
   renderCampDetail();
