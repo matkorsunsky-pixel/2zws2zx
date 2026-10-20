@@ -146,6 +146,7 @@ input[type=range] { accent-color: var(--accent); }
 
 .field { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
 .field label { font-size: 13px; }
+#liveRow { grid-column: span 2; margin: 4px 0 8px; }
 .field output { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .field input[type=range] { grid-column: span 2; width: 100%; accent-color: var(--accent); }
 .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
@@ -225,9 +226,9 @@ section > h2:hover { color: var(--ink); }
 
 main { position: relative; min-width: 0; min-height: 0; background-color: var(--stage);
   background-image: radial-gradient(var(--stage-dot) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
-#mapcv, #view, #ui { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#mapcv, #view, #fx, #ui { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
 #mapcv { pointer-events: none; }
-#ui { pointer-events: none; }
+#ui, #fx { pointer-events: none; }
 main.drop::after { content: "Отпустите, чтобы открыть карту"; position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-items: center; font: 600 16px var(--f-ui); color: var(--accent); background: rgb(0 0 0 / .04); pointer-events: none; }
 /* --- HUD over the map --- */
 .hud {
@@ -574,6 +575,59 @@ body:not(.nopanel) .status > #hint { display: none; }
   .menu { overflow-y: auto; }
 }
 @media (prefers-reduced-motion: reduce) { #menuBg { animation: none; } .menu, .mscreen { animation: none; } }
+/* --- v2: the map fills the screen; the panel, the HUD, the bars and the generals' dock float over it as glass --- */
+@media (min-width: 761px) {
+  :root { --glass: rgb(13 17 22 / .74); --gline: rgb(255 255 255 / .075); --gshadow: 0 1px 0 rgb(255 255 255 / .04) inset, 0 12px 40px rgb(0 0 0 / .42); --pw: 336px; }
+  :root[data-theme="light"] { --glass: rgb(250 248 244 / .8); --gline: rgb(0 0 0 / .08); --gshadow: 0 1px 0 rgb(255 255 255 / .6) inset, 0 12px 36px rgb(40 30 10 / .16); }
+  body, body.nopanel { grid-template-columns: 64px 1fr; }
+  .rail { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, #000), var(--bg)); border-right: 1px solid var(--gline); }
+  .rail-tools button { transition: background-color .15s, color .15s, transform .15s; }
+  .rail-tools button:active { transform: scale(.94); }
+  .rail-tools button.on { box-shadow: 0 6px 18px rgb(224 168 62 / .32), inset 0 1px 0 rgb(255 255 255 / .25); }
+  #panel {
+    position: fixed; z-index: 8; left: 74px; top: 10px; bottom: 10px; width: var(--pw);
+    border: 1px solid var(--gline); border-radius: 18px; background: var(--glass); box-shadow: var(--gshadow);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25);
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1), opacity .22s, visibility 0s;
+  }
+  body.nopanel #panel { visibility: hidden; opacity: 0; transform: translateX(-18px) scale(.985); pointer-events: none; border: 1px solid var(--gline); transition: transform .25s, opacity .2s, visibility 0s .25s; }
+  .ptabs { padding: 10px 10px 8px; gap: 3px; border-bottom: 1px solid var(--gline); }
+  .ptabs button { border-radius: 9px; padding: 8px 2px; }
+  .ptabs button.on { background: var(--accent-soft); color: var(--accent); }
+  .ptabs button.on::after { display: none; }
+  .toolhead { background: linear-gradient(135deg, var(--accent-soft), transparent 75%); border-color: var(--gline); border-radius: 14px; }
+  main { background: radial-gradient(120% 90% at 55% 35%, color-mix(in srgb, var(--stage) 80%, #1a2330) 0%, var(--stage) 70%); }
+  main::before { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 58%, rgb(0 0 0 / .28) 100%); }
+  :root[data-theme="light"] main::before { background: radial-gradient(ellipse at 50% 45%, transparent 62%, rgb(60 40 10 / .1) 100%); }
+  body:not(.nopanel) .hud { left: calc(var(--pw) + 22px); }
+  .hud > button, .hud .hclock, .hud .hgroup, .hud .hscore, .mapctl { background: var(--glass); border-color: var(--gline); box-shadow: var(--gshadow); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); border-radius: 14px; }
+  .sidepick { background: var(--glass); border-color: var(--gline); box-shadow: var(--gshadow); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); border-radius: 14px; padding: 6px 7px; }
+  body:not(.nopanel) .sidepick { left: calc(50% + (var(--pw) + 12px) / 2); max-width: calc(100% - var(--pw) - 40px); }
+  .gstrip { left: 10px; right: 10px; bottom: 10px; border-radius: 16px; border: 1px solid var(--gline); border-top: 1px solid var(--gline); border-left: 4px solid var(--side, var(--accent));
+    background: var(--glass); box-shadow: var(--gshadow); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); padding-block: 7px; }
+  body:not(.nopanel) .gstrip { left: calc(var(--pw) + 22px); }
+  .armybar { border-radius: 14px; }
+  #toast { border-radius: 12px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}
+/* with the panel open the HUD has the width of the stage less the panel: it folds as it would on a narrower stage */
+@media (min-width: 761px) and (max-width: 1714px) { body:not(.nopanel) .hud .tgl .tl { display: none; } }
+@media (min-width: 761px) and (max-width: 1654px) { body:not(.nopanel) .hdate small { display: none; } body:not(.nopanel) .hdate { min-width: 0; } }
+@media (min-width: 761px) and (max-width: 1564px) { body:not(.nopanel) .hscore small { display: none; } body:not(.nopanel) .hscore .hbar { grid-row: 1 / span 2; } }
+@media (min-width: 761px) and (max-width: 1514px) { body:not(.nopanel) .hpockets .pw, body:not(.nopanel) .hwar .pw { display: none; } }
+@media (min-width: 761px) and (max-width: 1414px) { body:not(.nopanel) .hud .hbar { width: 64px; } body:not(.nopanel) .hud > .hcountry { min-width: 110px; } }
+@media (min-width: 761px) and (max-width: 1374px) { body:not(.nopanel) .hud > .hscore { display: none !important; } body:not(.nopanel) .hctext small { display: none; } }
+@media (min-width: 761px) and (max-width: 1274px) { body:not(.nopanel) .hud .hctext { display: none; } body:not(.nopanel) .hud > .hcountry { min-width: 0; } }
+@media (min-width: 761px) and (max-width: 1214px) { body:not(.nopanel) .hud { flex-wrap: wrap; } }
+/* the border tool's bar: modes, the shape of the front, effects */
+.livebar .fseg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.livebar .fseg button { padding: 6px 11px; font-weight: 600; font-size: 12.5px; border-color: transparent; background: transparent; border-radius: 8px; }
+.livebar .fseg button.on { background: var(--accent); color: var(--accent-ink); box-shadow: 0 3px 10px rgb(224 168 62 / .3); }
+.livebar .ftg { padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.livebar .ftg::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--line2); transition: background-color .15s, box-shadow .15s; }
+.livebar .ftg.on { color: var(--ink); }
+.livebar .ftg.on::before { background: var(--ok); box-shadow: 0 0 0 3px rgb(92 194 141 / .2); }
+.livebar .fsep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--line); }
+@media (prefers-reduced-motion: reduce) { #panel, body.nopanel #panel { transition: none; } }
 </style>
 </head>
 <body>
@@ -878,6 +932,7 @@ body:not(.nopanel) .status > #hint { display: none; }
 <main id="stage">
   <canvas id="mapcv" aria-hidden="true"></canvas>
   <canvas id="view"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
@@ -2097,8 +2152,9 @@ async function geoSearch(q) {
   if (!geoStore && (g[2] < 0 || g[3] < 0 || g[0] > W || g[1] > H)) { toast('«' + res[0].display_name.split(',')[0] + '» вне текущей области. Вернитесь к прежней области кнопкой ниже.'); return; }
   const r = stage.getBoundingClientRect(), strip = $('#genStrip').offsetHeight;
   const bw = Math.max(g[2] - g[0], 2), bh = Math.max(g[3] - g[1], 2);
-  view.s = clamp(Math.min(r.width / bw, (r.height - strip) / bh) * .8, geoStore ? 1 / 64 : .05, maxZoom());
-  view.x = r.width / 2 - (g[0] + g[2]) / 2 * view.s; view.y = (r.height - strip) / 2 - (g[1] + g[3]) / 2 * view.s;
+  const lp = panelInset(), rw = r.width - lp;
+  view.s = clamp(Math.min(rw / bw, (r.height - strip) / bh) * .8, geoStore ? 1 / 64 : .05, maxZoom());
+  view.x = lp + rw / 2 - (g[0] + g[2]) / 2 * view.s; view.y = (r.height - strip) / 2 - (g[1] + g[3]) / 2 * view.s;
   userView = true; requestDraw();
   toast('Найдено: ' + res[0].display_name.split(',').slice(0, 2).join(','));
   viewChanged();
@@ -2574,8 +2630,9 @@ function fitWorld() {
   if (!geoStore || !win) return fit();
   const r = stage.getBoundingClientRect(), top = hudInset(), strip = $('#genStrip').offsetHeight + top, n = worldCells(win.L);
   const y0 = latToY(78) * n - win.cy0, y1 = latToY(-58) * n - win.cy0, x0 = -win.cx0, x1 = n - win.cx0;
-  view.s = Math.min(r.width / (x1 - x0), (r.height - strip) / (y1 - y0)) * .96;
-  view.x = (r.width - (x1 - x0) * view.s) / 2 - x0 * view.s; view.y = top + (r.height - strip - (y1 - y0) * view.s) / 2 - y0 * view.s;
+  const lp = panelInset(), rw = r.width - lp;
+  view.s = Math.min(rw / (x1 - x0), (r.height - strip) / (y1 - y0)) * .96;
+  view.x = lp + (rw - (x1 - x0) * view.s) / 2 - x0 * view.s; view.y = top + (r.height - strip - (y1 - y0) * view.s) / 2 - y0 * view.s;
   userView = true; requestDraw(); viewChanged();
 }
 function startEarthStore() {
@@ -4194,8 +4251,9 @@ async function applyWar(id) {
     // look at the theatre of war
     const r = stage.getBoundingClientRect(), top = hudInset(), strip = $('#genStrip').offsetHeight + top, v = w.view;
     const gx0 = lonToX(v[1]) * n - win.cx0, gx1 = lonToX(v[3]) * n - win.cx0, gy0 = latToY(v[2]) * n - win.cy0, gy1 = latToY(v[0]) * n - win.cy0;
-    view.s = Math.min(r.width / (gx1 - gx0), (r.height - strip) / (gy1 - gy0)) * .95;
-    view.x = r.width / 2 - (gx0 + gx1) / 2 * view.s; view.y = top + (r.height - strip) / 2 - (gy0 + gy1) / 2 * view.s;
+    const lp = panelInset(), rw = r.width - lp;
+    view.s = Math.min(rw / (gx1 - gx0), (r.height - strip) / (gy1 - gy0)) * .95;
+    view.x = lp + rw / 2 - (gx0 + gx1) / 2 * view.s; view.y = top + (r.height - strip) / 2 - (gy0 + gy1) / 2 * view.s;
     userView = true; requestDraw(); viewChanged();
     setTool('units');
     toast(w.name + ' — карта готова. Играете за: ' + (countries[player - 1] || {}).name + '.');
@@ -4208,8 +4266,8 @@ async function applyWar(id) {
 function resize() {
   dpr = window.devicePixelRatio || 1;
   const r = stage.getBoundingClientRect();
-  mapCv.width = uiCv.width = cv.width = Math.max(1, Math.round(r.width * dpr));
-  mapCv.height = uiCv.height = cv.height = Math.max(1, Math.round(r.height * dpr));
+  mapCv.width = uiCv.width = cv.width = fxCv.width = Math.max(1, Math.round(r.width * dpr));
+  mapCv.height = uiCv.height = cv.height = fxCv.height = Math.max(1, Math.round(r.height * dpr));
   layerSig = '';
   requestDraw();
 }
@@ -4399,6 +4457,7 @@ function drawUi() {
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(20,25,32,.9)';
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
     if (tool === 'warp') { ctx.fillStyle = 'rgba(20,25,32,.9)'; ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    if (tool === 'warp' && warpMode === 'rubber') drawGrabZone(ctx, sx, sy, r);
   }
   if (drag && drag.mode === 'region') {
     const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
@@ -4432,6 +4491,34 @@ function drawUi() {
   }
 }
 
+// over a front the rubber tool shows the stretch of it that a pull will move: a band along the line, the part that
+// moves whole brighter, and the two ways it can be pulled
+let grabCache = null;
+function drawGrabZone(c, sx, sy, r) {
+  const key = Math.round(hover.x * 2) + ',' + Math.round(hover.y * 2) + ',' + BR() + ',' + mapEpoch;
+  if (!grabCache || grabCache.key !== key) grabCache = { key, fa: frontAxis(hover, BR() * .8) };
+  const fa = grabCache.fa;
+  if (!fa) return;
+  const pf = WARP_PROFILES[warpProfile] || WARP_PROFILES.arc, A = (pf.c + pf.f) * r, C = 1.15 * r, ang = Math.atan2(fa.ty, fa.tx);
+  c.save(); c.translate(sx, sy); c.rotate(ang);
+  const g = c.createLinearGradient(-A, 0, A, 0);
+  g.addColorStop(0, 'rgba(255,214,120,0)'); g.addColorStop(.5 - pf.c / (pf.c + pf.f) / 2, 'rgba(255,214,120,.28)');
+  g.addColorStop(.5 + pf.c / (pf.c + pf.f) / 2, 'rgba(255,214,120,.28)'); g.addColorStop(1, 'rgba(255,214,120,0)');
+  c.fillStyle = g; c.beginPath(); c.ellipse(0, 0, A, C * .62, 0, 0, Math.PI * 2); c.fill();
+  c.setLineDash([7, 5]); c.lineWidth = 2; c.strokeStyle = 'rgba(255,214,120,.95)';
+  c.beginPath(); c.ellipse(0, 0, A, C * .62, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+  // the line of the front through the grip, and arrows both ways across it
+  c.lineWidth = 2.5; c.strokeStyle = 'rgba(255,240,200,.9)'; c.beginPath(); c.moveTo(-pf.c * r - 6, 0); c.lineTo(pf.c * r + 6, 0); c.stroke();
+  c.fillStyle = 'rgba(255,240,200,.9)';
+  for (const d of [-1, 1]) { const y = d * C * .42; c.beginPath(); c.moveTo(-6, y - d * 2); c.lineTo(6, y - d * 2); c.lineTo(0, y + d * 7); c.closePath(); c.fill(); }
+  c.restore();
+}
+// the width of the panel floating over the left of the map, when it is open (on narrow screens it sits below the map)
+function panelInset() {
+  const p = $('#panel');
+  if (!p || document.body.classList.contains('nopanel') || getComputedStyle(p).position !== 'fixed') return 0;
+  return Math.max(0, p.getBoundingClientRect().right - stage.getBoundingClientRect().left + 8);
+}
 // height of the HUD strip over the top of the map (it floats over the map, so fitted views start below it)
 function hudInset() { const h = $('#hud'); return h && !h.hidden ? Math.min(140, h.offsetTop + h.offsetHeight + 6) : 0; }
 function fit() {
@@ -4439,8 +4526,9 @@ function fit() {
   userView = false;
   const r = stage.getBoundingClientRect();
   const strip = $('#genStrip') ? $('#genStrip').offsetHeight : 0, top = hudInset(), rh = Math.max(60, r.height - strip - top);
-  const s = Math.min(r.width / W, rh / H) * 0.92;
-  view.s = s; view.x = (r.width - W * s) / 2; view.y = top + (rh - H * s) / 2;
+  const lp = panelInset(), rw = Math.max(60, r.width - lp);
+  const s = Math.min(rw / W, rh / H) * 0.92;
+  view.s = s; view.x = lp + (rw - W * s) / 2; view.y = top + (rh - H * s) / 2;
   requestDraw();
 }
 function zoomAt(p, k) {
@@ -4494,12 +4582,17 @@ function frontAxis(g, R) {
   nx /= m; ny /= m;
   return { nx, ny, tx: -ny, ty: nx };
 }
+// the shape a grabbed front bends into: a smooth arc, a narrow wedge (a breakthrough) or a broad wall moving as one;
+// c: the half-length of the part that moves whole, f: the length over which the pull fades, both in radii
+const WARP_PROFILES = { arc: { c: .45, f: 1.0, name: 'Дуга' }, wedge: { c: .06, f: 1.05, lin: true, name: 'Клин' }, wall: { c: 1.25, f: .65, name: 'Вал' } };
+let warpProfile = 'arc';
 function warpTo(p0, q) {
   const R = BR(), R2 = R * R, ddx = q.x - p0.x, ddy = q.y - p0.y, fa = drag.fa;
   // grabbed on a front, the pull spreads along the front line (a stretch of the front advances together and bends
   // in a long smooth arc, as front lines move on animated war maps) and is even across it, so the land behind the
   // line fills in instead of being squeezed; grabbed anywhere else it is the round rubber sheet
-  const RB = fa ? R * 1.5 : R;
+  const pf = WARP_PROFILES[warpProfile] || WARP_PROFILES.arc, reach = pf.c + pf.f;
+  const RB = fa ? R * Math.max(1.5, reach + .05) : R;
   const nb = [Math.max(0, Math.floor(q.x - RB - 1)), Math.max(0, Math.floor(q.y - RB - 1)),
               Math.min(W, Math.ceil(q.x + RB + 2)), Math.min(H, Math.ceil(q.y + RB + 2))];
   const wb = drag.box ? [Math.min(nb[0], drag.box[0]), Math.min(nb[1], drag.box[1]), Math.max(nb[2], drag.box[2]), Math.max(nb[3], drag.box[3])] : nb;
@@ -4514,9 +4607,10 @@ function warpTo(p0, q) {
         // along the front: the middle stretch (as wide as the circle) moves as one straight piece of line,
         // then the pull fades out over the same distance again on each side; across: even, then fading
         const A = Math.abs(dx * fa.tx + dy * fa.ty) / R, C = Math.abs(dx * fa.nx + dy * fa.ny) / R;
-        if (A >= 1.45 || C >= 1.15) { own[i] = o0; occ[i] = occ0[i]; continue; }
-        const ta = A <= .45 ? 0 : (A - .45) / 1, tc = C <= .6 ? 0 : (C - .6) / .55;
-        w = (1 - ta * ta * (3 - 2 * ta)) * (1 - tc * tc * (3 - 2 * tc));
+        if (A >= reach || C >= 1.15) { own[i] = o0; occ[i] = occ0[i]; continue; }
+        const ta = A <= pf.c ? 0 : (A - pf.c) / pf.f, tc = C <= .6 ? 0 : (C - .6) / .55;
+        // the wedge falls off almost straight (a pointed salient), the others smoothly
+        w = (pf.lin ? 1 - Math.pow(ta, .8) : 1 - ta * ta * (3 - 2 * ta)) * (1 - tc * tc * (3 - 2 * tc));
         if (w < .015) { own[i] = o0; occ[i] = occ0[i]; continue; }
       } else {
         const r2 = (dx * dx + dy * dy) / R2;
@@ -4578,8 +4672,277 @@ function warpStep() {
 function growBox(b) {
   if (!b || !drag || b[2] <= b[0] || b[3] <= b[1]) return;
   if (drag.live) liveFollow(drag.live, b);
+  fxMark(b);
   const u = drag.ub;
   drag.ub = u ? [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])] : b.slice();
+}
+// ---------- the front in motion: effects of a border drag ----------
+// While the border is pulled the land it takes is lit in the taker's colour under moving hatching, the leading edge
+// glows, shells burst and smoke drifts along it, a broad arrow runs from where the front was grabbed to the hand and
+// a counter shows how far and how much; when it is let go everything settles and fades. All of it is drawn on a canvas
+// of its own every frame, from two masks at the scale of the cells that are only brought up to date where the drag
+// has just been, so a long pull costs no more than a short one.
+const fxCv = $('#fx'), fxc = fxCv.getContext('2d');
+let fxOn = true, fxSound = true, fxArrow = true;   // read from the saved settings once they are loaded
+let fx = null, fxRaf = 0;
+const FX_HATCH = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const x = c.getContext('2d'); x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 3;
+  for (let k = -16; k <= 32; k += 8) { x.beginPath(); x.moveTo(k, 16); x.lineTo(k + 16, 0); x.stroke(); }
+  return c;
+})();
+const fxTmp = document.createElement('canvas'), fxTc = fxTmp.getContext('2d');
+const fxGlow = document.createElement('canvas'), fxGc = fxGlow.getContext('2d');
+function fxBegin(d) {
+  if (!fxOn || !own) { fx = null; return; }
+  const n = W * H;
+  if (!fx || fx.n !== n) {
+    fx = { n, start: new Uint8Array(n), got: new Uint8Array(n), gain: document.createElement('canvas'), edge: document.createElement('canvas') };
+    fx.gain.width = fx.edge.width = W; fx.gain.height = fx.edge.height = H;
+  } else { fx.got.fill(0); fx.gain.getContext('2d').clearRect(0, 0, W, H); fx.edge.getContext('2d').clearRect(0, 0, W, H); }
+  fx.start.set(own);
+  Object.assign(fx, { g0: { x: d.p0.x, y: d.p0.y }, hand: { x: d.p0.x, y: d.p0.y }, ub: null, todo: null, cells: 0, parts: [], edgePts: [], live: true,
+    t0: performance.now(), tEnd: 0, side: d.val, by: {}, lastBoom: 0, rumble: 0, arrow: null });
+  fxKick();
+}
+// a box of cells the drag has just changed: its masks are brought up to date on the next frame
+function fxMark(b) {
+  if (!fx || !fx.live || !b) return;
+  const t = fx.todo;
+  fx.todo = t ? [Math.min(t[0], b[0]), Math.min(t[1], b[1]), Math.max(t[2], b[2]), Math.max(t[3], b[3])] : b.slice();
+  fxKick();
+}
+function fxKick() { if (!fxRaf) fxRaf = requestAnimationFrame(fxFrame); }
+function fxUpdate() {
+  const b = fx.todo; fx.todo = null;
+  if (!b) return 0;
+  const x0 = Math.max(0, b[0] - 1), y0 = Math.max(0, b[1] - 1), x1 = Math.min(W, b[2] + 1), y1 = Math.min(H, b[3] + 1), w = x1 - x0, h = y1 - y0;
+  if (w <= 0 || h <= 0) return 0;
+  const gi = new ImageData(w, h), ei = new ImageData(w, h), gd = gi.data, ed = ei.data, st = fx.start, got = fx.got;
+  let fresh = 0;
+  const pts = [];
+  for (let y = y0; y < y1; y++) {
+    let i = y * W + x0, q = (y - y0) * w * 4;
+    for (let x = x0; x < x1; x++, i++, q += 4) {
+      const o = own[i], s = st[i];
+      const won = o !== s && o !== 0 && s !== 0;
+      if (won !== !!got[i] || (won && got[i] !== o)) {
+        if (got[i]) { fx.cells--; fx.by[got[i]]--; }
+        if (won) { fresh++; fx.cells++; fx.by[o] = (fx.by[o] || 0) + 1; }
+        got[i] = won ? o : 0;
+      }
+      if (!won) continue;
+      const c = rgb[o] || [200, 200, 200];
+      gd[q] = c[0]; gd[q + 1] = c[1]; gd[q + 2] = c[2]; gd[q + 3] = 255;
+      // the leading edge: taken land next to land still held by the other side
+      const l = x > 0 ? i - 1 : i, r = x < W - 1 ? i + 1 : i, u = y > 0 ? i - W : i, dn = y < H - 1 ? i + W : i;
+      if ((own[l] !== o && own[l] && own[l] === st[l]) || (own[r] !== o && own[r] && own[r] === st[r]) || (own[u] !== o && own[u] && own[u] === st[u]) || (own[dn] !== o && own[dn] && own[dn] === st[dn])) {
+        ed[q] = 255; ed[q + 1] = Math.min(255, 150 + c[1] * .4) | 0; ed[q + 2] = 70; ed[q + 3] = 255;
+        if (pts.length < 600) pts.push(x + .5, y + .5);
+      }
+    }
+  }
+  fx.gain.getContext('2d').putImageData(gi, x0, y0);
+  fx.edge.getContext('2d').putImageData(ei, x0, y0);
+  const u = fx.ub; fx.ub = u ? [Math.min(u[0], x0), Math.min(u[1], y0), Math.max(u[2], x1), Math.max(u[3], y1)] : [x0, y0, x1, y1];
+  if (pts.length) fx.edgePts = pts;
+  // the side of the advance: the country that has taken the most land so far
+  let best = 0; for (const k in fx.by) if (fx.by[k] > best) { best = fx.by[k]; fx.side = +k; }
+  return fresh;
+}
+// shell bursts along the leading edge: as many as the drag has just taken land for, never more than the eye can follow
+function fxSpawn(fresh, now) {
+  const P = fx.parts, E = fx.edgePts;
+  if (!E.length || !fresh) return;
+  const want = Math.min(3, Math.ceil(Math.sqrt(fresh) / 8));
+  for (let k = 0; k < want && P.length < 90; k++) {
+    const j = (Math.random() * E.length / 2 | 0) * 2;
+    const big = Math.random() < .3;
+    P.push({ x: E[j] + (Math.random() - .5) * 3, y: E[j + 1] + (Math.random() - .5) * 3, t0: now + Math.random() * 120, life: big ? 1300 : 800, big });
+    if (big && fxSound && now - fx.lastBoom > 90) { fx.lastBoom = now; fxBoom(.35 + Math.random() * .4); }
+  }
+}
+function fxEnd() {
+  if (!fx || !fx.live) return;
+  fxUpdate();
+  fx.live = false; fx.tEnd = performance.now();
+  fxKick();
+}
+function fxFrame(now) {
+  fxRaf = 0;
+  fxc.setTransform(1, 0, 0, 1, 0, 0);
+  fxc.clearRect(0, 0, fxCv.width, fxCv.height);
+  if (!fx || !fxOn) { fxRumble(0); return; }
+  const fresh = fx.live ? fxUpdate() : 0;
+  if (fresh) fxSpawn(fresh, now);
+  // after the release everything fades out over a second and a half
+  const fade = fx.live ? 1 : Math.max(0, 1 - (now - fx.tEnd) / 1500);
+  if (!fx.live) fxRumble(0); else { fx.rumble = fx.rumble * .9 + Math.min(1, fresh / 400) * .1; fxRumble(fx.rumble); }
+  const k = view.s * dpr, ub = fx.ub;
+  fxc.setTransform(k, 0, 0, k, view.x * dpr, view.y * dpr);
+  if (ub && fade > 0) {
+    const [x0, y0, x1, y1] = ub, w = x1 - x0, h = y1 - y0;
+    fxc.imageSmoothingEnabled = true;
+    // the land taken: the taker's colour, brighter, and moving diagonal hatching over it
+    fxc.globalAlpha = .38 * fade; fxc.globalCompositeOperation = 'source-over';
+    fxc.drawImage(fx.gain, x0, y0, w, h, x0, y0, w, h);
+    const sx0 = Math.max(0, Math.floor(x0 * k + view.x * dpr)), sy0 = Math.max(0, Math.floor(y0 * k + view.y * dpr));
+    const sx1 = Math.min(fxCv.width, Math.ceil(x1 * k + view.x * dpr)), sy1 = Math.min(fxCv.height, Math.ceil(y1 * k + view.y * dpr));
+    if (sx1 > sx0 && sy1 > sy0) {
+      if (fxTmp.width < sx1 - sx0 || fxTmp.height < sy1 - sy0) { fxTmp.width = Math.max(fxTmp.width, sx1 - sx0); fxTmp.height = Math.max(fxTmp.height, sy1 - sy0); }
+      fxTc.setTransform(1, 0, 0, 1, 0, 0); fxTc.globalCompositeOperation = 'source-over'; fxTc.clearRect(0, 0, sx1 - sx0, sy1 - sy0);
+      const pat = fxTc.createPattern(FX_HATCH, 'repeat'), off = (now / 40) % 16;
+      fxTc.translate(off - sx0 % 16, -sy0 % 16); fxTc.fillStyle = pat; fxTc.fillRect(-16, -16, sx1 - sx0 + 32, sy1 - sy0 + 32);
+      fxTc.setTransform(k, 0, 0, k, view.x * dpr - sx0, view.y * dpr - sy0);
+      fxTc.globalCompositeOperation = 'destination-in'; fxTc.imageSmoothingEnabled = true;
+      fxTc.drawImage(fx.gain, x0, y0, w, h, x0, y0, w, h);
+      fxc.setTransform(1, 0, 0, 1, 0, 0); fxc.globalAlpha = .16 * fade;
+      fxc.drawImage(fxTmp, 0, 0, sx1 - sx0, sy1 - sy0, sx0, sy0, sx1 - sx0, sy1 - sy0);
+      fxc.setTransform(k, 0, 0, k, view.x * dpr, view.y * dpr);
+    }
+    // the leading edge: a soft glow (blurred at the scale of the cells, cheap) and a bright core, breathing
+    const pulse = .75 + .25 * Math.sin(now / 160);
+    if (fxGlow.width < w || fxGlow.height < h) { fxGlow.width = Math.max(fxGlow.width, w); fxGlow.height = Math.max(fxGlow.height, h); }
+    fxGc.setTransform(1, 0, 0, 1, 0, 0); fxGc.clearRect(0, 0, w, h);
+    fxGc.filter = 'blur(' + Math.max(1.2, 3 / view.s) + 'px)'; fxGc.drawImage(fx.edge, x0, y0, w, h, 0, 0, w, h); fxGc.filter = 'none';
+    fxc.globalCompositeOperation = 'lighter';
+    fxc.globalAlpha = .9 * fade * pulse; fxc.drawImage(fxGlow, 0, 0, w, h, x0, y0, w, h);
+    fxc.globalAlpha = .55 * fade; fxc.drawImage(fxGlow, 0, 0, w, h, x0, y0, w, h);
+    fxc.globalCompositeOperation = 'source-over';
+    fxc.globalAlpha = .85 * fade; fxc.drawImage(fx.edge, x0, y0, w, h, x0, y0, w, h);
+    fxc.globalAlpha = 1;
+  }
+  // bursts: a white-hot flash, an orange fireball, then grey smoke that swells, drifts and thins
+  const P = fx.parts, pr = 1 / view.s;
+  for (let j = P.length - 1; j >= 0; j--) {
+    const p = P[j], t = (now - p.t0) / p.life;
+    if (t >= 1) { P.splice(j, 1); continue; }
+    if (t < 0) continue;
+    const R = (p.big ? 10 : 5.5) * pr;
+    if (t < .18) {
+      const a = 1 - t / .18;
+      fxc.globalCompositeOperation = 'lighter';
+      fxc.fillStyle = `rgba(255,${200 + 55 * a | 0},${120 + 120 * a | 0},${.9 * a})`;
+      fxc.beginPath(); fxc.arc(p.x, p.y, R * (.4 + t * 3), 0, 6.283); fxc.fill();
+      fxc.globalCompositeOperation = 'source-over';
+    }
+    if (t < .45) { const a = 1 - t / .45; fxc.fillStyle = `rgba(255,${120 + 60 * a | 0},40,${.55 * a})`; fxc.beginPath(); fxc.arc(p.x, p.y, R * (.5 + t * 1.4), 0, 6.283); fxc.fill(); }
+    const sa = (t < .2 ? t / .2 : 1 - (t - .2) / .8) * .26;
+    fxc.fillStyle = `rgba(70,72,76,${sa})`;
+    fxc.beginPath(); fxc.arc(p.x + t * 6 * pr, p.y - t * 10 * pr, R * (.6 + t * 1.3), 0, 6.283); fxc.fill();
+  }
+  // the arrow of the advance, from where the front was grabbed to the hand
+  if (fxArrow && drag && drag.mode === 'warp' && drag.wm !== 'smooth' && fx.live) fxDrawArrow(now, 1);
+  else if (fxArrow && !fx.live && fx.arrow && fade > 0) fxDrawArrow(now, fade);
+  fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (fx.live && drag && drag.mode === 'warp') fxBadge();
+  if (fx.live || fade > 0 || P.length) fxKick(); else { fx.ub = null; }
+}
+function fxDrawArrow(now, alpha) {
+  const a = fx.live ? { x: fx.g0.x, y: fx.g0.y, hx: drag.p.x, hy: drag.p.y } : fx.arrow;
+  if (fx.live) fx.arrow = a;
+  const ax = a.x * view.s + view.x, ay = a.y * view.s + view.y, bx = a.hx * view.s + view.x, by = a.hy * view.s + view.y;
+  const L = Math.hypot(bx - ax, by - ay);
+  if (L < 26) return;
+  const ux = (bx - ax) / L, uy = (by - ay) / L, nx = -uy, ny = ux;
+  const c = rgb[fx.side] || [224, 168, 62];
+  const wd = clamp(BR() * view.s * .32, 10, 34), head = Math.min(L * .45, wd * 2.1);
+  // a gentle bend: the control point a little to the side, as the arrows on staff maps sweep
+  const bend = L * .12, mx = (ax + bx) / 2 + nx * bend, my = (ay + by) / 2 + ny * bend;
+  const pt = t => { const s = 1 - t; return [s * s * ax + 2 * s * t * mx + t * t * bx, s * s * ay + 2 * s * t * my + t * t * by]; };
+  const tan = t => { const s = 1 - t; const dx = 2 * s * (mx - ax) + 2 * t * (bx - mx), dy = 2 * s * (my - ay) + 2 * t * (by - my), m = Math.hypot(dx, dy) || 1; return [dx / m, dy / m]; };
+  const tH = 1 - head / L, N = 24, left = [], right = [];
+  for (let i = 0; i <= N; i++) {
+    const t = tH * i / N, [x, y] = pt(t), [dx, dy] = tan(t), w = wd * (.35 + .65 * (i / N)) / 2;
+    left.push([x - dy * w, y + dx * w]); right.push([x + dy * w, y - dx * w]);
+  }
+  const [hx, hy] = pt(tH), [tx, ty] = tan(tH), hw = wd * 1.05;
+  fxc.save();
+  fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  fxc.globalAlpha = alpha;
+  fxc.beginPath();
+  left.forEach(([x, y], i) => i ? fxc.lineTo(x, y) : fxc.moveTo(x, y));
+  fxc.lineTo(hx - ty * hw, hy + tx * hw); fxc.lineTo(bx, by); fxc.lineTo(hx + ty * hw, hy - tx * hw);
+  for (let i = right.length - 1; i >= 0; i--) fxc.lineTo(right[i][0], right[i][1]);
+  fxc.closePath();
+  const g = fxc.createLinearGradient(ax, ay, bx, by);
+  g.addColorStop(0, `rgba(${c},.15)`); g.addColorStop(.55, `rgba(${c},.75)`); g.addColorStop(1, `rgba(${Math.min(255, c[0] + 40)},${Math.min(255, c[1] + 40)},${Math.min(255, c[2] + 40)},.95)`);
+  fxc.shadowColor = 'rgba(0,0,0,.45)'; fxc.shadowBlur = 10; fxc.shadowOffsetY = 3;
+  fxc.fillStyle = g; fxc.fill();
+  fxc.shadowColor = 'transparent';
+  fxc.lineJoin = 'round'; fxc.lineWidth = 2; fxc.strokeStyle = `rgba(${c[0] * .45 | 0},${c[1] * .45 | 0},${c[2] * .45 | 0},.9)`; fxc.stroke();
+  fxc.lineWidth = 1; fxc.strokeStyle = 'rgba(255,255,255,.35)'; fxc.stroke();
+  // chevrons running forward inside the arrow
+  fxc.clip();
+  fxc.strokeStyle = 'rgba(255,255,255,.55)'; fxc.lineWidth = Math.max(2, wd * .14); fxc.lineCap = 'round';
+  const gap = wd * 1.1, off = (now / 12) % gap;
+  for (let s = off; s < L - head * .6; s += gap) {
+    const t = s / L, [x, y] = pt(t), [dx, dy] = tan(t), w = wd * (.35 + .65 * Math.min(1, t / tH)) * .32;
+    fxc.globalAlpha = alpha * Math.min(1, s / (gap * 2));
+    fxc.beginPath(); fxc.moveTo(x - dx * w - dy * w, y - dy * w + dx * w); fxc.lineTo(x, y); fxc.lineTo(x - dx * w + dy * w, y - dy * w - dx * w); fxc.stroke();
+  }
+  fxc.restore();
+}
+// the counter by the hand: how far the front has gone and how much land has changed hands
+function fxBadge() {
+  const p = drag.tp || drag.p, x = p.x * view.s + view.x, y = p.y * view.s + view.y;
+  const m = geo ? metersPerCell() : 0, dist = Math.hypot(drag.p.x - fx.g0.x, drag.p.y - fx.g0.y);
+  if (dist * view.s < 18 && !fx.cells) return;
+  const c = rgb[fx.side] || [224, 168, 62];
+  const t1 = m ? (dist * m / 1000 < 10 ? (dist * m / 1000).toFixed(1) : Math.round(dist * m / 1000)) + ' км' : Math.round(dist) + ' кл.';
+  const t2 = fx.cells ? '+' + (m ? fmtKm2(fx.cells * m * m / 1e6) : fx.cells + ' кл.') : '';
+  const name = fx.side && countries[fx.side - 1] ? countries[fx.side - 1].name : '';
+  fxc.font = '700 13px ' + FONT_UI; const w1 = fxc.measureText('▲ ' + t1).width;
+  fxc.font = '600 11.5px ' + FONT_UI; const w2 = t2 ? fxc.measureText(t2).width : 0, w3 = name ? fxc.measureText(name).width : 0;
+  const w = Math.max(w1 + w2 + (t2 ? 14 : 0), w3) + 28, h = name ? 40 : 26;
+  // away from the arrow: on the side of the hand the pull is heading to
+  const ddx = drag.p.x - fx.g0.x, ddy = drag.p.y - fx.g0.y, dl = Math.hypot(ddx, ddy) || 1, ox = ddx / dl, oy = ddy / dl;
+  const bx = Math.round(x + ox * 34 + (ox < -.3 ? -w : ox > .3 ? 0 : -w / 2)), by = Math.round(y + oy * 34 + (oy < -.3 ? -h : oy > .3 ? 0 : -h / 2));
+  fxc.fillStyle = 'rgba(10,13,17,.86)'; fxc.strokeStyle = 'rgba(255,255,255,.14)'; fxc.lineWidth = 1;
+  fxc.beginPath(); fxc.roundRect(bx, by, w, h, 9); fxc.fill(); fxc.stroke();
+  fxc.fillStyle = `rgb(${c})`; fxc.beginPath(); fxc.roundRect(bx, by, 4, h, [9, 0, 0, 9]); fxc.fill();
+  fxc.textBaseline = 'middle'; fxc.textAlign = 'left';
+  fxc.fillStyle = '#fff'; fxc.font = '700 13px ' + FONT_UI; fxc.fillText('▲ ' + t1, bx + 12, by + 13);
+  if (t2) { fxc.fillStyle = '#ffd27a'; fxc.font = '600 11.5px ' + FONT_UI; fxc.fillText(t2, bx + 26 + w1, by + 13.5); }
+  if (name) { fxc.fillStyle = 'rgba(255,255,255,.6)'; fxc.font = '600 11.5px ' + FONT_UI; fxc.fillText(name, bx + 12, by + 30); }
+}
+function fmtKm2(a) { return (a < 10 ? a.toFixed(1) : Math.round(a).toLocaleString('ru-RU')) + ' км²'; }
+// the sum of a drag, said once it is let go
+function fxSummary() {
+  if (!fx || !fx.cells || !geo) return;
+  const m = metersPerCell(), a = fx.arrow, km = a ? Math.hypot(a.hx - a.x, a.hy - a.y) * m / 1000 : 0;
+  const who = fx.side && countries[fx.side - 1] ? countries[fx.side - 1].name : '';
+  toast((who ? who + ': ' : '') + 'фронт сдвинулся на ' + (km < 10 ? km.toFixed(1) : Math.round(km)) + ' км, перешло ' + fmtKm2(fx.cells * m * m / 1e6) + '.');
+}
+// ---------- sound: distant guns and the rumble of a moving front (made on the spot, no recordings) ----------
+let fxAc = null, fxNoise = null, fxRum = null;
+function fxAudio() {
+  if (fxAc) return fxAc;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+  try { fxAc = new AC(); } catch (e) { return null; }
+  const n = fxAc.sampleRate * 2, b = fxAc.createBuffer(1, n, fxAc.sampleRate), d = b.getChannelData(0);
+  let l = 0; for (let i = 0; i < n; i++) { l = (l + .04 * (Math.random() * 2 - 1)) / 1.04; d[i] = l * 3.2; }
+  fxNoise = b;
+  return fxAc;
+}
+function fxBoom(v) {
+  const ac = fxAudio(); if (!ac) return;
+  const s = ac.createBufferSource(); s.buffer = fxNoise; s.playbackRate.value = .6 + Math.random() * .5;
+  const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 160 + Math.random() * 260;
+  const g = ac.createGain(), t = ac.currentTime, len = .6 + Math.random() * .9;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.32 * v, t + .012); g.gain.exponentialRampToValueAtTime(.0008, t + len);
+  s.connect(f); f.connect(g); g.connect(ac.destination);
+  s.start(t, Math.random() * 1.2, len + .05);
+}
+function fxRumble(v) {
+  if (!fxSound) v = 0;
+  if (!fxRum) { if (!v) return; const ac = fxAudio(); if (!ac) return;
+    const s = ac.createBufferSource(); s.buffer = fxNoise; s.loop = true;
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 85;
+    const g = ac.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(ac.destination); s.start();
+    fxRum = { s, g };
+  }
+  fxRum.g.gain.setTargetAtTime(Math.min(.5, v * .9), fxAc.currentTime, .12);
 }
 // Push: the ring is a bulldozer. Every cell it passes over goes to the side the push started from;
 // the land behind the front is not stretched, the front simply advances where the ring goes.
@@ -5246,6 +5609,25 @@ function renderLiveBar() {
   box.hidden = tool !== 'warp' || !W;
   if (box.hidden) return;
   box.textContent = '';
+  // how the border moves, the shape of a pulled front and the effects, then the troops that follow it
+  const seg = (items, cur, pick, title) => {
+    const g = document.createElement('div'); g.className = 'fseg'; g.setAttribute('role', 'radiogroup'); if (title) g.setAttribute('aria-label', title);
+    for (const [k, t, tip] of items) {
+      const b = document.createElement('button'); b.textContent = t; b.title = tip; b.className = k === cur ? 'on' : ''; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', k === cur);
+      b.addEventListener('click', () => pick(k)); g.append(b);
+    }
+    box.append(g);
+  };
+  seg([['rubber', 'Резина', 'Участок фронта едет за курсором и выгибается'], ['push', 'Натиск', 'Кольцо, как бульдозер, занимает всё, где прошло'], ['smooth', 'Сгладить', 'Рваная линия становится ровной']], warpMode, m => { setWarpMode(m); renderLiveBar(); }, 'Режим границы');
+  if (warpMode === 'rubber') seg(Object.entries(WARP_PROFILES).map(([k, p]) => [k, p.name, { arc: 'Фронт выгибается плавной дугой', wedge: 'Узкий клин — прорыв на узком участке', wall: 'Широкий вал — весь участок фронта идёт ровно' }[k]]), warpProfile,
+    k => { warpProfile = k; LS.set('mezha-wprof', k); grabCache = null; renderLiveBar(); requestUi(); }, 'Профиль фронта');
+  const tg = (on, t, tip, fn) => { const b = document.createElement('button'); b.className = 'ftg' + (on ? ' on' : ''); b.setAttribute('aria-pressed', on); b.title = tip; b.textContent = t; b.addEventListener('click', fn); box.append(b); };
+  tg(fxOn, 'Эффекты', 'Подсветка занятой земли, огонь на линии фронта, разрывы', () => { fxOn = !fxOn; LS.set('mezha-fx', fxOn ? '1' : '0'); renderLiveBar(); fxKick(); });
+  if (fxOn) {
+    tg(fxArrow, 'Стрелка', 'Стрелка наступления от места, где взяли фронт', () => { fxArrow = !fxArrow; LS.set('mezha-fxarrow', fxArrow ? '1' : '0'); renderLiveBar(); });
+    tg(fxSound, 'Звук', 'Далёкая канонада и гул, пока фронт движется', () => { fxSound = !fxSound; LS.set('mezha-fxsound', fxSound ? '1' : '0'); if (!fxSound) fxRumble(0); renderLiveBar(); });
+  }
+  const sep = document.createElement('i'); sep.className = 'fsep'; box.append(sep);
   const sw = document.createElement('button'); sw.className = 'lsw' + (liveFront ? ' on' : ''); sw.setAttribute('aria-pressed', liveFront);
   sw.title = 'Войска, стоящие у границы, идут за ней, когда вы её тянете (L)';
   sw.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16c3-6 6 2 9-4s6 1 9-3"/><rect x="5" y="16" width="4" height="4"/><rect x="14" y="13" width="4" height="4"/></svg>';
@@ -8131,7 +8513,7 @@ cv.addEventListener('pointerdown', e => {
   pointers.set(e.pointerId, p);
   if (pointers.size === 2) {
     // second finger: abandon the stroke and switch to pinch-zoom
-    if (drag && (drag.mode === 'warp' || drag.mode === 'paint' || drag.mode === 'unit') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); }
+    if (drag && (drag.mode === 'warp' || drag.mode === 'paint' || drag.mode === 'unit') && hist.length) { restore(hist.pop()); redoStack.length = 0; afterChange(); if (fx) { fx.live = false; fx.ub = null; fx.parts = []; fx.arrow = null; fxKick(); } }
     else if (drag && drag.mode === 'lasso') requestDraw();
     const [a, b] = [...pointers.values()];
     drag = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, c0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
@@ -8162,8 +8544,9 @@ cv.addEventListener('pointerdown', e => {
     const o = inside ? own[gy * W + gx] : 0;
     if (warpMode === 'push' && !o) { toast('Натиск начинают с земли наступающей страны.'); return; }
     pushHist(); own0.set(own);
-    drag = { mode: 'warp', p0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null, live: liveFront ? liveUnits() : null };
+    drag = { mode: 'warp', p0: g, g0: g, p: g, box: null, changed: false, wm: warpMode, val: o, last: g, ub: null, pk: performance.now(), fa: warpMode === 'rubber' ? frontAxis(g, BR() * .8) : null, live: liveFront ? liveUnits() : null };
     if (hideCursor) cv.style.cursor = 'none';
+    fxBegin(drag);
     $('#hint').textContent = warpMode === 'smooth' ? 'Сглаживаете линию фронта.' : o ? (warpMode === 'push' ? 'Наступает: ' : 'Тянете в пользу: ') + countries[o - 1].name : HINTS.warp;
     if (warpMode !== 'rubber') warpStep();
   } else if (tool === 'brush' || tool === 'eraser') {
@@ -8287,6 +8670,8 @@ cv.addEventListener('pointermove', e => {
     view.x = drag.vx + p.x - drag.sx; view.y = drag.vy + p.y - drag.sy; requestDraw();
   } else if (drag.mode === 'warp') {
     drag.tp = toGrid(p);
+    // Shift: straight across the front, as an advance goes, whatever the hand does along it
+    if (e.shiftKey && drag.fa && drag.g0) { const dx = drag.tp.x - drag.g0.x, dy = drag.tp.y - drag.g0.y, k = dx * drag.fa.nx + dy * drag.fa.ny; drag.tp = { x: drag.g0.x + drag.fa.nx * k, y: drag.g0.y + drag.fa.ny * k }; }
     if (!drag.pending) { drag.pending = true; requestAnimationFrame(warpFollow); }
 
   } else if (drag.mode === 'paint') {
@@ -8327,7 +8712,7 @@ function endPointer(e) {
   if (drag.mode === 'pan') viewChanged();
   if (drag.mode === 'warp') {
     if (drag.tp) drag.p = drag.tp;
-    warpStep(); if (drag.wm !== 'smooth') cleanBox(drag.ub); $('#hint').textContent = HINTS.warp;
+    warpStep(); fxEnd(); if (drag.wm !== 'smooth') { cleanBox(drag.ub); fxSummary(); } $('#hint').textContent = HINTS.warp;
     if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
   }
   if (drag.mode === 'box') {
@@ -9021,7 +9406,7 @@ function showTab(name) {
   document.querySelectorAll('#panel .pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
   LS.set('mezha-tab', name);
 }
-function setPanel(open) { document.body.classList.toggle('nopanel', !open); LS.set('mezha-panel', open ? '1' : '0'); }
+function setPanel(open) { document.body.classList.toggle('nopanel', !open); LS.set('mezha-panel', open ? '1' : '0'); if (!userView) setTimeout(fit, 0); }
 document.querySelectorAll('.ptabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => showTab('tool')));
 $('#toolDesc').addEventListener('click', () => document.querySelector('.toolhead').classList.toggle('open'));
@@ -9038,7 +9423,7 @@ function renderToolHead(t) {
 }
 // the border tool's three ways of moving a front
 const WARP_HINT = {
-  rubber: 'Возьмитесь за линию фронта и тяните: участок фронта движется целиком и выгибается плавной дугой, земля за ним заполняется — как на анимированных картах войн. Ширина участка — радиус круга.',
+  rubber: 'Возьмитесь за линию фронта и тяните: участок фронта движется целиком и выгибается плавной дугой, земля за ним заполняется — как на анимированных картах войн. Ширина участка — радиус круга, форма — «Дуга», «Клин» или «Вал» над картой. С Shift фронт идёт строго поперёк линии.',
   push: 'Начните на земле наступающей страны и ведите круг: всё, по чему он прошёл, занимает она. Земля в тылу не растягивается.',
   smooth: 'Водите кругом по линии фронта: рваные края выпрямляются, щели, занозы и одиночные клетки исчезают. Берега и море не меняются.'
 };
@@ -9050,6 +9435,7 @@ function setWarpMode(m, quiet) {
   if (tool === 'warp') { $('#hint').textContent = HINTS.warp; renderToolHead('warp'); }
   document.querySelectorAll('#setGrid [data-wm]').forEach(b => b.classList.toggle('on', b.dataset.wm === m));
   if (!quiet) { toast('Граница: ' + WARP_NAMES[m]); scheduleSave(); }
+  renderLiveBar();
 }
 document.querySelectorAll('#warpModes button').forEach(b => b.addEventListener('click', () => setWarpMode(b.dataset.wm)));
 setWarpMode(warpMode, true);
@@ -9398,6 +9784,8 @@ function scenarioPreview(w) {
 // holds a stretch of 4–15 km (more on a very long front, so that there are never more than the setting); each
 // side's divisions are shared out into armies of up to 24, every army under a general, holding its own stretch as a
 // front line. «Плотно» in the settings puts 20 m units shoulder to shoulder instead, for fights over streets.
+fxOn = LS.get('mezha-fx', '1') === '1'; fxSound = LS.get('mezha-fxsound', '1') === '1'; fxArrow = LS.get('mezha-fxarrow', '1') === '1';
+warpProfile = WARP_PROFILES[LS.get('mezha-wprof', 'arc')] ? LS.get('mezha-wprof', 'arc') : 'arc';
 liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
 const denseDeploy = () => deployCap >= 100000;
