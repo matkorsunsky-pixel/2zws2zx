@@ -1091,6 +1091,7 @@ body.mode-watch .stagecap { left: 50% !important; }
   .watchcard { top: auto; bottom: 90px; left: 8px; right: 8px; width: auto; max-height: 40vh; }
   body.mode-watch .playbar { bottom: 12px; }
 }
+.setnote { color: var(--m-muted); font-size: 11.5px; line-height: 1.4; margin-top: -4px; }
 </style>
 </head>
 <body>
@@ -1224,6 +1225,10 @@ body.mode-watch .stagecap { left: 50% !important; }
         <div class="field">
           <label for="arrowW">Толщина стрелок</label><output id="arrowWOut">9</output>
           <input type="range" id="arrowW" min="2" max="40" value="9">
+        </div>
+        <div class="field">
+          <label for="arrowOp">Прозрачность стрелок</label><output id="arrowOpOut">0%</output>
+          <input type="range" id="arrowOp" min="0" max="90" step="5" value="0">
         </div>
         <div class="row"><button id="arrowDel" hidden>Удалить стрелку</button><button id="arrowClear">Стереть все стрелки</button></div>
         <p class="hint">Зажмите ЛКМ и ведите линию удара. Стрелка рисуется цветом выбранной страны. Щелчок по стрелке выделяет её, Delete удаляет.</p>
@@ -5096,8 +5101,19 @@ async function applyWar(id, opts = {}) {
 }
 
 // ---------- drawing ----------
+// graphics quality: «Чёткая» draws at the screen's full pixel density; «Авто» keeps the canvases under ~5 million
+// pixels (a 4K screen at 2× would be 33 million, four layers of it every frame); «Быстрая» draws at 1×, without the
+// cross-fade of the map layer
+let gfx = (() => { try { return localStorage.getItem('mezha-gfx') || 'auto'; } catch (e) { return 'auto'; } })();
+function gfxDpr() {
+  const d = window.devicePixelRatio || 1, r = stage.getBoundingClientRect(), px = r.width * r.height || 1;
+  if (gfx === 'fast') return 1;
+  if (gfx === 'high') return d;
+  return Math.max(1, Math.min(d, Math.sqrt(5e6 / px)));
+}
+function setGfx(v) { gfx = v; LS.set('mezha-gfx', v); resize(); requestDraw(); }
 function resize() {
-  dpr = window.devicePixelRatio || 1;
+  dpr = gfxDpr();
   const r = stage.getBoundingClientRect();
   mapCv.width = uiCv.width = cv.width = fxCv.width = Math.max(1, Math.round(r.width * dpr));
   mapCv.height = uiCv.height = cv.height = fxCv.height = Math.max(1, Math.round(r.height * dpr));
@@ -5170,6 +5186,8 @@ function drawPreview(vecMode) {
 let fadeCv = null, fadeCv2 = null, fadeT0 = 0, fadeMs = 300, layerView = '';
 const fadeSnap = () => fadeCv2 || fadeCv;
 function swapFade() { if (!fadeCv2) { fadeCv2 = fadeCv; fadeCv = document.createElement('canvas'); return; } const t = fadeCv; fadeCv = fadeCv2; fadeCv2 = t; }
+let moveVK = '', moveT = 0, lastFull = null, snapOk = false, settleMapT = 0;
+const snapCv = document.createElement('canvas');
 function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -5184,12 +5202,27 @@ function drawMap() {
   if (vecMode && editing && !preview) startPreview();
   if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && !editing) vecAsync(...vec.win);
   const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
-  if (layerSig !== sigNow()) {
+  // while the map is being moved (pan, zoom, pinch) the last full picture is only shifted and scaled: retracing
+  // borders, imagery and relief for every frame of a pan cost tens of milliseconds; the full picture comes back
+  // 170 ms after the movement stops. In battle the land changes many times a second: the full picture is redrawn
+  // at most five times a second, the troops over it every frame.
+  const vk = view.x + ',' + view.y + ',' + view.s + ',' + cv.width + ',' + cv.height, tnow = performance.now();
+  if (vk !== moveVK) { moveVK = vk; moveT = tnow; }
+  const quick = !editing && !preview && !exportNoGeo && !document.body.classList.contains('filming') && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && layerSig !== sigNow();
+  if (quick && tnow - moveT < 150 && vk !== lastFull.vk) {
+    if (!snapOk) { if (snapCv.width !== mapCv.width || snapCv.height !== mapCv.height) { snapCv.width = mapCv.width; snapCv.height = mapCv.height; } const sc = snapCv.getContext('2d'); sc.clearRect(0, 0, snapCv.width, snapCv.height); sc.drawImage(mapCv, 0, 0); snapOk = true; }
+    const m = mctx, k = view.s / lastFull.s;
+    m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
+    m.setTransform(k, 0, 0, k, (view.x - lastFull.x * k) * dpr, (view.y - lastFull.y * k) * dpr); m.imageSmoothingEnabled = true; m.drawImage(snapCv, 0, 0);
+    fadeT0 = 0; layerSig = ''; clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, 170);
+  } else if (quick && battlesOn && vk === lastFull.vk && tnow - lastFull.t < 200) {
+    clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, 200 - (tnow - lastFull.t));
+  } else if (layerSig !== sigNow()) {
     const m = mctx;
     // the same view with the land changed under it (troops on the move, a border let go): the old picture fades
     // into the new one, so the front line glides instead of jumping from one tracing to the next
     const viewKey = [view.x, view.y, view.s, cv.width, cv.height].join(), now = performance.now();
-    if (layerSig && viewKey === layerView && vecMode && !editing && !preview) {
+    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast') {
       if (!fadeCv) fadeCv = document.createElement('canvas');
       if (fadeCv.width !== mapCv.width || fadeCv.height !== mapCv.height) { fadeCv.width = mapCv.width; fadeCv.height = mapCv.height; }
       const fc = fadeCv.getContext('2d');
@@ -5213,6 +5246,7 @@ function drawMap() {
     drawVecLabels(m);
     drawTerritoryLabels(m);
     layerSig = sigNow();
+    lastFull = { x: view.x, y: view.y, s: view.s, vk, t: tnow, w: mapCv.width, h: mapCv.height }; snapOk = false;
   }
   if (preview) drawPreview(vecMode);
   if (fadeT0) {
@@ -5315,7 +5349,7 @@ function drawUi() {
     ctx.beginPath();
     drag.pts.forEach((q, k) => { const sx = q.x * view.s + view.x, sy = q.y * view.s + view.y; k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
     ctx.lineWidth = Math.max(2, arrowWidth * (geoStore ? 1 : view.s)); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},.55)`; ctx.stroke();
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${(.55 * arrowOp).toFixed(2)})`; ctx.stroke();
   }
   if (drag && drag.mode === 'lasso' && drag.pts.length > 1) {
     const c = rgb[drag.capt] || [20, 25, 32];
@@ -5569,61 +5603,76 @@ function resistSettle() {
 // allies hold. Within 450 km of a hub a division is fully supplied, beyond that its strength in battle falls
 // to a third at 1350 km; cut off in a pocket it is out of supply as before. The «Снабжение» map shows it.
 const SUP_FULL = 450, SUP_FADE = 900;
-let supLvl = null, supBusy = 0, supShow = false, supCv = null, supT = 0;
+let supLvl = null, supF = 1, supW = 0, supH = 0, supCo = null, supBusy = 0, supShow = false, supCv = null, supT = 0;
 function supplyCompute() {
   if (!own || !W) return;
-  // distances in thirds of a cell (3 straight, 4 diagonal: round, not diamond-shaped), in two sweeps over the
-  // grid, each cell taking the nearest hub of its side among the neighbours already swept
-  const n = W * H, dist = new Uint32Array(n).fill(0xffffffff), so = new Uint8Array(n);
-  const seed = (x, y, o) => { const gx = Math.floor(x), gy = Math.floor(y); if (gx < 0 || gy < 0 || gx >= W || gy >= H) return; const i = gy * W + gx; if (!own[i] || !allied(own[i], o)) return; dist[i] = 0; so[i] = o; };
+  // supply is worked out on a coarser grid (blocks of supF × supF cells, ≤ ~350 000 of them): it changes over tens
+  // of kilometres, and a map of millions of cells would take a third of a second each time
+  const f = Math.max(1, Math.ceil(Math.sqrt(W * H / 350000))), cw = Math.ceil(W / f), ch = Math.ceil(H / f), n = cw * ch, INF = 0xffffffff;
+  const co = new Uint8Array(n), pk = pocket;
+  for (let y = 0; y < ch; y++) { const gy = Math.min(H - 1, y * f + (f >> 1)); for (let x = 0; x < cw; x++) { const gi = gy * W + Math.min(W - 1, x * f + (f >> 1)); co[y * cw + x] = pk && pk[gi] ? 254 : own[gi]; } }
+  // who stands with whom, and who fights whom: two tables instead of calls in the inner loops
+  const al = new Uint8Array(65536), war = new Uint8Array(65536);
+  for (let a = 1; a <= countries.length; a++) for (let b = 1; b <= countries.length; b++) { if (allied(a, b)) al[a << 8 | b] = 1; if (a !== b && atWar(a, b)) war[a << 8 | b] = 1; }
+  const real = o => o && o < 254;   // land of a country (not neutral, not inside a pocket)
+  const dist = new Uint32Array(n).fill(INF), so = new Uint8Array(n);
+  const seed = (x, y, o) => { const gx = Math.floor(x / f), gy = Math.floor(y / f); if (gx < 0 || gy < 0 || gx >= cw || gy >= ch) return; const i = gy * cw + gx, c = co[i]; if (!real(c) || !al[c << 8 | o]) return; dist[i] = 0; so[i] = o; };
   for (const c of cities) { const o = cityOwner(c); if (o && o !== 255) seed(c.x, c.y, o); }
   for (const u of units) if (unitDef(u).def[2] === 'hq') seed(u.x, u.y, u.owner);
   // the deep rear supplies itself: land more than 500 km from any front line is a hub too
-  const km0 = geo ? metersPerCell() / 1000 : 1, war = new Uint8Array(65536);
-  for (let a = 1; a <= countries.length; a++) for (let b = 1; b <= countries.length; b++) if (a !== b && atWar(a, b)) war[a << 8 | b] = 1;
-  const fd = new Uint32Array(n).fill(0xffffffff);
-  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
-    const o = own[i]; if (!o || o === 255) continue;
-    if ((x < W - 1 && war[o << 8 | own[i + 1]]) || (x > 0 && war[o << 8 | own[i - 1]]) || (y < H - 1 && war[o << 8 | own[i + W]]) || (y > 0 && war[o << 8 | own[i - W]])) fd[i] = 0;
+  // (distances in thirds of a block: 3 straight, 4 diagonal — round, not diamond-shaped; two sweeps over the grid)
+  const fd = new Uint32Array(n).fill(INF);
+  for (let y = 0; y < ch; y++) for (let x = 0, i = y * cw; x < cw; x++, i++) {
+    const o = co[i]; if (!real(o)) continue;
+    if ((x < cw - 1 && war[o << 8 | co[i + 1]]) || (x > 0 && war[o << 8 | co[i - 1]]) || (y < ch - 1 && war[o << 8 | co[i + cw]]) || (y > 0 && war[o << 8 | co[i - cw]])) fd[i] = 0;
   }
-  const rl = (i, j, w) => { if (fd[j] !== 0xffffffff && fd[j] + w < fd[i]) fd[i] = fd[j] + w; };
-  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) { if (x > 0) rl(i, i - 1, 3); if (y > 0) { rl(i, i - W, 3); if (x > 0) rl(i, i - W - 1, 4); if (x < W - 1) rl(i, i - W + 1, 4); } }
-  for (let y = H - 1; y >= 0; y--) for (let x = W - 1, i = y * W + x; x >= 0; x--, i--) { if (x < W - 1) rl(i, i + 1, 3); if (y < H - 1) { rl(i, i + W, 3); if (x < W - 1) rl(i, i + W + 1, 4); if (x > 0) rl(i, i + W - 1, 4); } }
-  const deep = 500 * 3 / km0;
-  for (let i = 0; i < n; i++) if (own[i] && own[i] !== 255 && fd[i] > deep) { dist[i] = 0; so[i] = own[i]; }
-  const ok = (i, o) => own[i] && own[i] !== 255 && allied(own[i], o) && !(pocket && pocket[i]);
-  const relax = (i, j, w) => { const d = dist[j]; if (d === 0xffffffff || d + w >= dist[i]) return; if (ok(i, so[j])) { dist[i] = d + w; so[i] = so[j]; } };
-  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
-    if (!own[i]) continue;
-    if (x > 0) relax(i, i - 1, 3);
-    if (y > 0) { relax(i, i - W, 3); if (x > 0) relax(i, i - W - 1, 4); if (x < W - 1) relax(i, i - W + 1, 4); }
+  for (let y = 0; y < ch; y++) for (let x = 0, i = y * cw; x < cw; x++, i++) {
+    let v = fd[i];
+    if (x > 0 && fd[i - 1] + 3 < v) v = fd[i - 1] + 3;
+    if (y > 0) { const j = i - cw; if (fd[j] + 3 < v) v = fd[j] + 3; if (x > 0 && fd[j - 1] + 4 < v) v = fd[j - 1] + 4; if (x < cw - 1 && fd[j + 1] + 4 < v) v = fd[j + 1] + 4; }
+    fd[i] = v;
   }
-  for (let y = H - 1; y >= 0; y--) for (let x = W - 1, i = y * W + x; x >= 0; x--, i--) {
-    if (!own[i]) continue;
-    if (x < W - 1) relax(i, i + 1, 3);
-    if (y < H - 1) { relax(i, i + W, 3); if (x < W - 1) relax(i, i + W + 1, 4); if (x > 0) relax(i, i + W - 1, 4); }
+  for (let y = ch - 1; y >= 0; y--) for (let x = cw - 1, i = y * cw + x; x >= 0; x--, i--) {
+    let v = fd[i];
+    if (x < cw - 1 && fd[i + 1] + 3 < v) v = fd[i + 1] + 3;
+    if (y < ch - 1) { const j = i + cw; if (fd[j] + 3 < v) v = fd[j] + 3; if (x < cw - 1 && fd[j + 1] + 4 < v) v = fd[j + 1] + 4; if (x > 0 && fd[j - 1] + 4 < v) v = fd[j - 1] + 4; }
+    fd[i] = v;
   }
-  const km = geo ? metersPerCell() / 1000 : 1, lv = supLvl && supLvl.length === n ? supLvl : new Uint8Array(n);
-  for (let i = 0; i < n; i++) { const d = dist[i]; lv[i] = d === 0xffffffff ? 0 : Math.max(1, Math.round(255 * clamp(1 - Math.max(0, d / 3 * km - SUP_FULL) / SUP_FADE, .3, 1))); }
-  supLvl = lv;
+  const km = (geo ? metersPerCell() / 1000 : 1) * f, deep = 500 * 3 / km;
+  for (let i = 0; i < n; i++) if (real(co[i]) && fd[i] > deep) { dist[i] = 0; so[i] = co[i]; }
+  // the same sweeps from the hubs, through land of the hub's side only
+  const relax = (i, j, w, o) => { const d = dist[j]; if (d !== INF && d + w < dist[i] && al[o << 8 | so[j]]) { dist[i] = d + w; so[i] = so[j]; } };
+  for (let y = 0; y < ch; y++) for (let x = 0, i = y * cw; x < cw; x++, i++) {
+    const o = co[i]; if (!real(o)) continue;
+    if (x > 0) relax(i, i - 1, 3, o);
+    if (y > 0) { relax(i, i - cw, 3, o); if (x > 0) relax(i, i - cw - 1, 4, o); if (x < cw - 1) relax(i, i - cw + 1, 4, o); }
+  }
+  for (let y = ch - 1; y >= 0; y--) for (let x = cw - 1, i = y * cw + x; x >= 0; x--, i--) {
+    const o = co[i]; if (!real(o)) continue;
+    if (x < cw - 1) relax(i, i + 1, 3, o);
+    if (y < ch - 1) { relax(i, i + cw, 3, o); if (x < cw - 1) relax(i, i + cw + 1, 4, o); if (x > 0) relax(i, i + cw - 1, 4, o); }
+  }
+  const lv = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const d = dist[i]; lv[i] = d === INF ? 0 : Math.max(1, Math.round(255 * clamp(1 - Math.max(0, d / 3 * km - SUP_FULL) / SUP_FADE, .3, 1))); }
+  supLvl = lv; supF = f; supW = cw; supH = ch; supCo = co;
   if (supShow) supPaint();
 }
-function supplySoon() { if (supBusy) return; supBusy = setTimeout(() => { supBusy = 0; supplyCompute(); requestDraw(); }, 400); }
+function supplySoon() { if (supBusy) return; supBusy = setTimeout(() => { supBusy = 0; supplyCompute(); requestDraw(); }, battlesOn ? 1500 : 400); }
 // a division's supply, 0.3 … 1 (on land of no hub at all: as far from one as can be)
 function supplyOf(u) {
   if (!game.supply || !supLvl) return 1;
   const gx = Math.floor(u.x), gy = Math.floor(u.y);
   if (gx < 0 || gy < 0 || gx >= W || gy >= H) return 1;
-  const v = supLvl[gy * W + gx];
+  const v = supLvl[Math.floor(gy / supF) * supW + Math.floor(gx / supF)];
   return v ? v / 255 : allied(own[gy * W + gx], u.owner) ? .3 : 1;
 }
 // the supply map of the player's side: yellow where it thins, red where it is short, clear where it is full
 function supPaint() {
   if (!supLvl) return;
-  if (!supCv || supCv.width !== W || supCv.height !== H) { supCv = document.createElement('canvas'); supCv.width = W; supCv.height = H; }
-  const im = new ImageData(W, H), d = im.data, me = player || 1;
-  for (let i = 0; i < W * H; i++) {
-    const o = own[i]; if (!o || o === 255 || !allied(o, me)) continue;
+  if (!supCv || supCv.width !== supW || supCv.height !== supH) { supCv = document.createElement('canvas'); supCv.width = supW; supCv.height = supH; }
+  const im = new ImageData(supW, supH), d = im.data, me = player || 1;
+  for (let i = 0; i < supW * supH; i++) {
+    const o = supCo[i]; if (!o || o >= 254 || !allied(o, me)) continue;
     const v = supLvl[i] / 255, p = i * 4;
     if (!supLvl[i]) { d[p] = 230; d[p + 1] = 40; d[p + 2] = 40; d[p + 3] = 150; continue; }
     if (v > .97) continue;
@@ -5634,7 +5683,7 @@ function supPaint() {
 }
 function drawSupplyMap(c) {
   if (!supShow || !supCv) return;
-  c.save(); c.globalAlpha = .55; c.imageSmoothingEnabled = true; c.drawImage(supCv, 0, 0); c.restore();
+  c.save(); c.globalAlpha = .55; c.imageSmoothingEnabled = true; c.drawImage(supCv, 0, 0, supW * supF, supH * supF); c.restore();
 }
 function setSupShow(on) {
   supShow = on;
@@ -5816,7 +5865,11 @@ function drawTerrain(c) {
   const n = worldCells(win.L);
   if (layers.relief && reliefImg && reliefImg.complete && reliefMeta) {
     c.save(); c.globalCompositeOperation = 'soft-light'; c.globalAlpha = layers.staff ? .7 : .95; c.imageSmoothingEnabled = true;
-    c.drawImage(reliefImg, -win.cx0, reliefMeta.y0 * n - win.cy0, n, (reliefMeta.y1 - reliefMeta.y0) * n);
+    // only the part of the picture on screen is scaled and blended, not the whole world
+    const iw = reliefImg.naturalWidth, ih = reliefImg.naturalHeight, ry0 = reliefMeta.y0, ry1 = reliefMeta.y1;
+    const fx0 = clamp((-view.x / view.s + win.cx0) / n - .01, 0, 1), fx1 = clamp(((stage.clientWidth - view.x) / view.s + win.cx0) / n + .01, 0, 1);
+    const fy0 = clamp(((-view.y / view.s + win.cy0) / n - .01 - ry0) / (ry1 - ry0), 0, 1), fy1 = clamp((((stage.clientHeight - view.y) / view.s + win.cy0) / n + .01 - ry0) / (ry1 - ry0), 0, 1);
+    if (fx1 > fx0 && fy1 > fy0) c.drawImage(reliefImg, fx0 * iw, fy0 * ih, (fx1 - fx0) * iw, (fy1 - fy0) * ih, fx0 * n - win.cx0, (ry0 + fy0 * (ry1 - ry0)) * n - win.cy0, (fx1 - fx0) * n, (fy1 - fy0) * (ry1 - ry0) * n);
     c.restore();
   }
   if (layers.rivers && riverSets) {
@@ -8386,7 +8439,7 @@ let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 // front lines (see «front lines» below): { id, owner, mode: 'hold' | 'attack', pts: [{ x, y, nx, ny }] on the border, n toward own land }
 let fronts = [], frontSeq = 1, selFront = null;
-let selArrow = null, selCity = null, arrowWidth = 9;
+let selArrow = null, selCity = null, arrowWidth = 9, arrowOp = (() => { try { return +localStorage.getItem('mezha-arrow-op') || 1; } catch (e) { return 1; } })();   // opacity of new arrows, .1 … 1
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 function fmtDate(t) {
   const d = new Date(t), hh = String(d.getUTCHours()).padStart(2, '0');
@@ -8571,7 +8624,7 @@ function simplify(pts, tol) {
   out.push(pts[pts.length - 1]);
   return out;
 }
-function drawArrow(c, a, selected) {
+function drawArrow(c, a, selected, selOnly) {
   const pts = a.pts, w = a.w * ZS(), col = rgb[a.owner] || [120, 120, 120];
   if (pts.length < 2) return;
   const head = w * 3.2;
@@ -8587,6 +8640,7 @@ function drawArrow(c, a, selected) {
   const dir = Math.atan2(end.y - pts[k].y, end.x - pts[k].x);
   c.lineJoin = 'round'; c.lineCap = 'round';
   const path = new Path2D(); path.moveTo(body[0].x, body[0].y); for (let i = 1; i < body.length; i++) path.lineTo(body[i].x, body[i].y);
+  if (selOnly) { c.setLineDash([w * .6, w * .5]); c.lineWidth = w * .2; c.strokeStyle = '#e2b84a'; c.stroke(path); c.setLineDash([]); return; }
   const fill = `rgba(${col[0]},${col[1]},${col[2]},.92)`, dark = `rgb(${col[0] * .45 | 0},${col[1] * .45 | 0},${col[2] * .45 | 0})`;
   c.lineWidth = w + w * .45; c.strokeStyle = dark; c.stroke(path);
   c.lineWidth = w; c.strokeStyle = fill; c.stroke(path);
@@ -8597,7 +8651,22 @@ function drawArrow(c, a, selected) {
   c.closePath(); c.fillStyle = fill; c.fill(); c.lineWidth = w * .22; c.strokeStyle = dark; c.stroke();
   if (selected) { c.setLineDash([w * .6, w * .5]); c.lineWidth = w * .2; c.strokeStyle = '#e2b84a'; c.stroke(path); c.setLineDash([]); }
 }
-function drawArrows(c, marks) { if (game.arrows) for (const a of arrows) drawArrow(c, a, marks && a === selArrow && tool === 'arrows'); }
+// see-through arrows are drawn whole on a layer of their own and laid over the map at their opacity, so the
+// outline, the body and the head do not show through each other; arrows of one opacity share one layer
+const arrowLayer = document.createElement('canvas');
+function drawArrows(c, marks) {
+  if (!game.arrows || !arrows.length) return;
+  const groups = new Map();
+  for (const a of arrows) { const op = a.op === undefined ? 1 : a.op; if (!groups.has(op)) groups.set(op, []); groups.get(op).push(a); }
+  for (const [op, list] of groups) {
+    if (op >= .999) { for (const a of list) drawArrow(c, a, marks && a === selArrow && tool === 'arrows'); continue; }
+    const L = arrowLayer; if (L.width !== c.canvas.width || L.height !== c.canvas.height) { L.width = c.canvas.width; L.height = c.canvas.height; }
+    const lc = L.getContext('2d'); lc.setTransform(1, 0, 0, 1, 0, 0); lc.clearRect(0, 0, L.width, L.height); lc.setTransform(c.getTransform());
+    for (const a of list) drawArrow(lc, a, false);
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = op; c.drawImage(L, 0, 0); c.restore();
+    if (marks && tool === 'arrows' && list.includes(selArrow)) drawArrow(c, selArrow, true, true);
+  }
+}
 function hitArrow(g) {
   if (!game.arrows) return null;
   for (let k = arrows.length - 1; k >= 0; k--) {
@@ -10448,7 +10517,7 @@ function endPointer(e) {
     let len = 0; for (let k = 1; k < pts.length; k++) len += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
     if (len * view.s < 20) return;
     pushHist();
-    const a = { pts: smoothLine(simplify(pts, arrowWidth * ZS() * .8), 2).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), owner, w: arrowWidth };
+    const a = { pts: smoothLine(simplify(pts, arrowWidth * ZS() * .8), 2).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), owner, w: arrowWidth, op: arrowOp };
     arrows.push(a); selArrow = a; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw();
     return;
   }
@@ -11172,8 +11241,15 @@ function fitHud() {
 }
 const fitHudSoon = () => { if (!hudFoldPending) { hudFoldPending = true; requestAnimationFrame(fitHud); } };
 new ResizeObserver(fitHudSoon).observe($('#hud'));
+// on every update of the HUD only a check: refold when it overflows; try to unfold now and then, not every tick
+let hudFitT = 0;
+function hudCheck() {
+  const h = $('#hud'); if (!h || !h.offsetParent) return;
+  const now = performance.now();
+  if (h.scrollWidth > h.clientWidth + 1 || (h.classList.length > 1 && now - hudFitT > 2000)) { hudFitT = now; fitHudSoon(); }
+}
 function renderHud() {
-  fitHudSoon();
+  requestAnimationFrame(hudCheck);
   if (!hudReady) return;
   const c = countries[player - 1];
   $('#hudFlag').style.background = c ? c.color : '';
@@ -11890,6 +11966,8 @@ function renderSettings() {
   };
   const ui = card('Интерфейс');
   seg(ui, 'Тема', [['dark', 'Тёмная'], ['light', 'Светлая'], ['auto', 'Как в системе']], document.documentElement.dataset.theme, { key: 'theme', fn: setTheme });
+  seg(ui, 'Графика', [['auto', 'Авто'], ['high', 'Чёткая'], ['fast', 'Быстрая']], gfx, { key: 'gfx', fn: setGfx });
+  const gh = document.createElement('small'); gh.className = 'setnote'; gh.textContent = 'Быстрая — для слабых компьютеров и больших экранов: карта рисуется в обычном разрешении, без плавных переходов.'; ui.append(gh);
   check(ui, 'Панель слева', 'Клавиша H прячет и показывает её во время игры.', () => !document.body.classList.contains('nopanel'), v => setPanel(v));
   const bd = card('Граница');
   seg(bd, 'Как двигать границу (W)', Object.entries(WARP_NAMES), warpMode, { key: 'wm', fn: m => setWarpMode(m) });
@@ -12069,7 +12147,13 @@ function syncGameControls() {
   $('#arrowW').value = arrowWidth; $('#arrowWOut').textContent = arrowWidth;
   applySystems();
 }
-function renderArrowPanel() { $('#arrowDel').hidden = !selArrow; }
+function renderArrowPanel() {
+  $('#arrowDel').hidden = !selArrow;
+  // a picked arrow shows its own width and opacity on the sliders; changing them changes that arrow
+  const w = selArrow ? selArrow.w : arrowWidth, op = selArrow && selArrow.op !== undefined ? selArrow.op : selArrow ? 1 : arrowOp;
+  $('#arrowW').value = w; $('#arrowWOut').textContent = w;
+  $('#arrowOp').value = Math.round((1 - op) * 100); $('#arrowOpOut').textContent = Math.round((1 - op) * 100) + '%';
+}
 function deleteCity() { if (!selCity) return; pushHist(); cities = cities.filter(c => c !== selCity); selCity = null; renderCityPanel(); updUndo(); scheduleSave(); requestDraw(); }
 $('#gameStart').addEventListener('change', e => {
   const v = e.target.value; if (!v) return;
@@ -12082,6 +12166,11 @@ $('#arrowW').addEventListener('input', e => {
   arrowWidth = +e.target.value; $('#arrowWOut').textContent = arrowWidth;
   if (selArrow) { selArrow.w = arrowWidth; requestDraw(); }
   scheduleSave();
+});
+$('#arrowOp').addEventListener('input', e => {
+  const op = Math.round(100 - +e.target.value) / 100; $('#arrowOpOut').textContent = e.target.value + '%';
+  arrowOp = op; LS.set('mezha-arrow-op', String(op));
+  if (selArrow) { selArrow.op = op; requestDrawFast(); scheduleSave(); }
 });
 $('#arrowDel').addEventListener('click', () => { if (!selArrow) return; pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); });
 $('#arrowClear').addEventListener('click', () => { if (!arrows.length) return; pushHist(); arrows = []; selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); toast('Стрелки стёрты. Ctrl+Z вернёт их.'); });
