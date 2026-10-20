@@ -3059,7 +3059,7 @@ function allocGrid(w, h) {
   pockets = []; exclaves = []; vec = null; dirty = [];
 }
 let settleT = 0;
-function viewChanged() { if (cmp && cmp.view !== view.x + ',' + view.y + ',' + view.s) compareStop(); if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(maybeReload, 220); }
+function viewChanged() { if (cmp && cmp.view !== view.x + ',' + view.y + ',' + view.s) compareStop(); if (!geoStore) return; clearTimeout(settleT); settleT = setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(maybeReload, { timeout: 300 }); else maybeReload(); }, 380); }
 function maybeReload() {
   if (!geoStore || !win) return;
   if (drag || pointers.size) { viewChanged(); return; }
@@ -3072,7 +3072,7 @@ function maybeReload() {
   let gx0 = (win.cx0 + v[0]) * f, gx1 = (win.cx0 + v[2]) * f, gy0 = Math.max(0, (win.cy0 + v[1]) * f), gy1 = Math.min(n, (win.cy0 + v[3]) * f);
   if (gy1 <= gy0) return;
   const vw = gx1 - gx0, vh = gy1 - gy0;
-  let mx = vw * .2, my = vh * .2;
+  let mx = vw * .3, my = vh * .3;
   const cap = 4e6;
   while ((vw + 2 * mx) * (vh + 2 * my) > cap && (mx > 1 || my > 1)) { mx *= .7; my *= .7; }
   let w = Math.min(n, Math.ceil(vw + 2 * mx)), nx0 = Math.floor(gx0 - mx);
@@ -3104,7 +3104,8 @@ function reloadWindow(tl, nx0, ny0, w, h) {
   hist = []; redoStack = []; updUndo();
   spriteCache.clear();
   backdrop = null;
-  recolor(); computePockets(); renderPockets();
+  // pockets are found again in slices between frames: in one go it would hold the map still for a tenth of a second
+  recolor(); pocketJob = null; computePocketsSoon(renderPockets);
   checkCities(true);                 // a city on a border can land on either side at another detail level: that is not a capture
   updateDetailInfo();
   scheduleSave();
@@ -5186,7 +5187,7 @@ function drawPreview(vecMode) {
 let fadeCv = null, fadeCv2 = null, fadeT0 = 0, fadeMs = 300, layerView = '';
 const fadeSnap = () => fadeCv2 || fadeCv;
 function swapFade() { if (!fadeCv2) { fadeCv2 = fadeCv; fadeCv = document.createElement('canvas'); return; } const t = fadeCv; fadeCv = fadeCv2; fadeCv2 = t; }
-let moveVK = '', moveT = 0, lastFull = null, snapOk = false, settleMapT = 0;
+let moveVK = '', moveT = 0, lastFull = null, snapOk = false, settleMapT = 0, fullCost = 0;
 const snapCv = document.createElement('canvas');
 function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5206,15 +5207,26 @@ function drawMap() {
   // borders, imagery and relief for every frame of a pan cost tens of milliseconds; the full picture comes back
   // 170 ms after the movement stops. In battle the land changes many times a second: the full picture is redrawn
   // at most five times a second, the troops over it every frame.
-  const vk = view.x + ',' + view.y + ',' + view.s + ',' + cv.width + ',' + cv.height, tnow = performance.now();
+  // the view in world terms (the working window moves under the view when it is reloaded; the world does not)
+  const wn = win ? worldCells(win.L) : 1, wS = view.s * wn, wX = view.x - (win ? win.cx0 : 0) * view.s, wY = view.y - (win ? win.cy0 : 0) * view.s;
+  const vk = wX.toFixed(2) + ',' + wY.toFixed(2) + ',' + wS.toPrecision(9) + ',' + cv.width + ',' + cv.height, tnow = performance.now();
   if (vk !== moveVK) { moveVK = vk; moveT = tnow; }
-  const quick = !editing && !preview && !exportNoGeo && !document.body.classList.contains('filming') && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && layerSig !== sigNow();
-  if (quick && tnow - moveT < 150 && vk !== lastFull.vk) {
+  // only on a machine where the full picture is slow to draw: where it takes a few milliseconds it is drawn every frame
+  const quick = fullCost > 14 && !editing && !preview && !exportNoGeo && !document.body.classList.contains('filming') && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && layerSig !== sigNow();
+  // a new working window (the detail level changed, or the view left the old one): its outlines are traced in the
+  // background, and the last picture stands in for them, moved to where it belongs, for the few frames that takes
+  const standIn = !editing && !preview && !exportNoGeo && geoStore && vecMode && !vec && !vecWorkerOff && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && !document.body.classList.contains('filming') && (() => {
+    const vx0 = -view.x / view.s, vy0 = -view.y / view.s, vx1 = (stage.clientWidth - view.x) / view.s, vy1 = (stage.clientHeight - view.y) / view.s;
+    const mx = (vx1 - vx0) * .25 + 4, my = (vy1 - vy0) * .25 + 4;
+    const rect = [Math.max(0, Math.floor(vx0 - mx)), Math.max(0, Math.floor(vy0 - my)), Math.min(W, Math.ceil(vx1 + mx)), Math.min(H, Math.ceil(vy1 + my))];
+    return rect[2] > rect[0] && rect[3] > rect[1] && vecAsync(...rect);
+  })();
+  if (standIn || (quick && tnow - moveT < 150 && vk !== lastFull.vk)) {
     if (!snapOk) { if (snapCv.width !== mapCv.width || snapCv.height !== mapCv.height) { snapCv.width = mapCv.width; snapCv.height = mapCv.height; } const sc = snapCv.getContext('2d'); sc.clearRect(0, 0, snapCv.width, snapCv.height); sc.drawImage(mapCv, 0, 0); snapOk = true; }
-    const m = mctx, k = view.s / lastFull.s;
+    const m = mctx, k = wS / lastFull.s;
     m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
-    m.setTransform(k, 0, 0, k, (view.x - lastFull.x * k) * dpr, (view.y - lastFull.y * k) * dpr); m.imageSmoothingEnabled = true; m.drawImage(snapCv, 0, 0);
-    fadeT0 = 0; layerSig = ''; clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, 170);
+    m.setTransform(k, 0, 0, k, (wX - lastFull.x * k) * dpr, (wY - lastFull.y * k) * dpr); m.imageSmoothingEnabled = true; m.drawImage(snapCv, 0, 0);
+    fadeT0 = 0; layerSig = ''; clearTimeout(settleMapT); if (!standIn) settleMapT = setTimeout(requestDrawFast, 170);
   } else if (quick && battlesOn && vk === lastFull.vk && tnow - lastFull.t < 200) {
     clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, 200 - (tnow - lastFull.t));
   } else if (layerSig !== sigNow()) {
@@ -5246,7 +5258,8 @@ function drawMap() {
     drawVecLabels(m);
     drawTerritoryLabels(m);
     layerSig = sigNow();
-    lastFull = { x: view.x, y: view.y, s: view.s, vk, t: tnow, w: mapCv.width, h: mapCv.height }; snapOk = false;
+    const cost = performance.now() - tnow; fullCost = fullCost ? fullCost * .6 + cost * .4 : cost;
+    lastFull = { x: wX, y: wY, s: wS, vk, t: tnow, w: mapCv.width, h: mapCv.height }; snapOk = false;
   }
   if (preview) drawPreview(vecMode);
   if (fadeT0) {
@@ -10565,8 +10578,26 @@ cv.addEventListener('wheel', e => {
   const dy = e.deltaY || e.deltaX;
   if (e.shiftKey && tool === 'units') { resizeUnitAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.06 : 0.002))); return; }
   if (e.shiftKey && tool in sizes) { setBrush(brush * Math.exp(-dy * (e.deltaMode ? 0.06 : 0.002))); return; }
-  zoomAt(pos(e), Math.exp(-dy * (e.deltaMode ? 0.05 : 0.0015)));
+  zoomSmooth(pos(e), Math.exp(-dy * (e.deltaMode ? 0.05 : 0.0015)));
 }, { passive: false });
+// the wheel zooms in a glide: each notch sets a target scale, and the view eases to it over a few frames
+let zoomAnim = null;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function zoomSmooth(p, k) {
+  if (reduceMotion) { zoomAt(p, k); return; }
+  // the target is kept in world terms: the working window may be reloaded (and the view's scale renumbered) mid-glide
+  const wn = win && geoStore ? worldCells(win.L) : 1;
+  if (!zoomAnim) zoomAnim = { target: view.s * wn, raf: 0 };
+  zoomAnim.p = p; zoomAnim.target = clamp(zoomAnim.target * k, (geoStore ? 1 / 64 : 0.05) * wn, maxZoom() * wn);
+  if (!zoomAnim.raf) zoomAnim.raf = requestAnimationFrame(zoomStep);
+}
+function zoomStep() {
+  const z = zoomAnim; if (!z) return; z.raf = 0;
+  const r = z.target / (view.s * (win && geoStore ? worldCells(win.L) : 1)), last = Math.abs(Math.log(r)) < .006, s0 = view.s;
+  zoomAt(z.p, last ? r : Math.pow(r, .35));
+  if (last || view.s === s0) { zoomAnim = null; return; }
+  z.raf = requestAnimationFrame(zoomStep);
+}
 
 let whereText = '';
 function updWhere() {
