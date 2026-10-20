@@ -1,0 +1,26 @@
+Межа — войны и границы на настоящей карте Земли
+=================================================
+
+Данные карты
+  Границы стран и регионов, береговые линии, реки и озёра:
+    Natural Earth (naturalearthdata.com) — общественное достояние (public domain).
+  Рельеф (тени гор, встроен в игру):
+    Terrain Tiles на AWS Open Data (Mapzen / Linux Foundation). Исходные данные:
+    SRTM и GMTED2010 (USGS), ETOPO1 (NOAA), а также другие источники, перечисленные на
+    https://github.com/tilezen/joerd/blob/master/docs/attribution.md
+  Спутниковые снимки (слой «Спутник», загружаются из интернета):
+    NASA Blue Marble Next Generation, через NASA GIBS (Global Imagery Browse Services) —
+    общественное достояние; «Imagery courtesy of NASA».
+  Линии фронтов, даты и описания исторических этапов: собственная работа авторов «Межи»
+    по открытым историческим источникам.
+
+Шрифты (встроены в игру, SIL Open Font License 1.1)
+  Golos Text — Paratype
+  Unbounded — NaN
+  JetBrains Mono — JetBrains
+
+Программные компоненты
+  Electron (electronjs.org) — MIT License; включает Chromium (лицензии в LICENSES.chromium.html).
+  steamworks.js (github.com/ceifa/steamworks.js) — MIT License.
+  Steamworks SDK (steam_api64.dll / libsteam_api.so) — Valve Corporation, распространяется
+    по Steamworks SDK Access Agreement.

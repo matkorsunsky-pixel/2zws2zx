@@ -1,0 +1,12 @@
+"AppBuild"
+{
+	"AppID" "480"
+	"Desc" "Межа 1.0"
+	"ContentRoot" "..\dist\"
+	"BuildOutput" ".\output\"
+	"Depots"
+	{
+		"481"	"depot_windows.vdf"
+		"482"	"depot_linux.vdf"
+	}
+}

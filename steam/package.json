@@ -1,0 +1,9 @@
+{
+  "name": "mezha",
+  "productName": "Межа",
+  "version": "1.0.0",
+  "description": "Межа — войны и границы на настоящей карте Земли",
+  "main": "main.js",
+  "license": "UNLICENSED",
+  "steamAppId": 480
+}
