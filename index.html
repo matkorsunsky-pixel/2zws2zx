@@ -1245,7 +1245,10 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 .efac span { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; align-items: baseline; }
 .efac b { font-size: 13px; } .efac small { grid-column: 1; color: var(--muted); font-size: 11px; } .efac i { grid-row: 1 / span 2; grid-column: 2; font: 600 12px var(--f-mono); font-style: normal; color: var(--gold); }
 .efac.on, .ecstrikes button.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.ecstrikes button { flex: 1; justify-content: center; font-weight: 600; }
+.ecstrikes { display: flex; flex-direction: column; gap: 6px; }
+.ecstrikes button { display: grid; justify-items: start; gap: 2px; text-align: left; padding: 8px 10px; font-weight: 600; }
+.ecstrikes button small { font-weight: 500; font-size: 11px; color: var(--muted); }
+.ecstrikes button em { font-style: normal; font-weight: 500; font-size: 11px; color: var(--accent); }
 .eclist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 280px; overflow-y: auto; }
 .eclist li { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; padding: 5px 8px; border-radius: 9px; cursor: pointer; }
 .eclist li:hover { background: rgb(255 255 255 / .04); }
@@ -1525,8 +1528,8 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <p class="hint">Выберите завод, потом щёлкните место на своей земле. Завод строится несколько дней; каждый следующий того же типа дороже на 10%. Пустая казна останавливает заводы.</p>
       </section>
       <section><h2>Удары</h2>
-        <div class="row ecstrikes" id="ecStrikes"><button data-strike="drone">Удар дронами · 10 шт.</button><button data-strike="bomber">Бомбардировка · 3 самолёта</button><button data-strike="missile">Ракетный удар</button></div>
-        <p class="hint">Заводы делают оружие, а запускают его отдельные постройки. Дроны взлетают с пунктов дроноводов (их ставят не дальше 60 км от фронта) и летят до 400 км. Ракеты стартуют с пусковых установок — в тылу или у фронта — и летят до 2500 км. Бомбардировщики летят до 800 км от авиазаводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
+        <div class="ecstrikes" id="ecStrikes"></div>
+        <p class="hint">Заводы делают оружие, а запускают его отдельные постройки. Дроны взлетают с пунктов дроноводов (их ставят не дальше 60 км от фронта), ракеты — с пусковых установок в тылу или у фронта. У каждого вида свои дальность, радиус и сила: дешёвые FPV-дроны бьют только у самого фронта и слабо, но их много; дорогие баллистические и гиперзвуковые ракеты бьют далеко и мощно, а ПВО почти не может их сбить. Что делать, выбирается на линии завода дронов или ракет. Бомбардировщики летят до 800 км от авиазаводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
       </section>
       <section><h2>Помощь</h2>
         <div class="ecaid"><select id="ecAidTo" aria-label="Кому помочь"></select>
@@ -6905,7 +6908,7 @@ function fxBoom(v) {
 // strikes: the drone's moped buzz, the roar and hiss of a missile going up, the blast where they come down; heard
 // for one's own strikes and for those that come down on one's own land or on screen, and not too many at once
 let strikeSndT = 0;
-function strikeSound(kind, k, g, what) {
+function strikeSound(kind, k, g, what, power = 1) {
   if (!fxSound || document.hidden) return;
   const onScreen = (() => { const x = g.x * view.s + view.x, y = g.y * view.s + view.y; return x > -40 && y > -40 && x < innerWidth + 40 && y < innerHeight + 40; })();
   const mine = !!player && (k === player || fineOwner(g.x, g.y) === player);
@@ -6914,7 +6917,7 @@ function strikeSound(kind, k, g, what) {
   const ac = fxAudio(); if (!ac) return;
   if (ac.state === 'suspended') ac.resume();
   const t = ac.currentTime, vol = mine ? 1 : .55, out = ac.createGain(); out.gain.value = vol; out.connect(ac.destination);
-  if (what === 'hit') { fxBoom(kind === 'missile' ? 1.6 : kind === 'bomber' ? 1.2 : .7); if (kind === 'missile') setTimeout(() => fxBoom(.8), 140); return; }
+  if (what === 'hit') { fxBoom((kind === 'missile' ? 1.2 : kind === 'bomber' ? 1.2 : .6) * Math.min(1.8, .5 + power * .6)); if (kind === 'missile' && power >= 1) setTimeout(() => fxBoom(.6 * power), 140); return; }
   if (kind === 'drone') {
     // a few two-stroke engines, a little out of tune with each other, passing by
     for (let i = 0; i < 3; i++) {
@@ -10606,10 +10609,10 @@ const econYear = () => new Date(gameDate).getUTCFullYear();
 const eraPrice = () => eraLerp(ERA_PRICE, econYear()), eraScale = () => eraPrice() * eraLerp(ERA_REAL, econYear());
 const FACT = {
   civil: { name: 'Гражданский завод', cost: 2e9, days: 30, income: 15e6, from: 0 },
-  drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, from: 2000, info: '4 дрона в день' },
+  drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, from: 2000, info: 'дроны выбранного вида', lines: 'drone' },
   dronepost: { name: 'Пункт дроноводов', cost: 6e7, days: 4, upkeep: .4e6, from: 2000, front: 60, info: 'запускает дроны · не дальше 60 км от фронта' },
   bomber: { name: 'Авиазавод', cost: 1.2e9, days: 40, upkeep: 2e6, make: 'bomber', n: 1, every: 3, from: 1915, to: 1999, info: 'бомбардировщик раз в 3 дня' },
-  missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 2, from: 1950, info: 'ракета раз в 2 дня' },
+  missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 1, from: 1950, info: 'ракеты выбранного вида', lines: 'missile' },
   launcher: { name: 'Пусковая установка', cost: 4e8, days: 12, upkeep: 1e6, from: 1950, info: 'запускает ракеты · в тылу или у фронта' },
   armor: { name: 'Военный завод', cost: 8e8, days: 30, upkeep: 3e6, make: 'eq', n: 1, every: 1, from: 0, info: 'снаряжение для войск' },
   aa: { name: 'Завод ПВО', cost: 6e8, days: 20, upkeep: 1e6, make: 'aa', n: 1, every: 1, from: 1915, info: 'ракета ПВО в день' }
@@ -10629,12 +10632,25 @@ function factInfo(t) {
   if (t === 'aa' && y < 1955) return 'зенитная батарея в день';
   return F.info;
 }
-// strikes: what one costs from the stock, how far it reaches from its launch site, how wide it hits
+// strikes: the weapons, from the cheapest to the dearest of each kind. A dearer one reaches farther, hits wider and
+// harder, kills more (troops and people alike) and gets through air defence more often; a cheap one comes in
+// numbers. need: how many go up in one strike; rate: how many a factory makes a day at full efficiency; price: one
+// of them in dollars of 2025 (for the player to compare); aa: the chance the defence stops it
 const STRIKE = {
-  drone: { name: 'Удар дронами', need: 10, range: 400, radius: 6, from: 'dronepost', fly: 2200 },
-  bomber: { name: 'Бомбардировка', need: 3, range: 800, radius: 10, from: 'bomber', fly: 1600 },
-  missile: { name: 'Ракетный удар', need: 1, range: 2500, radius: 14, from: 'launcher', fly: 1500 }
+  fpv: { kind: 'drone', name: 'FPV-дроны', short: 'FPV', need: 10, range: 25, radius: 1.5, dmg: .35, civ: .3, aa: 0, year: 2014, rate: 30, price: 500, fly: 1300 },
+  lancet: { kind: 'drone', name: 'Барражирующие боеприпасы', short: '«Ланцет»', need: 3, range: 70, radius: 3, dmg: .9, civ: .5, aa: .2, year: 2019, rate: 6, price: 35e3, fly: 1700 },
+  drone: { kind: 'drone', name: 'Ударные дроны дальнего действия', short: '«Шахед»', need: 10, range: 1200, radius: 6, dmg: 1, civ: 1, aa: .35, year: 2000, rate: 4, price: 5e4, fly: 2200 },
+  jetdrone: { kind: 'drone', name: 'Реактивные ударные дроны', short: 'реактивные', need: 3, range: 1500, radius: 9, dmg: 1.5, civ: 1.4, aa: .3, year: 2023, rate: 1, price: 6e5, fly: 1700, area: true },
+  bomber: { kind: 'bomber', name: 'Бомбардировка', short: 'бомбардировщики', need: 3, range: 800, radius: 10, dmg: .65, civ: 1, aa: .35, year: 1915, to: 1999, price: 4e7, fly: 1600 },
+  tactical: { kind: 'missile', name: 'Тактические ракеты', short: 'тактические', need: 1, range: 150, radius: 7, dmg: .6, civ: .5, aa: .5, year: 1970, rate: 1, price: 4e5, fly: 1100 },
+  cruise: { kind: 'missile', name: 'Крылатые ракеты', short: 'крылатые', need: 1, range: 2500, radius: 11, dmg: 1, civ: 1, aa: .6, year: 1977, rate: .5, price: 1.5e6, fly: 1900 },
+  missile: { kind: 'missile', name: 'Баллистические ракеты', short: 'баллистические', need: 1, range: 500, radius: 14, dmg: 1.4, civ: 1.2, aa: .4, year: 1950, rate: .4, price: 3e6, fly: 1400 },
+  hyper: { kind: 'missile', name: 'Гиперзвуковые ракеты', short: 'гиперзвуковые', need: 1, range: 2000, radius: 16, dmg: 2, civ: 1.6, aa: .12, year: 2018, rate: .1, price: 1e7, fly: 1000 }
 };
+// where each kind goes up from, and which weapons a kind has in a given year (cheapest first)
+const LAUNCH = { drone: 'dronepost', missile: 'launcher', bomber: 'bomber' };
+const variantsOf = (kind, y = econYear()) => Object.keys(STRIKE).filter(v => STRIKE[v].kind === kind && y >= STRIKE[v].year && (!STRIKE[v].to || y <= STRIKE[v].to));
+const strikePrice = v => STRIKE[v].price * eraPrice();
 const econBlank = () => ({ money: {}, base: {}, stock: {}, facs: [], seq: 1, last: {}, stats: {} });
 // the war in numbers, for every country: what it made, put in the field and lost, its strikes, its people, its money
 function stAdd(k, key, v = 1) {
@@ -10695,6 +10711,13 @@ function nearestCityName(w) {
   for (const c of cities) { const d = econKm(w, toWorld(c.x, c.y)); if (d < bd) { bd = d; best = c; } }
   return best && bd < 250 ? best.name : '';
 }
+// the first line of a new factory of drones or missiles: the usual weapon of the time; for the AI any of them
+function firstLine(type, any) {
+  const vs = variantsOf(FACT[type].lines); if (!vs.length) return undefined;
+  // the AI picks the cheap, common ones more often (weight: the root of how many a day)
+  if (any) { const w = vs.map(v => Math.sqrt(STRIKE[v].rate)), t = w.reduce((a, b) => a + b, 0); let r = Math.random() * t; for (let i = 0; i < vs.length; i++) if ((r -= w[i]) <= 0) return vs[i]; return vs[0]; }
+  return vs.includes(FACT[type].make) ? FACT[type].make : vs[0];
+}
 // whether land of an enemy at war lies within km of a place: rings of points around it, near to far
 function nearFront(k, g, km) {
   const R = geo ? km * 1000 / metersPerCell() : km;
@@ -10719,7 +10742,7 @@ function econBuild(k, type, g, quiet) {
   if (FACT[type].front && !nearFront(k, g, FACT[type].front)) { if (!quiet) toast(factName(type) + ' ставят не дальше ' + FACT[type].front + ' км от фронта: дроноводы должны видеть цели.'); return false; }
   if (money(k) < cost) { if (!quiet) toast('Не хватает денег: нужно ' + fmtMoney(cost) + ', в казне ' + fmtMoney(money(k)) + '.'); return false; }
   econ.money[k] -= cost; if (k === player && !quiet) tutorNote('build'); stAdd(k, 'buildSpent', cost); stAdd(k, 'facStarted');
-  const f = { id: econ.seq++, type, owner: k, mx: w.mx, my: w.my, left: FACT[type].days, hp: 100, t: 0, city: nearestCityName(w) };
+  const f = { id: econ.seq++, type, owner: k, mx: w.mx, my: w.my, left: FACT[type].days, hp: 100, t: 0, city: nearestCityName(w), line: FACT[type].lines ? firstLine(type, k !== player) : undefined };
   econ.facs.push(f);
   if (!quiet) toast(factName(type) + ' заложен' + (f.city ? ' у города ' + f.city : '') + ': ' + fmtMoney(cost) + ', строится ' + FACT[type].days + ' ' + plural(FACT[type].days, 'день', 'дня', 'дней') + '.');
   logEvent(ownerName(k) + ': заложен ' + factName(type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k);
@@ -10784,6 +10807,12 @@ function econDay() {
       if (++f.t < F.every) continue;
       f.t = 0;
       if (F.make === 'eq') { f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02); const q = f.line || 'inf', v = LINE_OUT[q] * f.eff * f.hp / 100; st.eq[q] = (st.eq[q] || 0) + v; stAdd(k, 'made_' + q, v); }
+      else if (F.lines) {
+        // a line of drones or missiles: the cheaper the weapon, the more of them a day; a part made is carried over
+        f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02);
+        const v = f.line && STRIKE[f.line] && STRIKE[f.line].kind === F.lines ? f.line : F.make, a = (f.acc || 0) + STRIKE[v].rate * f.eff * f.hp / 100, n = Math.floor(a);
+        f.acc = a - n; if (n) { st[v] = (st[v] || 0) + n; stAdd(k, 'made_' + v, n); }
+      }
       else { st[F.make] += F.n; stAdd(k, 'made_' + F.make, F.n); }
     }
     econ.money[k] = money(k) + inc - exp; stAdd(k, 'inc', inc); stAdd(k, 'exp', exp);
@@ -10834,8 +10863,9 @@ function econAi(k) {
     // weapons need a place to go up from: a post of drone operators by the front, a launcher for the missiles
     const has = t => mine.some(f => f.type === t);
     let type = order[Math.floor(Math.random() * order.length)];
-    if (ft.includes('dronepost') && (has('drone') || st.drone >= STRIKE.drone.need) && mine.filter(f => f.type === 'dronepost').length < 2 + Math.floor(st.drone / 60)) type = 'dronepost';
-    else if (ft.includes('launcher') && (has('missile') || st.missile > 0) && !has('launcher')) type = 'launcher';
+    const drones = variantsOf('drone').reduce((t, v) => t + (st[v] || 0), 0);
+    if (ft.includes('dronepost') && (has('drone') || drones >= 10) && mine.filter(f => f.type === 'dronepost').length < 2 + Math.floor(drones / 60)) type = 'dronepost';
+    else if (ft.includes('launcher') && (has('missile') || variantsOf('missile').some(v => st[v] > 0)) && !has('launcher')) type = 'launcher';
     if (type === 'dronepost') { const g = money(k) > priceOf(k, type) * 2 && frontSpot(k, FACT.dronepost.front); if (g) econBuild(k, type, g, true); type = null; }
     if (type && money(k) > priceOf(k, type) * 4) {
       // near one of its biggest cities, a little way from it
@@ -10851,44 +10881,48 @@ function econAi(k) {
     for (let i = 0; i < 40 && foes.length; i++) { const u = foes[Math.floor(Math.random() * foes.length)]; if (econCanReach(k, kind, toWorld(u.x, u.y))) out.push(u); }
     return out;
   };
-  for (const kind of ['missile', 'bomber']) if (st[kind] >= STRIKE[kind].need && Math.random() < .5) {
-    // a factory of the enemy within reach first, else the thickest knot of its troops
-    const fs = econ.facs.filter(f => atWar(k, f.owner) && econCanReach(k, kind, f));
-    if (fs.length && Math.random() < .5) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, kind, fromWorld(f), true); }
-    else { const ts = targetsNear(kind); if (ts.length) econStrike(k, kind, ts[Math.floor(Math.random() * ts.length)], true); }
+  // missiles and bombers: an enemy factory within reach first (the dear ones keep for those), else a knot of troops
+  for (const v of Object.keys(STRIKE)) {
+    const S = STRIKE[v]; if (S.kind === 'drone' || !((st[v] || 0) >= S.need) || Math.random() > .5) continue;
+    const fs = econ.facs.filter(f => atWar(k, f.owner) && econCanReach(k, v, f));
+    if (fs.length && (S.dmg >= 1.4 || Math.random() < .5)) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, v, fromWorld(f), true); }
+    else { const ts = targetsNear(v); if (ts.length) econStrike(k, v, ts[Math.floor(Math.random() * ts.length)], true); }
   }
   // a big stock of drones goes up in several swarms a day
-  for (let n = Math.min(3, Math.floor(st.drone / STRIKE.drone.need / 3) + 1); n > 0 && st.drone >= STRIKE.drone.need; n--) { if (Math.random() > .6) continue; const ts = targetsNear('drone'); if (ts.length) econStrike(k, 'drone', ts[Math.floor(Math.random() * ts.length)], true); }
+  for (const v of Object.keys(STRIKE)) {
+    const S = STRIKE[v]; if (S.kind !== 'drone') continue;
+    for (let n = Math.min(3, Math.floor((st[v] || 0) / S.need / 3) + 1); n > 0 && (st[v] || 0) >= S.need; n--) { if (Math.random() > .6) continue; const ts = targetsNear(v); if (ts.length) econStrike(k, v, ts[Math.floor(Math.random() * ts.length)], true); }
+  }
 }
 // where a strike is launched from: the nearest factory of its kind within range (drones: also any own unit)
 function econLaunch(k, kind, w) {
   const S = STRIKE[kind];
   let best = null, bd = Infinity;
-  for (const f of econ.facs) if (f.owner === k && f.type === S.from && !(f.left > 0)) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
+  for (const f of econ.facs) if (f.owner === k && f.type === LAUNCH[S.kind] && !(f.left > 0)) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
   return best && bd <= S.range ? best : null;
 }
 const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
 function econStrike(k, kind, g, quiet) {
   if (mpGuest() && !mpApplying) { const ok = mpGuestCmd(Object.assign({ t: 'strike', kind }, toWorld(g.x, g.y))); if (ok) toast(STRIKE[kind].name + ': приказ отправлен.'); return ok; }
   const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y);
-  if (st[kind] < S.need) { if (!quiet) toast({ drone: 'Нужно не меньше ' + S.need + ' дронов. Постройте завод дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: 'Ракет нет. Постройте ракетный завод.' }[kind]); return false; }
+  if (!((st[kind] || 0) >= S.need)) { if (!quiet) toast({ drone: S.name + ': нужно не меньше ' + S.need + ' шт. Поставьте их на линию завода дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: S.name + ': ракет нет. Поставьте их на линию ракетного завода.' }[S.kind]); return false; }
   const from = econLaunch(k, kind, w);
-  if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших пунктов дроноводов (или их нет — постройте пункт у фронта).', bomber: 'ваших авиазаводов.', missile: 'ваших пусковых установок (или их нет — постройте установку).' }[kind]); return false; }
+  if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших пунктов дроноводов (или их нет — постройте пункт у фронта).', bomber: 'ваших авиазаводов.', missile: 'ваших пусковых установок (или их нет — постройте установку).' }[S.kind]); return false; }
   st[kind] -= S.need; if (k === player && !quiet) tutorNote('strike'); stAdd(k, 'strikes'); stAdd(k, 'launch_' + kind, S.need);
   const def = fineOwner(g.x, g.y), dst = def ? stock(def) : null;
   // interceptors of the side under attack: a missile is shot down more often than a swarm of drones is turned back
   let k2 = 1;
-  if (dst && dst.aa > 0 && atWar(k, def)) { dst.aa--; stAdd(def, 'aaShots'); if (Math.random() < (kind === 'missile' ? .55 : .35)) { k2 = kind === 'missile' ? 0 : .5; stAdd(def, 'intercepts'); stAdd(k, 'downed'); } }
+  if (dst && dst.aa > 0 && S.aa > 0 && atWar(k, def)) { dst.aa--; stAdd(def, 'aaShots'); if (Math.random() < S.aa) { k2 = S.kind === 'missile' || S.area ? 0 : .5; stAdd(def, 'intercepts'); stAdd(k, 'downed'); } }
   const fg = fromWorld(from);
-  econFx.push({ kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0, dur: S.fly, n: kind === 'drone' ? 3 + Math.min(4, Math.floor(S.need / 4)) : 1 });
-  strikeSound(kind, k, g, 'launch');
-  setTimeout(() => { econImpact(k, kind, g, k2, quiet); if (k2 > 0) strikeSound(kind, k, g, 'hit'); }, S.fly);
-  if (!quiet) toast(S.name + (k2 === 0 ? ' — ракету сбила ПВО противника.' : '...'));
+  econFx.push({ kind: S.kind, v: kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0, dur: S.fly, n: S.kind === 'drone' ? Math.min(7, 2 + S.need) : 1, sz: .75 + Math.min(.7, S.dmg * .3) });
+  strikeSound(S.kind, k, g, 'launch', S.dmg);
+  setTimeout(() => { econImpact(k, kind, g, k2, quiet); if (k2 > 0) strikeSound(S.kind, k, g, 'hit', S.dmg); }, S.fly);
+  if (!quiet) toast(S.name + (k2 === 0 ? ' — сбиты ПВО противника.' : '...'));
   requestUi();
   return true;
 }
 function econImpact(k, kind, g, k2, quiet) {
-  if (k2 <= 0) { logEvent(ownerName(k) + ': ракету сбила ПВО', k); renderEcon(); return; }
+  if (k2 <= 0) { logEvent(ownerName(k) + ': ' + STRIKE[kind].name.toLowerCase() + ' сбиты ПВО', k); renderEcon(); return; }
   const S = STRIKE[kind];
   const R = geo ? Math.max(S.radius * 1000 / metersPerCell(), unitCellsAt(g.y) * 1.2) : unitCellsAt(g.y) * 2;
   const hit = units.filter(u => atWar(k, u.owner) && Math.hypot(u.x - g.x, u.y - g.y) <= R);
@@ -10896,8 +10930,8 @@ function econImpact(k, kind, g, k2, quiet) {
   // troops under the cover of air defence (an AA unit of their side nearby) take half the damage
   const cover = new Map();
   const aaK = u => { if (!cover.has(u)) { let c = false; forNear(u, bodyS(u) * 3, v => { if (roleOf(v).aa && allied(v.owner, u.owner)) { c = true; return false; } }); cover.set(u, roleOf(u).aa || c ? .5 : 1); } return cover.get(u); };
-  if (kind === 'missile' || kind === 'bomber') { const d = kind === 'missile' ? 40 : 25; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - d * 1.2 * m); } }
-  else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 12 * m); }
+  if (S.kind !== 'drone' || S.area) { const d = 40 * S.dmg; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - d * 1.2 * m); } }
+  else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * S.dmg * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 12 * S.dmg * m); }
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) { noteLosses(dead, k); stAdd(k, 'strikeKills', dead.length); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
   // a factory under the blast
@@ -10905,7 +10939,7 @@ function econImpact(k, kind, g, k2, quiet) {
   for (const f of econ.facs) {
     if (!atWar(k, f.owner)) continue;
     const p = fromWorld(f); if (Math.hypot(p.x - g.x, p.y - g.y) > R) continue;
-    f.hp -= (kind === 'missile' ? 60 : kind === 'bomber' ? 35 : 15) * k2;
+    f.hp -= (S.kind === 'missile' ? 45 : S.kind === 'bomber' ? 55 : 15) * S.dmg * k2;
     if (f.hp <= 0) fac = f;
   }
   if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
@@ -10939,7 +10973,7 @@ function econPrebuild() {
       for (let t = 0; t < 8 && !g; t++) { const a = i * 2.4 + t * .8, x = c.x + Math.cos(a) * r0, y = c.y + Math.sin(a) * r0, w = toWorld(x, y); if (ownerAtWorld(w.mx, w.my) === k) g = w; }
       if (!g) return;
       const nArm = econ.facs.filter(x => x.owner === k && x.type === 'armor').length;
-      econ.facs.push({ id: econ.seq++, type, owner: k, mx: g.mx, my: g.my, left: 0, hp: 100, t: 0, city: c.name, pre: true, line: type === 'armor' ? ['inf', 'tank', 'art', 'inf', 'air'][nArm % 5] : undefined });
+      econ.facs.push({ id: econ.seq++, type, owner: k, mx: g.mx, my: g.my, left: 0, hp: 100, t: 0, city: c.name, pre: true, line: FACT[type].lines ? firstLine(type, true) : type === 'armor' ? ['inf', 'tank', 'art', 'inf', 'air'][nArm % 5] : undefined });
     });
   }
 }
@@ -11051,13 +11085,13 @@ function drawEcon(c) {
       if (e.kind === 'missile') {
         // smoke behind it, thinning out, then the flame and the body
         for (let s = Math.max(0, t - .35); s < t; s += .012) { const p = P(s), k = (s - (t - .35)) / .35; c.beginPath(); c.arc(p.x + Math.sin(s * 90) * 1.2, p.y, 1.5 + (1 - k) * 4, 0, Math.PI * 2); c.fillStyle = `rgba(200,195,185,${k * .28})`; c.fill(); }
-        drawMissileSprite(c, q.x, q.y, ang, 1.3, now);
+        drawMissileSprite(c, q.x, q.y, ang, 1.3 * (e.sz || 1), now);
       } else if (e.kind === 'drone') {
         for (let j = 0; j < (e.n || 4); j++) {
           // a loose wedge, each drone wavering on its own
           const back = (j + 1 >> 1) * .022, side = (j % 2 ? 1 : -1) * Math.ceil(j / 2) * 9, p = P(Math.max(0, t - back));
           const nx = -Math.sin(ang), ny = Math.cos(ang), wob = Math.sin(now / 160 + j * 2.1) * 1.5;
-          drawDroneSprite(c, p.x + nx * (side + wob), p.y + ny * (side + wob), ang, 1);
+          drawDroneSprite(c, p.x + nx * (side + wob), p.y + ny * (side + wob), ang, e.sz || 1);
         }
       } else {
         c.beginPath(); for (let s = Math.max(0, t - .25); s <= t; s += .02) { const p = P(s); s === Math.max(0, t - .25) ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y); }
@@ -11065,7 +11099,7 @@ function drawEcon(c) {
         c.save(); c.translate(q.x, q.y); c.rotate(ang + Math.PI / 2); c.scale(9, 9); c.beginPath(); FAC_GLYPH.bomber(c); c.fillStyle = '#e8e2d2'; c.fill(); c.restore();
       }
     } else if (e.hit) {
-      const k = (now - e.t0 - dur) / 720, rr = (e.kind === 'missile' ? 34 : 18) * (0.3 + k);
+      const k = (now - e.t0 - dur) / 720, rr = (e.kind === 'missile' ? 30 : 16) * (e.sz || 1) * (0.3 + k);
       const gr = c.createRadialGradient(bx, by, 0, bx, by, rr);
       gr.addColorStop(0, `rgba(255,236,190,${(1 - k) * .95})`); gr.addColorStop(.4, `rgba(255,120,40,${(1 - k) * .7})`); gr.addColorStop(1, 'rgba(120,20,10,0)');
       c.fillStyle = gr; c.beginPath(); c.arc(bx, by, rr, 0, Math.PI * 2); c.fill();
@@ -11088,8 +11122,9 @@ function renderEcon(hudOnly) {
   $('#ecDelta').textContent = l ? 'доход ' + fmtMoney(l.inc) + ' · расход ' + fmtMoney(l.exp) + ' в день' : 'доход и расход появятся через сутки игры';
   $('#ecStock').innerHTML = '';
   const ft = factTypes();
-  for (const [k, n] of [['drone', 'Дроны'], ['bomber', 'Бомбардировщики'], ['missile', 'Ракеты'], ['aa', 'ПВО']]) {
-    if (!ft.includes(k) && !st[k]) continue; const s = document.createElement('span'); s.innerHTML = n + ' <b></b>'; s.querySelector('b').textContent = st[k]; $('#ecStock').append(s); }
+  const chip = (n, v) => { const s = document.createElement('span'); s.innerHTML = n + ' <b></b>'; s.querySelector('b').textContent = v; $('#ecStock').append(s); };
+  for (const v of Object.keys(STRIKE)) { const S = STRIKE[v]; if (!(st[v] > 0) && !(variantsOf(S.kind).includes(v) && ft.includes(LAUNCH[S.kind] === 'bomber' ? 'bomber' : S.kind))) continue; chip(S.kind === 'bomber' ? 'Бомбардировщики' : S.name.replace(/ (дальнего действия|ударные)/, ''), st[v] || 0); }
+  if (ft.includes('aa') || st.aa) chip('ПВО', st.aa);
   $('#ecEq').innerHTML = '';
   for (const q of ['inf', 'art', 'tank', 'air']) { const s2 = document.createElement('span'); s2.innerHTML = EQ_FULL[q] + ' <b></b>'; s2.querySelector('b').textContent = fmtNum(st.eq[q] || 0); $('#ecEq').append(s2); }
   const box = $('#ecBuild'); box.textContent = '';
@@ -11103,7 +11138,19 @@ function renderEcon(hudOnly) {
     b.addEventListener('click', () => econSetMode(econMode && econMode.type === type ? null : { kind: 'build', type }));
     box.append(b);
   }
-  document.querySelectorAll('#ecStrikes button').forEach(b => { const k = b.dataset.strike; b.hidden = !ft.includes(k) && !st[k]; b.disabled = st[k] < STRIKE[k].need; b.classList.toggle('on', !!econMode && econMode.type === k); });
+  // a button for every weapon of the time, cheap to dear, with what it does
+  const sb = $('#ecStrikes'); sb.textContent = '';
+  for (const kind of ['drone', 'bomber', 'missile']) for (const v of Object.keys(STRIKE).filter(v => STRIKE[v].kind === kind)) {
+    const S = STRIKE[v], avail = variantsOf(kind).includes(v);
+    if (!avail && !(st[v] > 0)) continue;
+    const b = document.createElement('button'); b.dataset.strike = v; b.className = econMode && econMode.type === v ? 'on' : '';
+    b.innerHTML = '<b></b><small></small><em></em>';
+    b.querySelector('b').textContent = S.name + ' · ' + S.need + ' шт.';
+    b.querySelector('small').textContent = 'до ' + fmtInt(S.range) + ' км · радиус ' + String(S.radius).replace('.', ',') + ' км · сила ×' + String(S.dmg).replace('.', ',') + (S.aa ? ' · ПВО сбивает ' + Math.round(S.aa * 100) + '%' : ' · ПВО не сбивает');
+    b.querySelector('em').textContent = 'в запасе ' + (st[v] || 0) + ' · ~' + fmtMoney(strikePrice(v)) + ' за шт.';
+    b.disabled = !((st[v] || 0) >= S.need);
+    sb.append(b);
+  }
   // aid: who can get it, what has come and gone
   const at = $('#ecAidTo'), keep = at.value; at.textContent = '';
   const cand = []; for (let b = 1; b <= countries.length; b++) if (b !== player && atWarAny(b)) cand.push(b);
@@ -11123,11 +11170,12 @@ function renderEcon(hudOnly) {
     const s = document.createElement('small'); s.textContent = f.left > 0 ? 'строится, ' + f.left + ' дн.' : f.hp < 100 ? 'повреждён, ' + Math.round(f.hp) + '%' : 'работает';
     li.append(cv3, t, s);
     // a military factory: its line and how well it runs
-    if (f.type === 'armor' && !(f.left > 0)) {
+    if ((f.type === 'armor' || FACT[f.type].lines) && !(f.left > 0)) {
       const row = document.createElement('div'); row.className = 'ecline';
       const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Что производит');
-      for (const q of ['inf', 'art', 'tank', 'air']) { const o = document.createElement('option'); o.value = q; o.textContent = EQ_FULL[q] + ' · ' + fmtNum(LINE_OUT[q] * 10) + ' компл. за 10 дней'; sel.append(o); }
-      sel.value = f.line || 'inf';
+      if (f.type === 'armor') for (const q of ['inf', 'art', 'tank', 'air']) { const o = document.createElement('option'); o.value = q; o.textContent = EQ_FULL[q] + ' · ' + fmtNum(LINE_OUT[q] * 10) + ' компл. за 10 дней'; sel.append(o); }
+      else for (const v of variantsOf(FACT[f.type].lines)) { const o = document.createElement('option'); o.value = v; o.textContent = STRIKE[v].name + ' · ' + fmtNum(STRIKE[v].rate * 10) + ' шт. за 10 дней'; sel.append(o); }
+      sel.value = f.type === 'armor' ? f.line || 'inf' : f.line && STRIKE[f.line] ? f.line : FACT[f.type].make;
       sel.addEventListener('click', e => e.stopPropagation());
       sel.addEventListener('change', () => setLine(f, sel.value));
       const ef = document.createElement('small'); const e0 = f.eff === undefined ? (f.pre ? .8 : .1) : f.eff; ef.textContent = 'эффективность ' + Math.round(e0 * 100) + '%'; ef.title = 'Как в Hearts of Iron: линия набирает 2% в день до 100%, смена продукции сбрасывает её до трети';
@@ -11144,7 +11192,7 @@ document.querySelectorAll('#panel [data-aid]').forEach(b => b.addEventListener('
   if (!ok) toast('Передавать нечего.'); renderEcon(); renderHud();
 }));
 $('#hudMoney').addEventListener('click', () => { setPanel(true); showTab('econ'); renderEcon(); });
-document.querySelectorAll('#ecStrikes button').forEach(b => b.addEventListener('click', () => { const k = b.dataset.strike; econSetMode(econMode && econMode.type === k ? null : { kind: 'strike', type: k }); }));
+$('#ecStrikes').addEventListener('click', e => { const b = e.target.closest('button[data-strike]'); if (!b || b.disabled) return; const k = b.dataset.strike; econSetMode(econMode && econMode.type === k ? null : { kind: 'strike', type: k }); });
 
 // ---------- civilians: the people of every region, killed by strikes and battles, growing in peace ----------
 // The population of a country today (millions, about 2024), spread over its regions: two fifths by area, three
@@ -11217,9 +11265,9 @@ function strikeCivilians(kind, g, Rkm) {
   const w = toWorld(g.x, g.y), f = regionOfPoint(w.mx, w.my); if (!f) return 0;
   const kmc = geo ? metersPerCell() / 1000 : 1, city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) * kmc < 12);
   const P = regionPop(f), dens0 = P.now / Math.max(1, P.area), dens = city ? Math.max(dens0, Math.min(15000, 2500 + (city.vp || 1) * 450)) : dens0;
-  const L = LETHAL[kind], e = dens * Math.PI * L.r * L.r * L.k * (.4 + Math.random() * 1.2), dead = Math.min(Math.floor(P.now), Math.floor(e) + (Math.random() < e % 1 ? 1 : 0));
+  const V = STRIKE[kind] || { kind, civ: 1 }, L = LETHAL[V.kind], e = dens * Math.PI * L.r * L.r * L.k * V.civ * (.4 + Math.random() * 1.2), dead = Math.min(Math.floor(P.now), Math.floor(e) + (Math.random() < e % 1 ? 1 : 0));
   popHit(f, dead, true);
-  const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .004, dens * Math.PI * Math.pow(Rkm * .25, 2) * (kind === 'drone' ? .004 : .015));
+  const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .004, dens * Math.PI * Math.pow(Rkm * .25, 2) * (V.kind === 'drone' ? .004 : .015) * V.civ);
   return dead;
 }
 // a day of war: the people of the regions where battles are fought die and flee a little
@@ -13415,7 +13463,7 @@ async function startScenario(id, pl, mode) {
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
 // ---------- «Статистика»: the war in numbers ----------
 let statWho = 0, statTimer = 0;
-const fmtInt = v => Math.round(v || 0).toLocaleString('ru-RU');
+function fmtInt(v) { return Math.round(v || 0).toLocaleString('ru-RU'); }
 function statsOf(k) { return (econ.stats && econ.stats[k]) || {}; }
 function openStats(on) {
   const box = $('#statBox'); if (on === undefined) on = box.hidden;
@@ -13440,10 +13488,10 @@ function renderStats() {
   grid.append(
     card('Армия', [['Сейчас в строю', fmtInt(now)], ['Развёрнуто за войну', fmtInt(r.deployed)], ['Потеряно отрядов', fmtInt(r.lost), r.lost ? 'bad' : ''], ['Уничтожено у противника', fmtInt(r.kills), r.kills ? 'good' : ''], ['Соотношение потерь', r.lost ? ((r.kills || 0) / r.lost).toFixed(2).replace('.', ',') + ' : 1' : r.kills ? '∞' : '—']]),
     card('Производство', [['Стрелковое оружие, компл.', fmtNum(r.made_inf || 0)], ['Артиллерия, компл.', fmtNum(r.made_art || 0)], ['Бронетехника, компл.', fmtNum(r.made_tank || 0)], ['Авиация, компл.', fmtNum(r.made_air || 0)],
-      ['Дронов', has('drone') ? fmtInt(r.made_drone) : null], ['Ракет', has('missile') ? fmtInt(r.made_missile) : null], ['Бомбардировщиков', has('bomber') ? fmtInt(r.made_bomber) : null], [econYear() < 1955 ? 'Зенитных батарей' : 'Ракет ПВО', has('aa') ? fmtInt(r.made_aa) : null]]),
-    card('Удары', [['Ударов нанесено', fmtInt(r.strikes)], ['Запущено дронов', r.launch_drone ? fmtInt(r.launch_drone) : null], ['Запущено ракет', r.launch_missile ? fmtInt(r.launch_missile) : null], ['Вылетов бомбардировщиков', r.launch_bomber ? fmtInt(r.launch_bomber) : null],
+      ...Object.keys(STRIKE).filter(v => r['made_' + v] || (variantsOf(STRIKE[v].kind).includes(v) && has(STRIKE[v].kind))).map(v => [STRIKE[v].kind === 'bomber' ? 'Бомбардировщиков' : STRIKE[v].name, fmtInt(r['made_' + v])]), [econYear() < 1955 ? 'Зенитных батарей' : 'Ракет ПВО', has('aa') ? fmtInt(r.made_aa) : null]]),
+    card('Удары', [['Ударов нанесено', fmtInt(r.strikes)], ...Object.keys(STRIKE).filter(v => r['launch_' + v]).map(v => [(STRIKE[v].kind === 'bomber' ? 'Вылетов бомбардировщиков' : 'Запущено: ' + STRIKE[v].name.toLowerCase()), fmtInt(r['launch_' + v])]),
       ['Сбито ПВО противника', fmtInt(r.downed), r.downed ? 'bad' : ''], ['Поражено отрядов', fmtInt(r.hitUnits)], ['Уничтожено ударами', fmtInt(r.strikeKills), r.strikeKills ? 'good' : ''], ['Уничтожено заводов', fmtInt(r.facKilled), r.facKilled ? 'good' : '']]),
-    card('ПВО и тыл', [['Выстрелов ПВО', fmtInt(r.aaShots)], ['Перехвачено', fmtInt(r.intercepts), r.intercepts ? 'good' : ''], ['Заводов потеряно от ударов', fmtInt(r.facLost), r.facLost ? 'bad' : ''], ['Захвачено заводов врага', fmtInt(r.facCaptured), r.facCaptured ? 'good' : ''], ['Своих заводов захвачено', fmtInt(r.facLostCap), r.facLostCap ? 'bad' : ''], ['Запас: дроны · ракеты · ПВО', (st.drone || 0) + ' · ' + (st.missile || 0) + ' · ' + (st.aa || 0)]]),
+    card('ПВО и тыл', [['Выстрелов ПВО', fmtInt(r.aaShots)], ['Перехвачено', fmtInt(r.intercepts), r.intercepts ? 'good' : ''], ['Заводов потеряно от ударов', fmtInt(r.facLost), r.facLost ? 'bad' : ''], ['Захвачено заводов врага', fmtInt(r.facCaptured), r.facCaptured ? 'good' : ''], ['Своих заводов захвачено', fmtInt(r.facLostCap), r.facLostCap ? 'bad' : ''], ['Запас: дроны · ракеты · ПВО', variantsOf('drone').concat(['drone']).filter((v, i, a) => a.indexOf(v) === i).reduce((t, v) => t + (st[v] || 0), 0) + ' · ' + Object.keys(STRIKE).filter(v => STRIKE[v].kind === 'missile').reduce((t, v) => t + (st[v] || 0), 0) + ' · ' + (st.aa || 0)]]),
     card('Мирное население', [['Погибло на своей земле', fmtPeople(r.civLost || 0), r.civLost ? 'bad' : ''], ['Погибло от своих ударов', fmtPeople(r.civKilled || 0)]]),
     card('Экономика', [['Казна', fmtMoney(money(k))], ['Доходы за войну', fmtMoney(r.inc || 0)], ['Расходы за войну', fmtMoney(r.exp || 0)], ['На войска', fmtMoney(r.armySpent || 0)], ['На стройку', fmtMoney(r.buildSpent || 0)], ['Заложено построек', fmtInt(r.facStarted)], ['Построено', fmtInt(r.facBuilt)], ['Работает сейчас', fmtInt(facs.length)]]),
     card('Помощь и города', [['Получено денег', fmtMoney(r.aidInMoney || 0)], ['Получено снаряжения, компл.', fmtNum(r.aidInEq || 0)], ['Передано денег', fmtMoney(r.aidOutMoney || 0)], ['Передано снаряжения, компл.', fmtNum(r.aidOutEq || 0)], ['Взято городов', fmtInt(r.citiesTaken), r.citiesTaken ? 'good' : ''], ['Потеряно городов', fmtInt(r.citiesLost), r.citiesLost ? 'bad' : '']])
@@ -13512,7 +13560,7 @@ const TUTOR = [
   ] },
   { id: 'strikes', name: 'Удары', about: 'Дроны, бомбардировщики и ракеты: дальность, ПВО и что остаётся после удара.', scen: ['svo2025', 1, 'play'], troops: true, sys: { econ: true }, bonus: { drone: 40, missile: 3 }, steps: [
     ['Откройте вкладку «Экономика». На учебную главу вам выдано 40 дронов и 3 ракеты.', '.ptabs [data-tab="econ"]', () => tabOn('econ')],
-    ['Нажмите «Удар дронами» или «Ракетный удар» в разделе ударов.', '#ecStrikes', () => econMode && econMode.kind === 'strike'],
+    ['Выберите оружие в разделе «Удары»: у каждого вида своя дальность и сила.', '#ecStrikes', () => econMode && econMode.kind === 'strike'],
     ['Щёлкните цель на земле противника. Красный круг — цель в досягаемости, серый — слишком далеко.', null, s => tuN('strike', s) > 0],
     ['Откройте «Войну» и найдите удар в хронике: потери войск противника и мирных жителей.', '.ptabs [data-tab="war"]', () => tabOn('war')]
   ] },
