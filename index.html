@@ -1059,11 +1059,23 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
   .gcard { width: 84px; }
 }
 
+/* --- «Сведения»: the card of a region --- */
+.infocard { position: absolute; right: 14px; top: 76px; z-index: 30; width: 286px; max-width: calc(100vw - 32px); max-height: calc(100% - 120px); overflow: auto; padding: 14px 16px 12px; border-radius: 16px; background: var(--glass, rgba(20,20,22,.86)); backdrop-filter: blur(14px); border: 1px solid var(--line2, rgba(255,255,255,.12)); box-shadow: 0 12px 40px rgb(0 0 0 / .45); color: var(--ink, #eee); }
+.infocard[hidden] { display: none; }
+.infocard b { display: block; font-size: 16px; padding-right: 24px; }
+.infocard small { display: block; color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+.infocard .ifold { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; }
+.infocard .ibar { height: 6px; border-radius: 4px; margin: 0 0 10px; background: linear-gradient(90deg, var(--accent) var(--p, 100%), #7a2a22 var(--p, 100%)); }
+.infocard .ibar[hidden] { display: none; }
+.infocard dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; font-size: 12.5px; }
+.infocard dt { color: var(--muted); }
+.infocard dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.infocard dd.bad { color: #e0705c; } .infocard dd.warn { color: #e6b45a; }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
 body:not(.mode-watch) .hud #hudModeP, body.mode-watch .hud #hudModeW { background: var(--grad-accent); color: var(--accent-ink); box-shadow: 0 3px 10px rgb(229 173 72 / .3), inset 0 1px 0 rgb(255 255 255 / .35); }
-body.mode-watch #tools button:not([data-tool="pan"]), body.mode-watch #tools .rail-sep, body.mode-watch #railPanel, body.mode-watch #panel,
+body.mode-watch #tools button:not([data-tool="pan"]):not([data-tool="info"]), body.mode-watch #tools .rail-sep, body.mode-watch #railPanel, body.mode-watch #panel,
 body.mode-watch #hudClock, body.mode-watch #hudWar, body.mode-watch #hudPockets, body.mode-watch #hudScore, body.mode-watch #hudWx, body.mode-watch #tglPush,
 body.mode-watch .hud .hgroup:has(#btnUndo), body.mode-watch #btnRec, body.mode-watch #genStrip, body.mode-watch #armyBar, body.mode-watch #objBox,
 body.mode-watch #sidePick, body.mode-watch #liveBar, body.mode-watch #geditor, body.mode-watch .status #hint { display: none !important; }
@@ -1182,6 +1194,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <button data-tool="cities" data-tip="Города · 9" aria-label="Города"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z"/></svg><kbd>9</kbd></button>
     <span class="rail-sep"></span>
     <button data-tool="region" data-tip="Область детализации · 0" aria-label="Область детализации" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3"/></svg><kbd>0</kbd></button>
+    <button data-tool="info" data-tip="Сведения об области · I" aria-label="Сведения об области" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><kbd>I</kbd></button>
     <button data-tool="pan" data-tip="Двигать карту · 6" aria-label="Двигать карту"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg><kbd>6</kbd></button>
   </div>
   <div class="rail-gap"></div>
@@ -1490,6 +1503,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 </aside>
 
 <main id="stage">
+  <div class="infocard" id="infoCard" hidden role="dialog" aria-label="Сведения об области"><button class="ifold" aria-label="Закрыть">×</button><b></b><small></small><div class="ibar" title="Сколько людей осталось от довоенного населения"><i></i></div><dl></dl></div>
   <canvas id="mapcv" aria-hidden="true"></canvas>
   <canvas id="view"></canvas>
   <canvas id="fx" aria-hidden="true"></canvas>
@@ -1749,6 +1763,7 @@ const HINTS = {
   fill: 'Щёлкните внутри области, обведённой кистью, — она зальётся цветом выбранной страны. Заливка останавливается только на нарисованных границах.',
   lasso: 'Зажмите кнопку мыши и обведите область. Всё внутри перейдёт стране, с чьей территории вы начали обводку.',
   pan: 'Перетаскивайте карту. Колёсико — масштаб.',
+  info: 'Наведите на область: она подсветится. Щелчок по области или городу покажет её население, потери мирных жителей, заводы и кто её держит.',
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
@@ -2863,10 +2878,11 @@ function renderGeoPanel() {
   if (!geoStore && regionMode) { regionMode = false; $('#regionMode').checked = false; }
   ['#geoRefine', '#geoBack', '#geoRegionBtn', '#geoOldHint'].forEach(id => { const el = $(id); if (el) el.hidden = !!geoStore; });
   $('#geoNewHint').hidden = !geoStore;
-  if (!geo) { const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = true; if (tool === 'region') setTool('warp'); return; }
+  if (!geo) { const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = true; const it = document.querySelector('#tools [data-tool="info"]'); if (it) it.hidden = true; if (tool === 'region' || tool === 'info') setTool(watchMode ? 'pan' : 'warp'); infoSel = null; renderInfoCard(); return; }
   $('#geoLayer').value = geoLayer; $('#geoLabels').checked = geoLabels; $('#geoBorders').checked = geoBorders;
   $('#geoBack').disabled = !geoStack.length;
   const rt = document.querySelector('#tools [data-tool="region"]'); if (rt) rt.hidden = !geo || geoStore;
+  const it = document.querySelector('#tools [data-tool="info"]'); if (it) it.hidden = !geoStore;
   $('#attrib').textContent = (GEO_LAYERS[geoLayer] || GEO_LAYERS.sat).attr + (geoLabels && GEO_LABELS && geoLayer !== 'vec' ? ' · подписи Esri' : '');
   const km = (geo.x1 - geo.x0) * 40075 * Math.cos(geoLatLon(W / 2, H / 2)[0] * Math.PI / 180);
   $('#geoInfo').textContent = 'Область ' + fmtMeters(km * 1000) + ' в ширину, одна клетка ≈ ' + fmtMeters(km * 1000 / W) + '. Уровней детализации: ' + geoStack.length + '.';
@@ -5689,6 +5705,8 @@ function drawUi() {
   const ctx = uctx;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawRegionHover(ctx);
+  if (W && !(watchMode && !game.econ)) drawScars(ctx);
+  drawInfoHover(ctx);
   drawEcon(ctx);
   drawPocketTags(ctx);
   drawSpawnGhost(ctx);
@@ -8776,7 +8794,7 @@ const frontById = id => fronts.find(f => f.id === id);
 // is a unit set on attacking, and able to
 const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <= 0;
 // the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
-function calendarTick() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) econDay(); renderHud(); } }
+function calendarTick() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { econDay(); popDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
 function battleTick() {
   if (!own) return;
   if (!units.length) { calendarTick(); return; }
@@ -10559,10 +10577,11 @@ function econImpact(k, kind, g, k2, quiet) {
     if (f.hp <= 0) fac = f;
   }
   if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
-  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '');
+  const civ = strikeCivilians(kind, g, S.radius); addScar(g, S.radius);
+  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
   logEvent(txt, k);
   if (!quiet || (player && fineOwner(g.x, g.y) === player && (kind === 'missile' || fac))) toast(txt);
-  renderEcon(); requestDraw();
+  renderEcon(); if (infoSel) renderInfoCard(); requestDraw();
 }
 // a scenario begins with the industry of its time: civil factories by the cities (more for the big ones), military
 // factories by the biggest, and for a country at war a factory of its strike weapon and of air defence by the capital
@@ -10734,6 +10753,162 @@ document.querySelectorAll('#panel [data-aid]').forEach(b => b.addEventListener('
 }));
 $('#hudMoney').addEventListener('click', () => { setPanel(true); showTab('econ'); renderEcon(); });
 document.querySelectorAll('#ecStrikes button').forEach(b => b.addEventListener('click', () => { const k = b.dataset.strike; econSetMode(econMode && econMode.type === k ? null : { kind: 'strike', type: k }); }));
+
+// ---------- civilians: the people of every region, killed by strikes and battles, growing in peace ----------
+// The population of a country today (millions, about 2024), spread over its regions: two fifths by area, three
+// fifths by its big cities (capitals count thrice); in another year scaled by the world's population then. An
+// estimate, not a census: what it shows is the order of the numbers, and what a war takes from them.
+const COUNTRY_POP = {"CHN":1410,"IND":1430,"USA":335,"IDN":278,"PAK":240,"NGA":224,"BRA":216,"BGD":173,"RUS":144,"MEX":129,"ETH":127,"JPN":124,"PHL":117,"EGY":113,"COD":102,"VNM":99,"IRN":89,"TUR":85,"DEU":84,"THA":72,"GBR":68,"TZA":67,"FRA":68,"ZAF":61,"ITA":59,"KEN":55,"MMR":54,"COL":52,"KOR":52,"SDN":48,"UGA":48,"ESP":48,"DZA":45,"IRQ":45,"ARG":46,"AFG":41,"POL":37,"CAN":40,"MAR":37,"UKR":37,"SAU":36,"AGO":36,"UZB":36,"PER":34,"MYS":34,"GHA":34,"MOZ":33,"YEM":34,"NPL":30,"VEN":28,"MDG":30,"CMR":28,"CIV":28,"PRK":26,"AUS":27,"NER":27,"TWN":23,"LKA":22,"BFA":23,"MLI":23,"ROU":19,"MWI":21,"CHL":19,"KAZ":20,"ZMB":20,"GTM":18,"ECU":18,"SYR":23,"NLD":18,"SEN":18,"KHM":17,"TCD":18,"SOM":18,"ZWE":16,"GIN":14,"RWA":14,"BEN":13,"BDI":13,"TUN":12,"BOL":12,"BEL":12,"HTI":12,"CUB":11,"SSD":11,"DOM":11,"CZE":11,"GRC":10,"JOR":11,"PRT":10,"AZE":10,"SWE":10,"HND":10,"ARE":10,"HUN":10,"TJK":10,"BLR":9,"AUT":9,"PNG":10,"SRB":7,"ISR":10,"CHE":9,"TGO":9,"SLE":8,"LAO":8,"PRY":7,"BGR":6,"LBY":7,"LBN":5,"NIC":7,"KGZ":7,"SLV":6,"TKM":6,"SGP":6,"DNK":6,"FIN":6,"COG":6,"SVK":5,"NOR":5,"OMN":5,"PSX":5,"CRI":5,"LBR":5,"IRL":5,"CAF":6,"NZL":5,"MRT":5,"PAN":4,"KWT":4,"HRV":4,"MDA":2.5,"GEO":3.7,"ERI":3.7,"URY":3.4,"BIH":3.2,"MNG":3.4,"ARM":2.8,"JAM":2.8,"QAT":2.7,"ALB":2.8,"LTU":2.8,"NAM":2.6,"GMB":2.7,"BWA":2.6,"GAB":2.4,"LSO":2.3,"MKD":1.8,"SVN":2.1,"GNB":2.1,"LVA":1.9,"BHR":1.5,"GNQ":1.7,"TTO":1.5,"EST":1.4,"TLS":1.4,"MUS":1.3,"CYP":1.3,"SWZ":1.2,"DJI":1.1,"FJI":.9,"BTN":.8,"GUY":.8,"SLB":.7,"MNE":.6,"LUX":.7,"SUR":.6,"KOS":1.8,"ISL":.4,"BLZ":.4,"BRN":.45,"SDS":11};
+const WORLD_POP = [[1800, .12], [1850, .15], [1900, .2], [1913, .22], [1940, .28], [1950, .31], [1960, .37], [1970, .45], [1980, .54], [1990, .65], [2000, .75], [2010, .85], [2025, 1]];
+let popModel = null;
+function popModelBuild() {
+  const R = decodeRegions(), area = new Map(), byCode = new Map();
+  // the area of a region in km²: the polygon's area in the map's units, at the scale of its latitude
+  for (const f of R.a1) {
+    let a = 0;
+    for (const p of f.parts) for (const r of p.rings) { let s = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) s += (r[j] - r[i]) * (r[j + 1] + r[i + 1]); const lat = latAtY((p.box[1] + p.box[3]) / 2); a += Math.abs(s / 2) * Math.pow(40075 * Math.cos(lat * Math.PI / 180), 2); }
+    area.set(f, a);
+    if (!byCode.has(f.code)) byCode.set(f.code, []);
+    byCode.get(f.code).push(f);
+  }
+  // big cities: which region each one is in
+  const cw = new Map();
+  for (const c of MODERN.cities) {
+    const mx = lonToX(c[2]), my = latToY(c[1]);
+    for (const f of R.a1) { if (!f.parts.some(p => mx >= p.box[0] && mx <= p.box[2] && my >= p.box[1] && my <= p.box[3] && inRings(p.rings, mx, my))) continue; cw.set(f, (cw.get(f) || 0) + (c[4] ? 3 : 1) * Math.max(1, c[3] || 1)); break; }
+  }
+  const base = new Map();
+  for (const [code, fs] of byCode) {
+    const total = (COUNTRY_POP[code] || 0) * 1e6 || fs.reduce((t, f) => t + area.get(f), 0) * 30;   // unknown: 30 per km²
+    const A = fs.reduce((t, f) => t + area.get(f), 0) || 1, C = fs.reduce((t, f) => t + (cw.get(f) || 0), 0);
+    for (const f of fs) base.set(f, total * (C ? .4 * area.get(f) / A + .6 * (cw.get(f) || 0) / C : area.get(f) / A));
+  }
+  popModel = { area, base };
+}
+const regionKey = f => f.code + ':' + f.name;
+function regionOfPoint(mx, my) {
+  const R = decodeRegions(); mx -= Math.floor(mx);
+  for (const f of R.a1) for (const p of f.parts) { const b = p.box; if (mx < b[0] || mx > b[2] || my < b[1] || my > b[3]) continue; if (inRings(p.rings, mx, my)) return f; }
+  return null;
+}
+// a region now: its people at the start (for the year of the war), grown since, less the dead
+function regionPop(f) {
+  if (!popModel) popModelBuild();
+  const st = (econ.pop || {})[regionKey(f)] || {};
+  const start = popModel.base.get(f) * eraLerp(WORLD_POP, econYear() - Math.floor((econ.day || 0) / 365));
+  const now = Math.max(0, start * (1 + .00003 * (econ.day || 0)) - (st.dead || 0) - (st.fled || 0));
+  return { start, now, dead: st.dead || 0, fled: st.fled || 0, strikes: st.strikes || 0, area: popModel.area.get(f) };
+}
+function popHit(f, dead, strike) {
+  const p = econ.pop || (econ.pop = {}), k = regionKey(f), st = p[k] || (p[k] = {});
+  st.dead = (st.dead || 0) + dead; if (strike) st.strikes = (st.strikes || 0) + 1;
+}
+// a strike on civilians: as many as live in the blast's area times its lethality
+const LETHAL = { missile: .004, bomber: .003, drone: .0008 };
+function strikeCivilians(kind, g, Rkm) {
+  if (!geoStore) return 0;
+  const w = toWorld(g.x, g.y), f = regionOfPoint(w.mx, w.my); if (!f) return 0;
+  // a city under the blast: its people live many times closer together than the region's average
+  const kmc = geo ? metersPerCell() / 1000 : 1, city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) * kmc < Rkm * 1.5 + 5);
+  const P = regionPop(f), dens = P.now / Math.max(1, P.area) * (city ? 4 + Math.min(city.vp || 1, 25) / 2 : 1), there = dens * Math.PI * Rkm * Rkm;
+  const dead = Math.min(P.now, Math.round(there * LETHAL[kind] * (.5 + Math.random())));
+  popHit(f, dead, true);
+  // and many more leave their homes
+  const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .02, there * (kind === 'drone' ? .02 : .08));
+  return dead;
+}
+// a day of war: the people of the regions where battles are fought die and flee a little
+function popDay() {
+  if (!geoStore || !battlesOn) return;
+  const seen = new Map(), fighting = units.filter(u => u.fighting || inBattle.has(u));
+  for (let i = 0; i < Math.min(40, fighting.length); i++) {
+    const u = fighting[Math.floor(Math.random() * fighting.length)], w = toWorld(u.x, u.y), f = regionOfPoint(w.mx, w.my);
+    if (f) seen.set(f, (seen.get(f) || 0) + fighting.length / Math.min(40, fighting.length));
+  }
+  for (const [f, n] of seen) {
+    const P = regionPop(f), k = regionKey(f), p = econ.pop || (econ.pop = {}), st = p[k] || (p[k] = {});
+    st.dead = (st.dead || 0) + Math.min(P.now * .001, P.now / Math.max(1, P.area) * .3 * n);
+    st.fled = (st.fled || 0) + P.now * Math.min(.002, .0002 * n);
+  }
+}
+// scars of the strikes: the land darkened in the shade of the country it belongs to, fading over four months to a
+// quarter (econ.scars: world place, radius in km, owner, date)
+function addScar(g, Rkm) {
+  const w = toWorld(g.x, g.y), o = fineOwner(g.x, g.y);
+  (econ.scars || (econ.scars = [])).push({ mx: w.mx, my: w.my, r: Rkm, o, t: gameDate });
+  if (econ.scars.length > 500) econ.scars.splice(0, econ.scars.length - 500);
+}
+function drawScars(c) {
+  if (!econ.scars || !econ.scars.length) return;
+  const vw = uiCv.width / dpr, vh = uiCv.height / dpr, kmPx = geo ? 1000 / metersPerCell() * view.s : view.s;
+  for (const sc of econ.scars) {
+    const g = fromWorld(sc), x = g.x * view.s + view.x, y = g.y * view.s + view.y, r = Math.max(4, sc.r * kmPx * 1.4);
+    if (x < -r || y < -r || x > vw + r || y > vh + r) continue;
+    const age = (gameDate - sc.t) / 864e5, a = Math.max(.25, 1 - age / 120) * .62;
+    const col = rgb[sc.o] || [60, 60, 60], d = col.map(v => v * .28 | 0);
+    const gr = c.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${d[0]},${d[1]},${d[2]},${a})`); gr.addColorStop(.55, `rgba(${d[0]},${d[1]},${d[2]},${a * .75})`); gr.addColorStop(1, `rgba(${d[0]},${d[1]},${d[2]},0)`);
+    c.fillStyle = gr; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+  }
+}
+const fmtPeople = v => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 1 : 2).replace('.', ',') + ' млн' : v >= 1e3 ? Math.round(v / 1e3) + ' тыс.' : String(Math.round(v));
+// ---------- «Сведения»: a region or a city under the cursor, its people and what the war did to it ----------
+let infoHover = null, infoSel = null;
+function infoHoverUpdate() {
+  if (tool !== 'info' || !geoStore || !hover || drag) { if (infoHover) { infoHover = null; requestUi(); } return; }
+  const [mx, my] = gridToMerc(hover), f = regionOfPoint(mx, my);
+  if (f !== infoHover) { infoHover = f; requestUi(); $('#hint').textContent = f ? regionTitle1(f) + ' — щелчок покажет сведения.' : ''; }
+}
+const regionTitle1 = f => { const c = REG.cn[f.code]; return f.name + (c && c !== f.name ? ', ' + c : ''); };
+function drawInfoHover(c) {
+  for (const [f, strong] of [[infoSel && infoSel.f, true], [infoHover, false]]) {
+    if (!f || !geoStore || !win || (!strong && f === (infoSel && infoSel.f))) continue;
+    const n = worldCells(win.L), p = new Path2D();
+    for (const part of f.parts) for (const r of part.rings) { for (let k = 0; k < r.length; k += 2) { const sx = (r[k] * n - win.cx0) * view.s + view.x, sy = (r[k + 1] * n - win.cy0) * view.s + view.y; k ? p.lineTo(sx, sy) : p.moveTo(sx, sy); } p.closePath(); }
+    c.fillStyle = strong ? 'rgba(229,173,72,.14)' : 'rgba(255,255,255,.08)'; c.fill(p, 'evenodd');
+    c.lineWidth = strong ? 2.6 : 1.6; c.strokeStyle = strong ? 'rgba(229,173,72,.95)' : 'rgba(255,255,255,.75)'; c.stroke(p);
+  }
+}
+function infoClick(g) {
+  if (!geoStore) { toast('Сведения об областях есть на карте Земли.'); return; }
+  const r = 14 / view.s;
+  const city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) < Math.max(r, cityR(c) * 2));
+  const [mx, my] = city ? gridToMerc(city) : gridToMerc(g), f = regionOfPoint(mx, my);
+  infoSel = f || city ? { f, city, g: city ? { x: city.x, y: city.y } : g } : null;
+  renderInfoCard(); requestUi();
+}
+function renderInfoCard() {
+  const box = $('#infoCard');
+  if (!infoSel) { box.hidden = true; return; }
+  const { f, city, g } = infoSel, owner = fineOwner(g.x, g.y), rows = [];
+  box.hidden = false;
+  const P = f ? regionPop(f) : null;
+  let title = city ? city.name : f ? f.name : '', sub = f ? (city ? f.name + ', ' : '') + (REG.cn[f.code] || '') : '';
+  if (P) {
+    rows.push(['Население сейчас', fmtPeople(P.now)], ['До войны', fmtPeople(P.start)]);
+    if (P.dead > 0) rows.push(['Погибло мирных жителей', fmtPeople(P.dead), 'bad']);
+    if (P.fled > 0) rows.push(['Бежало', fmtPeople(P.fled), 'warn']);
+    if (P.strikes) rows.push(['Ударов по области', String(P.strikes), 'bad']);
+    rows.push(['Площадь', Math.round(P.area).toLocaleString('ru-RU') + ' км²'], ['Плотность', Math.round(P.now / Math.max(1, P.area)) + ' чел./км²']);
+  }
+  if (city) {
+    const ps = f ? cities.filter(c => { const [x, y] = gridToMerc(c); return f.parts.some(p => inRings(p.rings, x - Math.floor(x), y)); }) : [city];
+    const tot = ps.reduce((t, c) => t + (c.vp || 1), 0) || 1;
+    if (P) rows.unshift(['Жителей в городе (оценка)', fmtPeople(P.now * .55 * (city.vp || 1) / tot)]);
+    rows.unshift(['Победные очки', String(city.vp || 1)], ['Держит', ownerName(cityOwner(city))]);
+  } else rows.unshift(['Держит здесь', ownerName(owner)]);
+  if (f) {
+    const cs = cities.filter(c => { const [x, y] = gridToMerc(c); return f.parts.some(p => inRings(p.rings, x - Math.floor(x), y)); });
+    if (cs.length && !city) rows.push(['Города', cs.map(c => c.name).join(', ')]);
+    const fs = econ.facs.filter(x => f.parts.some(p => inRings(p.rings, x.mx - Math.floor(x.mx), x.my)));
+    if (fs.length) rows.push(['Заводы', fs.map(x => factName(x.type) + ' (' + ownerName(x.owner) + ')').join(', ')]);
+  }
+  box.querySelector('b').textContent = title; box.querySelector('small').textContent = sub;
+  const dl = box.querySelector('dl'); dl.textContent = '';
+  for (const [k, v, cls] of rows) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; if (cls) dd.className = cls; dl.append(dt, dd); }
+  const bar = box.querySelector('.ibar');
+  bar.hidden = !P; if (P) bar.style.setProperty('--p', Math.round(100 * P.now / Math.max(1, P.start)) + '%');
+}
 
 // --- fog of war ---
 let visCache = null;
@@ -11180,7 +11355,8 @@ function drawSpawnGhost(c) {
   c.restore();
 }
 function setTool(t) {
-  if (watchMode && t !== 'pan') return;
+  if (watchMode && t !== 'pan' && t !== 'info') return;
+  if (t !== 'info' && infoHover) { infoHover = null; requestUi(); }
   tool = t;
   renderLiveBar();
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -11248,6 +11424,7 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   if (e.button !== 0) return;
+  if (tool === 'info') { pointers.delete(e.pointerId); infoClick(toGrid(p)); return; }
   const g = toGrid(p);
   const gx = Math.floor(g.x), gy = Math.floor(g.y);
   const inside = gx >= 0 && gy >= 0 && gx < W && gy < H;
@@ -11372,7 +11549,7 @@ cv.addEventListener('pointermove', e => {
   updWhere();
   if (!drag) {
     if (tool === 'units' && hover && !spaceDown) { const cur = hitUnit(hover) ? (lineMode() ? 'pointer' : 'move') : unitMode === 'move' ? (hitFront(hover) ? 'pointer' : 'default') : lineMode() ? (hitFront(hover) ? 'pointer' : 'crosshair') : 'copy'; if (cv.style.cursor !== cur) cv.style.cursor = cur; }
-    updateRegionHover();
+    updateRegionHover(); infoHoverUpdate();
     requestUi(); return;
   }
   if (drag.mode === 'pinch') {
@@ -11419,7 +11596,7 @@ cv.addEventListener('pointermove', e => {
     if (Math.hypot(g.x - l.x, g.y - l.y) * view.s >= 3) { drag.pts.push(g); requestUi(); }
   }
 });
-const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' ? (unitMode === 'move' ? 'default' : lineMode() ? 'crosshair' : 'copy') : tool === 'cities' ? 'copy' : 'crosshair';
+const toolCursor = () => tool === 'pan' ? 'grab' : tool === 'fill' ? 'cell' : tool === 'lasso' ? 'alias' : tool === 'units' ? (unitMode === 'move' ? 'default' : lineMode() ? 'crosshair' : 'copy') : tool === 'cities' ? 'copy' : tool === 'info' ? 'help' : 'crosshair';
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!drag) return;
@@ -11566,8 +11743,9 @@ window.addEventListener('keydown', e => {
   if (tool === 'units' && e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const mine = units.filter(u => u.owner === active); setSel(mine); toast('Выбраны все отряды: ' + (countries[active - 1] || {}).name + ' (' + mine.length + ')'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
-  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities', Digit0: 'region' };
+  const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities', Digit0: 'region', KeyI: 'info' };
   if (tools[e.code] === 'region' && !geo) return;
+  if (tools[e.code] === 'info' && !geoStore) return;
   if (tools[e.code]) { if ((tools[e.code] === 'arrows' && !game.arrows) || (tools[e.code] === 'cities' && !game.cities)) return; setTool(tools[e.code]); return; }
   if (tool === 'arrows' && selArrow && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); pushHist(); arrows = arrows.filter(a => a !== selArrow); selArrow = null; renderArrowPanel(); updUndo(); scheduleSave(); requestDraw(); return; }
   if (tool === 'cities' && selCity && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteCity(); return; }
@@ -12163,7 +12341,7 @@ const phone = () => matchMedia('(max-width: 760px)').matches;
 setPanel(!phone() && LS.get('mezha-panel', '1') === '1');
 if (phone()) { const st = $('#genStrip'); if (st && !st.classList.contains('folded')) $('#genFold').click(); }
 
-const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Войска', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', pan: 'Двигать карту' };
+const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Войска', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', info: 'Сведения', pan: 'Двигать карту' };
 function renderToolHead(t) {
   $('#toolName').textContent = TOOL_NAMES[t] || '';
   $('#toolDesc').textContent = HINTS[t] || '';
@@ -12381,7 +12559,7 @@ $('#fileProj').addEventListener('change', () => closeMenu());
 document.querySelectorAll('#menu [data-back]').forEach(b => b.addEventListener('click', () => showScreen(null)));
 // sandbox
 function freshWorld() {
-  econ = econBlank(); econMode = null;
+  econ = econBlank(); econMode = null; infoSel = infoHover = null; renderInfoCard();
   setBattles(false);
   units = []; forms = []; cities = []; arrows = []; generals = []; gameLog = []; selUnit = null; selUnits = []; selGen = null; fronts = []; selFront = null;
   countries = []; exclaves = []; wars = [];
@@ -12797,7 +12975,7 @@ async function startScenario(id, pl, mode) {
   playStop(); setBattles(false);
   if (!watch) { const w0 = WARS.find(x => x.id === id), y = w0 ? +w0.date.slice(0, 4) : 0, gi = ERA_GROUPS.findIndex(([a, b]) => y >= a && y < b); if (w0 && !w0.peace && gi >= 0) achCount('eras', gi, ERA_GROUPS.length, 'ACH_ALL_ERAS'); }
   if (!watch && watchMode) setMode(false);
-  econ = econBlank(); econMode = null;
+  econ = econBlank(); econMode = null; infoSel = infoHover = null; renderInfoCard();
   try {
     $('#warSel').value = id; renderWarPanel();
     await applyWar(id);
@@ -13174,6 +13352,7 @@ $('#geoLabels').addEventListener('change', e => { geoLabels = e.target.checked; 
 $('#geoBorders').addEventListener('change', e => { geoBorders = e.target.checked; renderGeoPanel(); requestDraw(); scheduleSave(); });
 $('#regionMode').addEventListener('change', e => setRegionMode(e.target.checked));
 $('#tglRegion').addEventListener('click', () => setRegionMode(!regionMode));
+$('#infoCard .ifold').addEventListener('click', () => { infoSel = null; renderInfoCard(); requestUi(); });
 $('#regionLevel').addEventListener('change', e => { regionLevel = e.target.value; hoverRegion = null; updateRegionHover(); requestUi(); scheduleSave(); });
 function setRingMode(m) {
   ringMode = m; $('#ringMode').value = m; requestUi(); scheduleSave();
