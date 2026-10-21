@@ -1131,6 +1131,34 @@ body.mp-guest #tools button:not([data-tool="pan"]):not([data-tool="units"]):not(
 .mpchat { max-height: 150px; min-height: 40px; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 10px; background: rgb(0 0 0 / .22); }
 .mpchat p { margin: 0; line-height: 1.35; } .mpchat p.sys { color: var(--muted); font-style: italic; }
 @media (max-width: 640px) { .mpbox { top: 64px; left: 16px; right: 16px; width: auto; } }
+/* --- «Статистика» --- */
+body.mode-watch #btnStats { display: none !important; }
+.statbox { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 238; width: 920px; max-width: calc(100vw - 32px); max-height: calc(100vh - 100px); display: flex; flex-direction: column; border-radius: 18px; background: var(--glass); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--line2); box-shadow: 0 20px 60px rgb(0 0 0 / .55); color: var(--ink); }
+.statbox[hidden] { display: none; }
+.statbox header { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.statbox header > div { flex: 1; min-width: 0; }
+.statbox header b { display: block; font-size: 17px; }
+.statbox header small { color: var(--muted); font-size: 12px; }
+.statbox header select { max-width: 220px; }
+.statbox header button { width: 30px; height: 30px; padding: 0; border-radius: 9px; font-size: 17px; }
+.stbody { overflow: auto; padding: 14px 16px 16px; }
+.stgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.stcard { border: 1px solid var(--line); border-radius: 13px; padding: 10px 12px; background: rgb(255 255 255 / .025); }
+.stcard h5 { margin: 0 0 8px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.stcard dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin: 0; font-size: 12.5px; }
+.stcard dt { color: var(--muted); }
+.stcard dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.stcard dd.bad { color: #e0705c; } .stcard dd.good { color: #8fd6a8; }
+.stbody h4 { margin: 18px 0 8px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.sttable { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.sttable table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.sttable th, .sttable td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.sttable th:first-child, .sttable td:first-child { text-align: left; }
+.sttable th { color: var(--muted); font-weight: 600; font-size: 11px; position: sticky; top: 0; background: var(--panel); }
+.sttable tr[data-k] { cursor: pointer; } .sttable tr[data-k]:hover td { background: rgb(255 255 255 / .04); }
+.sttable tr.on td { background: rgb(229 173 72 / .1); }
+.sttable td i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+.stnote { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
@@ -1498,7 +1526,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       </section>
       <section><h2>Удары</h2>
         <div class="row ecstrikes" id="ecStrikes"><button data-strike="drone">Удар дронами · 10 шт.</button><button data-strike="bomber">Бомбардировка · 3 самолёта</button><button data-strike="missile">Ракетный удар</button></div>
-        <p class="hint">Дроны летят до 400 км от ваших войск или заводов дронов, бомбардировщики — до 800 км от авиазаводов, ракеты — до 2500 км от ракетных заводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
+        <p class="hint">Заводы делают оружие, а запускают его отдельные постройки. Дроны взлетают с пунктов дроноводов (их ставят не дальше 60 км от фронта) и летят до 400 км. Ракеты стартуют с пусковых установок — в тылу или у фронта — и летят до 2500 км. Бомбардировщики летят до 800 км от авиазаводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
       </section>
       <section><h2>Помощь</h2>
         <div class="ecaid"><select id="ecAidTo" aria-label="Кому помочь"></select>
@@ -1601,6 +1629,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="hbtn" id="btnStats" title="Статистика войны: производство, потери, удары (J)" aria-label="Статистика"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></svg></button>
     <button class="hbtn" id="hudNet" title="Сеть: игроки, приглашения, чат" aria-label="Сеть"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.8-3.4 3-5 5.5-5s4.7 1.6 5.5 5M14 14.6c.9-.4 1.9-.6 3-.6 2.2 0 4 1.4 4.6 4.5"/></svg></button>
     <button class="hbtn" id="btnCmd" title="Поиск: войны, этапы, города, места и команды (Ctrl+K)" aria-label="Поиск"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
     <div class="hgroup hmode" id="hudMode" hidden role="group" aria-label="Режим"><button id="hudModeW" title="Смотреть войну по этапам, без войск">Смотреть</button><button id="hudModeP" title="Своя игра: войска, время, бои">Играть</button></div>
@@ -1720,6 +1749,8 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <label>Ответ гостя<textarea id="mpAnsIn" rows="3" placeholder="MEZHA-ANS-…"></textarea></label><button class="primary" data-mp="accept">Подключить</button></div></div>
   <div id="mpPickBox" hidden><label>Ваша страна<select id="mpPick"></select></label><button class="primary" data-mp="pick">Играть за неё</button></div>
   <div class="mpchat" id="mpChat"></div><input id="mpSay" placeholder="Сообщение… Enter — отправить" maxlength="300"></div></div>
+<div class="statbox" id="statBox" hidden role="dialog" aria-label="Статистика войны"><header><div><b>Статистика войны</b><small id="stPeriod"></small></div><select id="stWho" aria-label="Страна"></select><button data-st="close" aria-label="Закрыть">×</button></header>
+  <div class="stbody"><div class="stgrid" id="stGrid"></div><h4>Сравнение стран</h4><div class="sttable"><table id="stTable"></table></div><p class="stnote">Считается с начала партии. Щелчок по строке таблицы открывает страну.</p></div></div>
 <div class="menu" id="menu" hidden>
   <canvas id="menuBg" aria-hidden="true"></canvas>
   <div class="menu-shade"></div>
@@ -6871,6 +6902,41 @@ function fxBoom(v) {
   s.connect(f); f.connect(g); g.connect(ac.destination);
   s.start(t, Math.random() * 1.2, len + .05);
 }
+// strikes: the drone's moped buzz, the roar and hiss of a missile going up, the blast where they come down; heard
+// for one's own strikes and for those that come down on one's own land or on screen, and not too many at once
+let strikeSndT = 0;
+function strikeSound(kind, k, g, what) {
+  if (!fxSound || document.hidden) return;
+  const onScreen = (() => { const x = g.x * view.s + view.x, y = g.y * view.s + view.y; return x > -40 && y > -40 && x < innerWidth + 40 && y < innerHeight + 40; })();
+  const mine = !!player && (k === player || fineOwner(g.x, g.y) === player);
+  if (!mine && !onScreen) return;
+  const now = performance.now(); if (now - strikeSndT < (what === 'hit' ? 120 : 250)) return; strikeSndT = now;
+  const ac = fxAudio(); if (!ac) return;
+  if (ac.state === 'suspended') ac.resume();
+  const t = ac.currentTime, vol = mine ? 1 : .55, out = ac.createGain(); out.gain.value = vol; out.connect(ac.destination);
+  if (what === 'hit') { fxBoom(kind === 'missile' ? 1.6 : kind === 'bomber' ? 1.2 : .7); if (kind === 'missile') setTimeout(() => fxBoom(.8), 140); return; }
+  if (kind === 'drone') {
+    // a few two-stroke engines, a little out of tune with each other, passing by
+    for (let i = 0; i < 3; i++) {
+      const o = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain(), f = ac.createBiquadFilter(), gn = ac.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(118 + i * 9, t); o.frequency.linearRampToValueAtTime(96 + i * 7, t + 2.2);
+      lfo.frequency.value = 26 + i * 3; lg.gain.value = 9; lfo.connect(lg); lg.connect(o.frequency);
+      f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.4;
+      gn.gain.setValueAtTime(0, t + i * .12); gn.gain.linearRampToValueAtTime(.05, t + i * .12 + .35); gn.gain.setValueAtTime(.05, t + 1.4); gn.gain.exponentialRampToValueAtTime(.0005, t + 2.3);
+      o.connect(f); f.connect(gn); gn.connect(out); o.start(t + i * .12); lfo.start(t + i * .12); o.stop(t + 2.4); lfo.stop(t + 2.4);
+    }
+    return;
+  }
+  // a missile or the engines of bombers: the roar of the start, a hiss that climbs and fades
+  const s = ac.createBufferSource(); s.buffer = fxNoise; s.playbackRate.value = 1.4;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = .8;
+  const gn = ac.createGain(), len = kind === 'missile' ? 1.6 : 1.4;
+  f.frequency.setValueAtTime(kind === 'missile' ? 380 : 220, t); f.frequency.exponentialRampToValueAtTime(kind === 'missile' ? 2600 : 600, t + len * .8);
+  gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(kind === 'missile' ? .55 : .3, t + .06); gn.gain.exponentialRampToValueAtTime(.001, t + len);
+  s.connect(f); f.connect(gn); gn.connect(out); s.start(t, Math.random(), len + .1);
+  const r = ac.createBufferSource(); r.buffer = fxNoise; const rf = ac.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 120; const rg = ac.createGain();
+  rg.gain.setValueAtTime(.5, t); rg.gain.exponentialRampToValueAtTime(.001, t + .9); r.connect(rf); rf.connect(rg); rg.connect(out); r.start(t, Math.random(), 1);
+}
 function fxRumble(v) {
   if (!fxSound) v = 0;
   if (!fxRum) { if (!v) return; const ac = fxAudio(); if (!ac) return;
@@ -8136,14 +8202,14 @@ const unitCost = u => roleOf(u).cost * eraPrice() * (ECH_EQ[u.ech || ''] || 1);
 const paidDeploy = () => game.econ && game.paid && !watchMode && W > 0;
 function payFor(k, list) {
   if (mp && mp.live && mp.rules && mp.rules.cap && isHuman(k)) { const n = units.filter(u => u.owner === k).length + list.filter(u => !units.includes(u)).length; if (n > mp.rules.cap) { if (k === player) toast('Предел войск в сетевой игре: ' + mp.rules.cap + ' отрядов на игрока.'); return false; } }
-  if (!paidDeploy() || !list.length || !countries[k - 1]) return true;
+  if (!paidDeploy() || !list.length || !countries[k - 1]) { if (list.length && W && !watchMode) stAdd(k, 'deployed', list.length); return true; }
   const need = { inf: 0, art: 0, tank: 0, air: 0 }; let sum = 0;
   for (const u of list) { const R = roleOf(u); sum += unitCost(u); need[R.eq] += ECH_EQ[u.ech || ''] || 1; }
   const st = stock(k), miss = [];
   if (money(k) < sum) miss.push(fmtMoney(sum - money(k)));
   for (const q in need) if (need[q] > (st.eq[q] || 0) + 1e-9) miss.push(EQ_NAMES[q] + ' ' + fmtNum(need[q] - (st.eq[q] || 0)));
   if (miss.length) { if (k === player) toast('Не хватает на ' + list.length + ' ' + plural(list.length, 'отряд', 'отряда', 'отрядов') + ': ' + miss.join(', ') + '. Снаряжение делают военные заводы (вкладка «Экономика»).'); return false; }
-  econ.money[k] -= sum;
+  econ.money[k] -= sum; stAdd(k, 'deployed', list.length); stAdd(k, 'armySpent', sum);
   for (const q in need) st.eq[q] -= need[q];
   if (k === player) toast('Размещено за ' + fmtMoney(sum) + ' и ' + Object.entries(need).filter(([, v]) => v).map(([q, v]) => fmtNum(v) + ' компл. (' + EQ_NAMES[q] + ')').join(', ') + '.');
   renderEcon(true);
@@ -9198,6 +9264,7 @@ function checkCities(silent) {
     const o = cityOwner(c);
     if (c.lastOwner !== undefined && o !== c.lastOwner && o && !silent) {
       logEvent(ownerName(o) + ' берёт ' + (c.capital ? 'столицу ' : 'город ') + c.name + (c.lastOwner ? ' у страны ' + ownerName(c.lastOwner) : ''), o);
+      stAdd(o, 'citiesTaken'); stAdd(c.lastOwner, 'citiesLost');
       if (c.capital || c.vp >= 5) toast(ownerName(o) + ' берёт ' + c.name + '!');
       if (player && allied(o, player)) { ach('ACH_CITY'); if (c.capital) ach('ACH_CAPITAL'); }
     }
@@ -10310,8 +10377,15 @@ let aiClock = 0;
 // Divisions of a line lost in a pocket or a battle are counted on the line; while it is short of them, a new division
 // comes every day of play from deep behind the line to the stretch of it that stands emptiest, so a front
 // broken by a pocket is held thinly at first and is as strong as before after some days.
-function noteLosses(list) {
-  for (const u of list) { const f = u.fl && frontById(u.fl); if (f) f.lost = (f.lost || 0) + 1; }
+function noteLosses(list, by) {
+  for (const u of list) {
+    const f = u.fl && frontById(u.fl); if (f) f.lost = (f.lost || 0) + 1;
+    stAdd(u.owner, 'lost');
+    // who destroyed it: the striker, else the nearest enemy
+    let k = by || 0;
+    if (!k) { let bd = Infinity; forNear(u, bodyS(u) * 6, v => { if (v !== u && atWar(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; k = v.owner; } } }); }
+    stAdd(k, 'kills');
+  }
 }
 function reinforceTick(h) {
   for (const f of fronts) {
@@ -10533,8 +10607,10 @@ const eraPrice = () => eraLerp(ERA_PRICE, econYear()), eraScale = () => eraPrice
 const FACT = {
   civil: { name: 'Гражданский завод', cost: 2e9, days: 30, income: 15e6, from: 0 },
   drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, from: 2000, info: '4 дрона в день' },
+  dronepost: { name: 'Пункт дроноводов', cost: 6e7, days: 4, upkeep: .4e6, from: 2000, front: 60, info: 'запускает дроны · не дальше 60 км от фронта' },
   bomber: { name: 'Авиазавод', cost: 1.2e9, days: 40, upkeep: 2e6, make: 'bomber', n: 1, every: 3, from: 1915, to: 1999, info: 'бомбардировщик раз в 3 дня' },
   missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 2, from: 1950, info: 'ракета раз в 2 дня' },
+  launcher: { name: 'Пусковая установка', cost: 4e8, days: 12, upkeep: 1e6, from: 1950, info: 'запускает ракеты · в тылу или у фронта' },
   armor: { name: 'Военный завод', cost: 8e8, days: 30, upkeep: 3e6, make: 'eq', n: 1, every: 1, from: 0, info: 'снаряжение для войск' },
   aa: { name: 'Завод ПВО', cost: 6e8, days: 20, upkeep: 1e6, make: 'aa', n: 1, every: 1, from: 1915, info: 'ракета ПВО в день' }
 };
@@ -10555,11 +10631,18 @@ function factInfo(t) {
 }
 // strikes: what one costs from the stock, how far it reaches from its launch site, how wide it hits
 const STRIKE = {
-  drone: { name: 'Удар дронами', need: 10, range: 400, radius: 6, from: 'drone' },
-  bomber: { name: 'Бомбардировка', need: 3, range: 800, radius: 10, from: 'bomber' },
-  missile: { name: 'Ракетный удар', need: 1, range: 2500, radius: 14, from: 'missile' }
+  drone: { name: 'Удар дронами', need: 10, range: 400, radius: 6, from: 'dronepost', fly: 2200 },
+  bomber: { name: 'Бомбардировка', need: 3, range: 800, radius: 10, from: 'bomber', fly: 1600 },
+  missile: { name: 'Ракетный удар', need: 1, range: 2500, radius: 14, from: 'launcher', fly: 1500 }
 };
-const econBlank = () => ({ money: {}, base: {}, stock: {}, facs: [], seq: 1, last: {} });
+const econBlank = () => ({ money: {}, base: {}, stock: {}, facs: [], seq: 1, last: {}, stats: {} });
+// the war in numbers, for every country: what it made, put in the field and lost, its strikes, its people, its money
+function stAdd(k, key, v = 1) {
+  if (!k || k === 255 || !countries[k - 1] || !v) return;
+  const S = econ.stats || (econ.stats = {}), r = S[k] || (S[k] = {});
+  r[key] = (r[key] || 0) + v;
+  if (econ.statT0 === undefined) econ.statT0 = gameDate;
+}
 let econ = econBlank(), econMode = null, econFx = [];
 const econOn = () => game.econ && !watchMode && W > 0;
 function fmtMoney(v) {
@@ -10612,12 +10695,30 @@ function nearestCityName(w) {
   for (const c of cities) { const d = econKm(w, toWorld(c.x, c.y)); if (d < bd) { bd = d; best = c; } }
   return best && bd < 250 ? best.name : '';
 }
+// whether land of an enemy at war lies within km of a place: rings of points around it, near to far
+function nearFront(k, g, km) {
+  const R = geo ? km * 1000 / metersPerCell() : km;
+  for (const f of [.12, .3, .5, .7, .85, 1]) for (let a = 0; a < 40; a++) {
+    const x = g.x + Math.cos(a / 40 * Math.PI * 2) * R * f, y = g.y + Math.sin(a / 40 * Math.PI * 2) * R * f;
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const o = cellOwner(x, y); if (o && o !== k && o !== 255 && atWar(k, o)) return true;
+  }
+  return false;
+}
+// a place for a post by the front: by one of the country's units facing the enemy, else a cell of its land near it
+function frontSpot(k, km) {
+  const mine = units.filter(u => u.owner === k);
+  for (let i = 0; i < 40 && mine.length; i++) { const u = mine[Math.floor(Math.random() * mine.length)]; if (fineOwner(u.x, u.y) === k && nearFront(k, u, km * .7)) return { x: u.x + (Math.random() - .5) * unitCellsAt(u.y), y: u.y + (Math.random() - .5) * unitCellsAt(u.y) }; }
+  for (let i = 0; i < 300; i++) { const g = { x: Math.random() * W, y: Math.random() * H }; if (cellOwner(g.x, g.y) === k && nearFront(k, g, km * .7)) return g; }
+  return null;
+}
 function econBuild(k, type, g, quiet) {
   if (mpGuest() && !mpApplying) return mpGuestCmd(Object.assign({ t: 'build', type }, toWorld(g.x, g.y)));
   const w = toWorld(g.x, g.y), cost = priceOf(k, type);
   if (ownerAtWorld(w.mx, w.my) !== k) { if (!quiet) toast('Строить можно только на своей земле.'); return false; }
+  if (FACT[type].front && !nearFront(k, g, FACT[type].front)) { if (!quiet) toast(factName(type) + ' ставят не дальше ' + FACT[type].front + ' км от фронта: дроноводы должны видеть цели.'); return false; }
   if (money(k) < cost) { if (!quiet) toast('Не хватает денег: нужно ' + fmtMoney(cost) + ', в казне ' + fmtMoney(money(k)) + '.'); return false; }
-  econ.money[k] -= cost; if (k === player && !quiet) tutorNote('build');
+  econ.money[k] -= cost; if (k === player && !quiet) tutorNote('build'); stAdd(k, 'buildSpent', cost); stAdd(k, 'facStarted');
   const f = { id: econ.seq++, type, owner: k, mx: w.mx, my: w.my, left: FACT[type].days, hp: 100, t: 0, city: nearestCityName(w) };
   econ.facs.push(f);
   if (!quiet) toast(factName(type) + ' заложен' + (f.city ? ' у города ' + f.city : '') + ': ' + fmtMoney(cost) + ', строится ' + FACT[type].days + ' ' + plural(FACT[type].days, 'день', 'дня', 'дней') + '.');
@@ -10662,7 +10763,7 @@ function econDay() {
   // factories on land the enemy took pass to it
   for (const f of econ.facs) {
     const o = ownerAtWorld(f.mx, f.my);
-    if (o && o !== f.owner && o !== 255 && atWar(o, f.owner)) { logEvent(ownerName(o) + ' захватывает ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : '') + ' (' + ownerName(f.owner) + ')', o); f.owner = o; ks.add(o); }
+    if (o && o !== f.owner && o !== 255 && atWar(o, f.owner)) { logEvent(ownerName(o) + ' захватывает ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : '') + ' (' + ownerName(f.owner) + ')', o); stAdd(o, 'facCaptured'); stAdd(f.owner, 'facLostCap'); f.owner = o; ks.add(o); }
   }
   const nUnits = {}; for (const u of units) nUnits[u.owner] = (nUnits[u.owner] || 0) + 1;
   for (const k of ks) {
@@ -10676,16 +10777,16 @@ function econDay() {
     for (const f of econ.facs) {
       if (f.owner !== k) continue;
       const F = FACT[f.type];
-      if (f.left > 0) { if (--f.left === 0) { logEvent(ownerName(k) + ': построен ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(factName(f.type) + ' построен' + (f.city ? ' у города ' + f.city : '') + '.'); } continue; }
+      if (f.left > 0) { if (--f.left === 0) { stAdd(k, 'facBuilt'); logEvent(ownerName(k) + ': построен ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(factName(f.type) + ' построен' + (f.city ? ' у города ' + f.city : '') + '.'); } continue; }
       if (F.income) { inc += F.income * P * f.hp / 100; facInc += F.income * P * f.hp / 100; }
       if (F.upkeep) exp += F.upkeep * P;
       if (!F.make || broke) continue;
       if (++f.t < F.every) continue;
       f.t = 0;
-      if (F.make === 'eq') { f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02); const q = f.line || 'inf'; st.eq[q] = (st.eq[q] || 0) + LINE_OUT[q] * f.eff * f.hp / 100; }
-      else st[F.make] += F.n;
+      if (F.make === 'eq') { f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02); const q = f.line || 'inf', v = LINE_OUT[q] * f.eff * f.hp / 100; st.eq[q] = (st.eq[q] || 0) + v; stAdd(k, 'made_' + q, v); }
+      else { st[F.make] += F.n; stAdd(k, 'made_' + F.make, F.n); }
     }
-    econ.money[k] = money(k) + inc - exp;
+    econ.money[k] = money(k) + inc - exp; stAdd(k, 'inc', inc); stAdd(k, 'exp', exp);
     econ.last[k] = { inc, exp, eraInc, tax, facInc, army };
     if (!isHuman(k) && !humanAllied(k) && game.ai && game.aiMode !== 'troops') econAi(k);
     if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeployQ.add(k);   // carried out a country or two a tick (battleTick)
@@ -10704,10 +10805,10 @@ function aidSend(from, to, pack, quiet) {
   if (mpGuest() && !mpApplying) return mpGuestCmd({ t: 'aid', to, pack: Object.assign({}, pack, { eq: pack.eq === Infinity ? 'inf' : pack.eq }) });
   if (from === player && !quiet) tutorNote('aid');
   const st = stock(from), dt = stock(to), got = [];
-  if (pack.money > 0) { const m = Math.min(pack.money, Math.max(0, money(from))); if (m > 0) { econ.money[from] -= m; econ.money[to] = money(to) + m; got.push(fmtMoney(m)); } }
+  if (pack.money > 0) { const m = Math.min(pack.money, Math.max(0, money(from))); if (m > 0) { econ.money[from] -= m; econ.money[to] = money(to) + m; got.push(fmtMoney(m)); stAdd(from, 'aidOutMoney', m); stAdd(to, 'aidInMoney', m); } }
   let sets = 0;
   for (const q of ['inf', 'art', 'tank', 'air']) { const n = Math.min(pack.eq || 0, st.eq[q] || 0) * (pack.eqShare || 1); if (n > 1e-6) { st.eq[q] -= n; dt.eq[q] = (dt.eq[q] || 0) + n; sets += n; } }
-  if (sets > .05) got.push(fmtNum(sets) + ' компл. снаряжения');
+  if (sets > .05) { got.push(fmtNum(sets) + ' компл. снаряжения'); stAdd(from, 'aidOutEq', sets); stAdd(to, 'aidInEq', sets); }
   for (const w of ['drone', 'bomber', 'missile', 'aa']) { const n = Math.floor((st[w] || 0) * (pack.arms || 0)); if (n > 0) { st[w] -= n; dt[w] = (dt[w] || 0) + n; got.push(n + ' ' + { drone: 'дронов', bomber: 'бомбардировщиков', missile: 'ракет', aa: 'ракет ПВО' }[w]); } }
   if (!got.length) return false;
   (econ.aidLog || (econ.aidLog = [])).unshift({ t: fmtDate(gameDate), from, to, what: got.join(', ') }); econ.aidLog.length = Math.min(econ.aidLog.length, 40);
@@ -10730,8 +10831,13 @@ function econAi(k) {
   const st = stock(k), mine = facsOf(k);
   if (Math.random() < .25) {
     const ft = factTypes(), order = (mine.length < 2 ? ['civil', 'drone', 'bomber'] : ['civil', 'drone', 'drone', 'bomber', 'missile', 'armor', 'armor', 'aa', 'civil']).filter(t => ft.includes(t));
-    const type = order[Math.floor(Math.random() * order.length)];
-    if (money(k) > priceOf(k, type) * 4) {
+    // weapons need a place to go up from: a post of drone operators by the front, a launcher for the missiles
+    const has = t => mine.some(f => f.type === t);
+    let type = order[Math.floor(Math.random() * order.length)];
+    if (ft.includes('dronepost') && (has('drone') || st.drone >= STRIKE.drone.need) && mine.filter(f => f.type === 'dronepost').length < 2 + Math.floor(st.drone / 60)) type = 'dronepost';
+    else if (ft.includes('launcher') && (has('missile') || st.missile > 0) && !has('launcher')) type = 'launcher';
+    if (type === 'dronepost') { const g = money(k) > priceOf(k, type) * 2 && frontSpot(k, FACT.dronepost.front); if (g) econBuild(k, type, g, true); type = null; }
+    if (type && money(k) > priceOf(k, type) * 4) {
       // near one of its biggest cities, a little way from it
       const cs = cities.filter(c => cityOwner(c) === k).sort((a, b) => b.vp - a.vp).slice(0, 4);
       const c = cs[Math.floor(Math.random() * cs.length)];
@@ -10759,7 +10865,6 @@ function econLaunch(k, kind, w) {
   const S = STRIKE[kind];
   let best = null, bd = Infinity;
   for (const f of econ.facs) if (f.owner === k && f.type === S.from && !(f.left > 0)) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
-  if (kind === 'drone') for (const u of units) if (u.owner === k) { const uw = toWorld(u.x, u.y), d = econKm(uw, w); if (d < bd) { bd = d; best = uw; } }
   return best && bd <= S.range ? best : null;
 }
 const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
@@ -10768,15 +10873,16 @@ function econStrike(k, kind, g, quiet) {
   const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y);
   if (st[kind] < S.need) { if (!quiet) toast({ drone: 'Нужно не меньше ' + S.need + ' дронов. Постройте завод дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: 'Ракет нет. Постройте ракетный завод.' }[kind]); return false; }
   const from = econLaunch(k, kind, w);
-  if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших войск и заводов дронов.', bomber: 'ваших авиазаводов.', missile: 'ваших ракетных заводов.' }[kind]); return false; }
-  st[kind] -= S.need; if (k === player && !quiet) tutorNote('strike');
+  if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших пунктов дроноводов (или их нет — постройте пункт у фронта).', bomber: 'ваших авиазаводов.', missile: 'ваших пусковых установок (или их нет — постройте установку).' }[kind]); return false; }
+  st[kind] -= S.need; if (k === player && !quiet) tutorNote('strike'); stAdd(k, 'strikes'); stAdd(k, 'launch_' + kind, S.need);
   const def = fineOwner(g.x, g.y), dst = def ? stock(def) : null;
   // interceptors of the side under attack: a missile is shot down more often than a swarm of drones is turned back
   let k2 = 1;
-  if (dst && dst.aa > 0 && atWar(k, def)) { dst.aa--; if (Math.random() < (kind === 'missile' ? .55 : .35)) k2 = kind === 'missile' ? 0 : .5; }
+  if (dst && dst.aa > 0 && atWar(k, def)) { dst.aa--; stAdd(def, 'aaShots'); if (Math.random() < (kind === 'missile' ? .55 : .35)) { k2 = kind === 'missile' ? 0 : .5; stAdd(def, 'intercepts'); stAdd(k, 'downed'); } }
   const fg = fromWorld(from);
-  econFx.push({ kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0 });
-  setTimeout(() => econImpact(k, kind, g, k2, quiet), 1100);
+  econFx.push({ kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0, dur: S.fly, n: kind === 'drone' ? 3 + Math.min(4, Math.floor(S.need / 4)) : 1 });
+  strikeSound(kind, k, g, 'launch');
+  setTimeout(() => { econImpact(k, kind, g, k2, quiet); if (k2 > 0) strikeSound(kind, k, g, 'hit'); }, S.fly);
   if (!quiet) toast(S.name + (k2 === 0 ? ' — ракету сбила ПВО противника.' : '...'));
   requestUi();
   return true;
@@ -10793,7 +10899,7 @@ function econImpact(k, kind, g, k2, quiet) {
   if (kind === 'missile' || kind === 'bomber') { const d = kind === 'missile' ? 40 : 25; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - d * 1.2 * m); } }
   else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 12 * m); }
   const dead = units.filter(u => hpOf(u) <= 0);
-  if (dead.length) { noteLosses(dead); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
+  if (dead.length) { noteLosses(dead, k); stAdd(k, 'strikeKills', dead.length); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
   // a factory under the blast
   let fac = null;
   for (const f of econ.facs) {
@@ -10804,6 +10910,7 @@ function econImpact(k, kind, g, k2, quiet) {
   }
   if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
   const civ = strikeCivilians(kind, g, S.radius); addScar(g, S.radius);
+  stAdd(k, 'hitUnits', hit.length); stAdd(k, 'civKilled', civ); stAdd(fineOwner(g.x, g.y), 'civLost', civ); if (fac) { stAdd(k, 'facKilled'); stAdd(fac.owner, 'facLost'); }
   const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
   logEvent(txt, k);
   if (!quiet || (player && fineOwner(g.x, g.y) === player && (kind === 'missile' || fac))) toast(txt);
@@ -10820,7 +10927,11 @@ function econPrebuild() {
     const plan = [];
     cs.forEach((c, i) => { const n = c.vp >= 20 ? 3 : c.vp >= 10 ? 2 : 1; for (let j = 0; j < n; j++) plan.push([c, 'civil']); if (i < 2 && (war || c.vp >= 10)) plan.push([c, 'armor']); });
     if (war && strikeType) plan.push([cs[0], strikeType]);
+    if (war && ft.includes('missile') && strikeType !== 'missile') plan.push([cs[0], 'missile']);
+    if (war && ft.includes('launcher')) plan.push([cs[1] || cs[0], 'launcher']);
     if (war && ft.includes('aa')) plan.push([cs[0], 'aa']);
+    // drone operators by the front, where they can see their targets
+    if (war && ft.includes('dronepost')) for (let n = 0; n < 2; n++) { const g = frontSpot(k, FACT.dronepost.front); if (g) { const w = toWorld(g.x, g.y); econ.facs.push({ id: econ.seq++, type: 'dronepost', owner: k, mx: w.mx, my: w.my, left: 0, hp: 100, t: 0, city: nearestCityName(w), pre: true }); } }
     plan.forEach(([c, type], i) => {
       // a place on its own land around the city, a little farther out for every factory
       const r0 = unitCellsAt(c.y) * (.5 + .12 * i);
@@ -10848,9 +10959,19 @@ function econClick(g) {
 // the factories on the map, the flights of drones and missiles, the ghost of what is being placed
 const FAC_GLYPH = {
   civil: c => { c.moveTo(-.6, .5); c.lineTo(-.6, -.1); c.lineTo(-.25, -.35); c.lineTo(-.25, -.1); c.lineTo(.1, -.35); c.lineTo(.1, -.1); c.lineTo(.45, -.35); c.lineTo(.45, -.6); c.lineTo(.6, -.6); c.lineTo(.6, .5); c.closePath(); },
-  drone: c => { c.moveTo(-.5, -.5); c.lineTo(.5, .5); c.moveTo(.5, -.5); c.lineTo(-.5, .5); for (const [x, y] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) { c.moveTo(x + .18, y); c.arc(x, y, .18, 0, Math.PI * 2); } },
+  // a long-range drone seen from above: a delta wing with fins at its tips
+  drone: c => { c.moveTo(0, -.66); c.quadraticCurveTo(.1, -.5, .12, -.3); c.lineTo(.66, .34); c.lineTo(.66, .5); c.lineTo(.2, .36); c.lineTo(.1, .56); c.lineTo(-.1, .56); c.lineTo(-.2, .36); c.lineTo(-.66, .5); c.lineTo(-.66, .34); c.lineTo(-.12, -.3); c.quadraticCurveTo(-.1, -.5, 0, -.66); c.closePath(); },
+  // operators at their post: a mast with the signal going out, a small drone over it
+  dronepost: c => { c.moveTo(-.4, .62); c.lineTo(0, -.02); c.lineTo(.4, .62); c.moveTo(0, -.02); c.lineTo(0, .62); c.moveTo(-.24, .3); c.lineTo(.24, .3);
+    c.moveTo(-.28, -.3); c.arc(0, -.3, .28, Math.PI * 1.15, Math.PI * 1.85); c.moveTo(-.48, -.4); c.arc(0, -.3, .5, Math.PI * 1.12, Math.PI * 1.88);
+    c.moveTo(-.22, -.62); c.lineTo(.22, -.62); c.moveTo(0, -.7); c.lineTo(0, -.54); },
   bomber: c => { c.moveTo(0, -.65); c.lineTo(.12, -.2); c.lineTo(.7, .05); c.lineTo(.7, .2); c.lineTo(.12, .05); c.lineTo(.1, .4); c.lineTo(.3, .55); c.lineTo(-.3, .55); c.lineTo(-.1, .4); c.lineTo(-.12, .05); c.lineTo(-.7, .2); c.lineTo(-.7, .05); c.lineTo(-.12, -.2); c.closePath(); },
-  missile: c => { c.moveTo(0, -.65); c.lineTo(.2, -.3); c.lineTo(.2, .35); c.lineTo(.4, .6); c.lineTo(-.4, .6); c.lineTo(-.2, .35); c.lineTo(-.2, -.3); c.closePath(); },
+  // a missile: a pointed nose, a long body, swept fins
+  missile: c => { c.moveTo(0, -.7); c.quadraticCurveTo(.15, -.5, .15, -.3); c.lineTo(.15, .3); c.lineTo(.38, .58); c.lineTo(.38, .68); c.lineTo(.1, .52); c.lineTo(-.1, .52); c.lineTo(-.38, .68); c.lineTo(-.38, .58); c.lineTo(-.15, .3); c.lineTo(-.15, -.3); c.quadraticCurveTo(-.15, -.5, 0, -.7); c.closePath(); },
+  // a launcher: a truck with the missile raised on its rail
+  launcher: c => { c.rect(-.66, .14, 1.32, .26); c.moveTo(.66, .14); c.lineTo(.66, -.06); c.lineTo(.4, -.06); c.lineTo(.4, .14);
+    for (const x of [-.44, -.06, .44]) { c.moveTo(x + .11, .5); c.arc(x, .5, .11, 0, Math.PI * 2); }
+    c.moveTo(-.5, .1); c.lineTo(.3, -.62); c.moveTo(-.38, .1); c.lineTo(.4, -.52); c.moveTo(.3, -.62); c.lineTo(.48, -.7); c.lineTo(.4, -.52); },
   armor: c => { c.rect(-.6, -.05, 1.2, .45); c.rect(-.3, -.3, .55, .25); c.moveTo(.25, -.2); c.lineTo(.7, -.28); },
   aa: c => { c.moveTo(-.55, .5); c.lineTo(0, -.1); c.lineTo(.55, .5); c.moveTo(0, -.1); c.lineTo(.45, -.6); c.moveTo(-.2, -.45); c.arc(0, -.35, .25, Math.PI, Math.PI * 1.9); }
 };
@@ -10860,7 +10981,26 @@ function drawFacIcon(c, type, x, y, r, col, building, alpha) {
   c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
   c.lineWidth = Math.max(1, r * .14); c.strokeStyle = building ? 'rgba(230,200,120,.95)' : 'rgba(10,10,10,.85)'; if (building) c.setLineDash([r * .3, r * .22]); c.stroke(); c.setLineDash([]);
   c.translate(x, y); c.scale(r * .78, r * .78); c.beginPath(); FAC_GLYPH[type](c);
-  c.lineWidth = .14; c.lineJoin = 'round'; c.strokeStyle = 'rgba(240,232,214,.95)'; if (type === 'civil' || type === 'missile' || type === 'bomber') { c.fillStyle = 'rgba(240,232,214,.9)'; c.fill(); } else c.stroke();
+  c.lineWidth = .14; c.lineJoin = 'round'; c.strokeStyle = 'rgba(240,232,214,.95)'; if (type === 'civil' || type === 'missile' || type === 'bomber' || type === 'drone') { c.fillStyle = 'rgba(240,232,214,.9)'; c.fill(); } else c.stroke();
+  c.restore();
+}
+// a missile in flight: body, fins and a flickering flame, along its heading (screen pixels)
+function drawMissileSprite(c, x, y, ang, k, now) {
+  c.save(); c.translate(x, y); c.rotate(ang); c.scale(k, k);
+  const fl = 7 + Math.sin(now / 30) * 2.5;
+  const g = c.createLinearGradient(-6 - fl, 0, -6, 0); g.addColorStop(0, 'rgba(255,90,20,0)'); g.addColorStop(.6, 'rgba(255,170,60,.9)'); g.addColorStop(1, 'rgba(255,245,200,1)');
+  c.beginPath(); c.moveTo(-6, -1.6); c.lineTo(-6 - fl, 0); c.lineTo(-6, 1.6); c.closePath(); c.fillStyle = g; c.fill();
+  c.beginPath(); c.moveTo(9, 0); c.quadraticCurveTo(7, -1.8, 4.5, -1.8); c.lineTo(-6, -1.8); c.lineTo(-6, 1.8); c.lineTo(4.5, 1.8); c.quadraticCurveTo(7, 1.8, 9, 0); c.closePath();
+  c.fillStyle = '#e9e4d8'; c.fill(); c.lineWidth = .7; c.strokeStyle = 'rgba(20,20,20,.85)'; c.stroke();
+  c.beginPath(); c.moveTo(-3, -1.8); c.lineTo(-6.5, -4.6); c.lineTo(-6.5, -1.8); c.moveTo(-3, 1.8); c.lineTo(-6.5, 4.6); c.lineTo(-6.5, 1.8); c.fillStyle = '#b8b2a4'; c.fill(); c.stroke();
+  c.fillStyle = '#c0392b'; c.fillRect(3, -1.8, 1.4, 3.6);
+  c.restore();
+}
+// a drone in flight: the delta wing, nose along its heading
+function drawDroneSprite(c, x, y, ang, k) {
+  c.save(); c.translate(x, y); c.rotate(ang + Math.PI / 2); c.scale(8.5 * k, 8.5 * k);
+  c.beginPath(); FAC_GLYPH.drone(c); c.fillStyle = '#d9d4c6'; c.fill(); c.lineWidth = .12; c.strokeStyle = 'rgba(15,15,15,.85)'; c.stroke();
+  c.beginPath(); c.arc(0, .62, .07 + Math.random() * .05, 0, Math.PI * 2); c.fillStyle = 'rgba(255,200,120,.9)'; c.fill();
   c.restore();
 }
 function drawEcon(c) {
@@ -10877,7 +11017,20 @@ function drawEcon(c) {
   // what is being placed or aimed, under the cursor
   if (econMode && hover) {
     const x = hover.x * view.s + view.x, y = hover.y * view.s + view.y;
-    if (econMode.kind === 'build') drawFacIcon(c, econMode.type, x, y, r, rgb[player] || [120, 120, 120], true, .75);
+    if (econMode.kind === 'build') {
+      const F = FACT[econMode.type];
+      if (F.front) {
+        // the reach of the operators: green where the front is close enough, grey where it is not
+        const now = performance.now();
+        if (!econMode.chk || now - econMode.chk.t > 120 || Math.hypot(econMode.chk.x - hover.x, econMode.chk.y - hover.y) * view.s > 6) econMode.chk = { t: now, x: hover.x, y: hover.y, ok: !!player && nearFront(player, hover, F.front) };
+        const ok = econMode.chk.ok, R = geo ? F.front * 1000 / metersPerCell() * view.s : 40;
+        c.beginPath(); c.arc(x, y, Math.max(14, R), 0, Math.PI * 2); c.fillStyle = ok ? 'rgba(110,190,120,.12)' : 'rgba(140,140,140,.1)'; c.fill();
+        c.lineWidth = 1.5; c.setLineDash([5, 4]); c.strokeStyle = ok ? 'rgba(130,210,140,.9)' : 'rgba(170,170,170,.75)'; c.stroke(); c.setLineDash([]);
+        c.font = `600 11px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)';
+        const txt = ok ? 'фронт рядом' : 'далеко от фронта (нужно ≤ ' + F.front + ' км)'; c.strokeText(txt, x, y + r + 4); c.fillStyle = ok ? '#a8e0b0' : '#d0d0d0'; c.fillText(txt, x, y + r + 4);
+      }
+      drawFacIcon(c, econMode.type, x, y, r, rgb[player] || [120, 120, 120], true, .75);
+    }
     else {
       const S = STRIKE[econMode.type], R = geo ? Math.max(S.radius * 1000 / metersPerCell(), unitCellsAt(hover.y) * 1.2) * view.s : 30;
       const ok = player && econCanReach(player, econMode.type, toWorld(hover.x, hover.y));
@@ -10886,20 +11039,33 @@ function drawEcon(c) {
       c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x + 6, y); c.moveTo(x, y - 6); c.lineTo(x, y + 6); c.stroke();
     }
   }
-  // flights: a missile on an arc, a swarm of drones in a low line; a flash where they land
+  // flights: a missile on an arc with its flame and smoke, a swarm of drones low and steady; a flash where they land
   const now = performance.now();
-  econFx = econFx.filter(e => now - e.t0 < 1900);
+  econFx = econFx.filter(e => now - e.t0 < (e.dur || 1100) + 800);
   for (const e of econFx) {
-    const t = (now - e.t0) / 1100, ax = e.a.x * view.s + view.x, ay = e.a.y * view.s + view.y, bx = e.b.x * view.s + view.x, by = e.b.y * view.s + view.y;
+    const dur = e.dur || 1100, t = (now - e.t0) / dur, ax = e.a.x * view.s + view.x, ay = e.a.y * view.s + view.y, bx = e.b.x * view.s + view.x, by = e.b.y * view.s + view.y;
     if (t < 1) {
-      const lift = e.kind === 'missile' ? Math.hypot(bx - ax, by - ay) * .35 : 0;
+      const lift = e.kind === 'missile' ? Math.hypot(bx - ax, by - ay) * .35 : e.kind === 'bomber' ? 0 : Math.hypot(bx - ax, by - ay) * .04;
       const P = s => ({ x: ax + (bx - ax) * s, y: ay + (by - ay) * s - Math.sin(Math.PI * s) * lift });
-      c.beginPath(); for (let s = Math.max(0, t - .25); s <= t; s += .02) { const q = P(s); s === Math.max(0, t - .25) ? c.moveTo(q.x, q.y) : c.lineTo(q.x, q.y); }
-      c.lineWidth = e.kind === 'missile' ? 2.5 : 1.5; c.strokeStyle = e.kind === 'missile' ? 'rgba(255,190,120,.9)' : 'rgba(220,220,200,.75)'; c.stroke();
-      const q = P(t); c.beginPath(); c.arc(q.x, q.y, e.kind === 'missile' ? 3.5 : 2, 0, Math.PI * 2); c.fillStyle = '#ffd9a0'; c.fill();
-      if (e.kind === 'drone') for (let j = 1; j < 5; j++) { const q2 = P(Math.max(0, t - j * .04)); c.beginPath(); c.arc(q2.x + Math.sin(j * 7 + t * 20) * 4, q2.y + Math.cos(j * 5 + t * 17) * 4, 1.5, 0, Math.PI * 2); c.fill(); }
+      const q = P(t), q2 = P(Math.min(1, t + .01)), ang = Math.atan2(q2.y - q.y, q2.x - q.x);
+      if (e.kind === 'missile') {
+        // smoke behind it, thinning out, then the flame and the body
+        for (let s = Math.max(0, t - .35); s < t; s += .012) { const p = P(s), k = (s - (t - .35)) / .35; c.beginPath(); c.arc(p.x + Math.sin(s * 90) * 1.2, p.y, 1.5 + (1 - k) * 4, 0, Math.PI * 2); c.fillStyle = `rgba(200,195,185,${k * .28})`; c.fill(); }
+        drawMissileSprite(c, q.x, q.y, ang, 1.3, now);
+      } else if (e.kind === 'drone') {
+        for (let j = 0; j < (e.n || 4); j++) {
+          // a loose wedge, each drone wavering on its own
+          const back = (j + 1 >> 1) * .022, side = (j % 2 ? 1 : -1) * Math.ceil(j / 2) * 9, p = P(Math.max(0, t - back));
+          const nx = -Math.sin(ang), ny = Math.cos(ang), wob = Math.sin(now / 160 + j * 2.1) * 1.5;
+          drawDroneSprite(c, p.x + nx * (side + wob), p.y + ny * (side + wob), ang, 1);
+        }
+      } else {
+        c.beginPath(); for (let s = Math.max(0, t - .25); s <= t; s += .02) { const p = P(s); s === Math.max(0, t - .25) ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y); }
+        c.lineWidth = 1.5; c.strokeStyle = 'rgba(220,220,200,.75)'; c.stroke();
+        c.save(); c.translate(q.x, q.y); c.rotate(ang + Math.PI / 2); c.scale(9, 9); c.beginPath(); FAC_GLYPH.bomber(c); c.fillStyle = '#e8e2d2'; c.fill(); c.restore();
+      }
     } else if (e.hit) {
-      const k = (t - 1) / .72, rr = (e.kind === 'missile' ? 34 : 18) * (0.3 + k);
+      const k = (now - e.t0 - dur) / 720, rr = (e.kind === 'missile' ? 34 : 18) * (0.3 + k);
       const gr = c.createRadialGradient(bx, by, 0, bx, by, rr);
       gr.addColorStop(0, `rgba(255,236,190,${(1 - k) * .95})`); gr.addColorStop(.4, `rgba(255,120,40,${(1 - k) * .7})`); gr.addColorStop(1, 'rgba(120,20,10,0)');
       c.fillStyle = gr; c.beginPath(); c.arc(bx, by, rr, 0, Math.PI * 2); c.fill();
@@ -11042,32 +11208,32 @@ function popHit(f, dead, strike) {
   const p = econ.pop || (econ.pop = {}), k = regionKey(f), st = p[k] || (p[k] = {});
   st.dead = (st.dead || 0) + dead; if (strike) st.strikes = (st.strikes || 0) + 1;
 }
-// a strike on civilians: as many as live in the blast's area times its lethality
-const LETHAL = { missile: .004, bomber: .003, drone: .0008 };
+// a strike on civilians: the people living where the warheads come down (a few hundred metres, not the whole area the
+// strike hurts troops in), as close together as in a city if one is near, times how many of them it kills; and
+// many more leave their homes
+const LETHAL = { missile: { r: .25, k: .02 }, bomber: { r: .5, k: .012 }, drone: { r: .15, k: .015 } };
 function strikeCivilians(kind, g, Rkm) {
   if (!geoStore) return 0;
   const w = toWorld(g.x, g.y), f = regionOfPoint(w.mx, w.my); if (!f) return 0;
-  // a city under the blast: its people live many times closer together than the region's average
-  const kmc = geo ? metersPerCell() / 1000 : 1, city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) * kmc < Rkm * 1.5 + 5);
-  const P = regionPop(f), dens = P.now / Math.max(1, P.area) * (city ? 4 + Math.min(city.vp || 1, 25) / 2 : 1), there = dens * Math.PI * Rkm * Rkm;
-  const dead = Math.min(P.now, Math.round(there * LETHAL[kind] * (.5 + Math.random())));
+  const kmc = geo ? metersPerCell() / 1000 : 1, city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) * kmc < 12);
+  const P = regionPop(f), dens0 = P.now / Math.max(1, P.area), dens = city ? Math.max(dens0, Math.min(15000, 2500 + (city.vp || 1) * 450)) : dens0;
+  const L = LETHAL[kind], e = dens * Math.PI * L.r * L.r * L.k * (.4 + Math.random() * 1.2), dead = Math.min(Math.floor(P.now), Math.floor(e) + (Math.random() < e % 1 ? 1 : 0));
   popHit(f, dead, true);
-  // and many more leave their homes
-  const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .02, there * (kind === 'drone' ? .02 : .08));
+  const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .004, dens * Math.PI * Math.pow(Rkm * .25, 2) * (kind === 'drone' ? .004 : .015));
   return dead;
 }
 // a day of war: the people of the regions where battles are fought die and flee a little
 function popDay() {
   if (!geoStore || !battlesOn) return;
   if (!popModel) { popModelSoon(); return; }
-  const seen = new Map(), fighting = units.filter(u => u.fighting || inBattle.has(u));
+  const seen = new Map(), whose = new Map(), fighting = units.filter(u => u.fighting || inBattle.has(u));
   for (let i = 0; i < Math.min(40, fighting.length); i++) {
     const u = fighting[Math.floor(Math.random() * fighting.length)], w = toWorld(u.x, u.y), f = regionOfPoint(w.mx, w.my);
-    if (f) seen.set(f, (seen.get(f) || 0) + fighting.length / Math.min(40, fighting.length));
+    if (f) { seen.set(f, (seen.get(f) || 0) + fighting.length / Math.min(40, fighting.length)); whose.set(f, fineOwner(u.x, u.y)); }
   }
   for (const [f, n] of seen) {
     const P = regionPop(f), k = regionKey(f), p = econ.pop || (econ.pop = {}), st = p[k] || (p[k] = {});
-    st.dead = (st.dead || 0) + Math.min(P.now * .001, P.now / Math.max(1, P.area) * .3 * n);
+    const dd = Math.min(P.now * .001, P.now / Math.max(1, P.area) * .3 * n); st.dead = (st.dead || 0) + dd; stAdd(whose.get(f), 'civLost', dd);
     st.fled = (st.fled || 0) + P.now * Math.min(.002, .0002 * n);
   }
 }
@@ -11987,6 +12153,7 @@ window.addEventListener('keydown', e => {
   if (tool === 'units' && e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const mine = units.filter(u => u.owner === active); setSel(mine); toast('Выбраны все отряды: ' + (countries[active - 1] || {}).name + ' (' + mine.length + ')'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; } e.preventDefault(); return; }
+  if (e.code === 'KeyJ') { openStats(); return; }
   const tools = { Digit1: 'warp', Digit2: 'brush', Digit3: 'eraser', Digit4: 'fill', Digit5: 'lasso', Digit6: 'pan', Digit7: 'units', Digit8: 'arrows', Digit9: 'cities', Digit0: 'region', KeyI: 'info' };
   if (tools[e.code] === 'region' && !geo) return;
   if (tools[e.code] === 'info' && !geoStore) return;
@@ -11995,6 +12162,7 @@ window.addEventListener('keydown', e => {
   if (tool === 'cities' && selCity && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteCity(); return; }
   if (tool === 'units' && (lineMode()) && selFront && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteFront(selFront); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
+  if (e.code === 'Escape' && !$('#statBox').hidden) { openStats(false); return; }
   if (e.code === 'Escape' && econMode) { econSetMode(null); return; }
   if (e.code === 'Escape' && selGen) { closeGen(); return; }
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
@@ -13245,6 +13413,59 @@ async function startScenario(id, pl, mode) {
   closeMenu(); renderHud(); scheduleSave();
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
+// ---------- «Статистика»: the war in numbers ----------
+let statWho = 0, statTimer = 0;
+const fmtInt = v => Math.round(v || 0).toLocaleString('ru-RU');
+function statsOf(k) { return (econ.stats && econ.stats[k]) || {}; }
+function openStats(on) {
+  const box = $('#statBox'); if (on === undefined) on = box.hidden;
+  if (on && (!W || watchMode)) { toast('Статистика ведётся в своей игре: режим «Играть».'); return; }
+  box.hidden = !on; clearInterval(statTimer);
+  if (on) { if (!statWho || !countries[statWho - 1]) statWho = player || 0; renderStats(); statTimer = setInterval(() => { if (!$('#statBox').hidden) renderStats(); }, 1000); }
+}
+function renderStats() {
+  const S = econ.stats || {}, ks = [];
+  for (let k = 1; k <= countries.length; k++) if (S[k] || atWarAny(k)) ks.push(k);
+  if (!statWho || !countries[statWho - 1]) statWho = ks[0] || 1;
+  const sel = $('#stWho'), cur = String(statWho);
+  if (sel.dataset.sig !== ks.join()) { sel.dataset.sig = ks.join(); sel.textContent = ''; for (const k of ks) { const o = document.createElement('option'); o.value = k; o.textContent = countries[k - 1].name + (k === player ? ' (вы)' : ''); sel.append(o); } }
+  sel.value = cur;
+  const t0 = econ.statT0 !== undefined ? econ.statT0 : gameDate, days = Math.max(0, Math.round((gameDate - t0) / 864e5));
+  $('#stPeriod').textContent = 'с ' + fmtDate(t0).replace(/,.*$/, '') + ' · ' + days + ' ' + plural(days, 'день', 'дня', 'дней') + ' войны';
+  const k = statWho, r = statsOf(k), st = stock(k), now = units.filter(u => u.owner === k).length, ft = factTypes();
+  const facs = econ.facs.filter(f => f.owner === k && !(f.left > 0));
+  const card = (title, rows) => { const d = document.createElement('div'); d.className = 'stcard'; d.innerHTML = '<h5></h5><dl></dl>'; d.querySelector('h5').textContent = title; const dl = d.querySelector('dl'); for (const [a, b, cls] of rows) { if (b === null) continue; const dt = document.createElement('dt'); dt.textContent = a; const dd = document.createElement('dd'); dd.textContent = b; if (cls) dd.className = cls; dl.append(dt, dd); } return d; };
+  const grid = $('#stGrid'); grid.textContent = '';
+  const has = t => ft.includes(t) || r['made_' + t];
+  grid.append(
+    card('Армия', [['Сейчас в строю', fmtInt(now)], ['Развёрнуто за войну', fmtInt(r.deployed)], ['Потеряно отрядов', fmtInt(r.lost), r.lost ? 'bad' : ''], ['Уничтожено у противника', fmtInt(r.kills), r.kills ? 'good' : ''], ['Соотношение потерь', r.lost ? ((r.kills || 0) / r.lost).toFixed(2).replace('.', ',') + ' : 1' : r.kills ? '∞' : '—']]),
+    card('Производство', [['Стрелковое оружие, компл.', fmtNum(r.made_inf || 0)], ['Артиллерия, компл.', fmtNum(r.made_art || 0)], ['Бронетехника, компл.', fmtNum(r.made_tank || 0)], ['Авиация, компл.', fmtNum(r.made_air || 0)],
+      ['Дронов', has('drone') ? fmtInt(r.made_drone) : null], ['Ракет', has('missile') ? fmtInt(r.made_missile) : null], ['Бомбардировщиков', has('bomber') ? fmtInt(r.made_bomber) : null], [econYear() < 1955 ? 'Зенитных батарей' : 'Ракет ПВО', has('aa') ? fmtInt(r.made_aa) : null]]),
+    card('Удары', [['Ударов нанесено', fmtInt(r.strikes)], ['Запущено дронов', r.launch_drone ? fmtInt(r.launch_drone) : null], ['Запущено ракет', r.launch_missile ? fmtInt(r.launch_missile) : null], ['Вылетов бомбардировщиков', r.launch_bomber ? fmtInt(r.launch_bomber) : null],
+      ['Сбито ПВО противника', fmtInt(r.downed), r.downed ? 'bad' : ''], ['Поражено отрядов', fmtInt(r.hitUnits)], ['Уничтожено ударами', fmtInt(r.strikeKills), r.strikeKills ? 'good' : ''], ['Уничтожено заводов', fmtInt(r.facKilled), r.facKilled ? 'good' : '']]),
+    card('ПВО и тыл', [['Выстрелов ПВО', fmtInt(r.aaShots)], ['Перехвачено', fmtInt(r.intercepts), r.intercepts ? 'good' : ''], ['Заводов потеряно от ударов', fmtInt(r.facLost), r.facLost ? 'bad' : ''], ['Захвачено заводов врага', fmtInt(r.facCaptured), r.facCaptured ? 'good' : ''], ['Своих заводов захвачено', fmtInt(r.facLostCap), r.facLostCap ? 'bad' : ''], ['Запас: дроны · ракеты · ПВО', (st.drone || 0) + ' · ' + (st.missile || 0) + ' · ' + (st.aa || 0)]]),
+    card('Мирное население', [['Погибло на своей земле', fmtPeople(r.civLost || 0), r.civLost ? 'bad' : ''], ['Погибло от своих ударов', fmtPeople(r.civKilled || 0)]]),
+    card('Экономика', [['Казна', fmtMoney(money(k))], ['Доходы за войну', fmtMoney(r.inc || 0)], ['Расходы за войну', fmtMoney(r.exp || 0)], ['На войска', fmtMoney(r.armySpent || 0)], ['На стройку', fmtMoney(r.buildSpent || 0)], ['Заложено построек', fmtInt(r.facStarted)], ['Построено', fmtInt(r.facBuilt)], ['Работает сейчас', fmtInt(facs.length)]]),
+    card('Помощь и города', [['Получено денег', fmtMoney(r.aidInMoney || 0)], ['Получено снаряжения, компл.', fmtNum(r.aidInEq || 0)], ['Передано денег', fmtMoney(r.aidOutMoney || 0)], ['Передано снаряжения, компл.', fmtNum(r.aidOutEq || 0)], ['Взято городов', fmtInt(r.citiesTaken), r.citiesTaken ? 'good' : ''], ['Потеряно городов', fmtInt(r.citiesLost), r.citiesLost ? 'bad' : '']])
+  );
+  // the countries side by side
+  const tb = $('#stTable'), rows = ks.map(k => ({ k, r: statsOf(k), n: units.filter(u => u.owner === k).length })).sort((a, b) => b.n - a.n || (b.r.kills || 0) - (a.r.kills || 0)).slice(0, 14);
+  tb.innerHTML = '<thead><tr><th>Страна</th><th>В строю</th><th>Развёрнуто</th><th>Потери</th><th>Уничтожил</th><th>Ударов</th><th>Сбито у него</th><th>Мирных погибло</th><th>Произведено снаряж.</th><th>Казна</th></tr></thead>';
+  const body = document.createElement('tbody');
+  for (const { k, r, n } of rows) {
+    const tr = document.createElement('tr'); tr.dataset.k = k; if (k === statWho) tr.className = 'on';
+    const c = rgb[k] || [120, 120, 120], made = (r.made_inf || 0) + (r.made_art || 0) + (r.made_tank || 0) + (r.made_air || 0);
+    const vals = [fmtInt(n), fmtInt(r.deployed), fmtInt(r.lost), fmtInt(r.kills), fmtInt(r.strikes), fmtInt(r.downed), fmtPeople(r.civLost || 0), fmtNum(made), game.econ ? fmtMoney(money(k)) : '—'];
+    const td0 = document.createElement('td'); const i = document.createElement('i'); i.style.background = `rgb(${c})`; td0.append(i, document.createTextNode(countries[k - 1].name + (k === player ? ' (вы)' : ''))); tr.append(td0);
+    for (const v of vals) { const td = document.createElement('td'); td.textContent = v; tr.append(td); }
+    body.append(tr);
+  }
+  tb.append(body);
+}
+$('#btnStats').addEventListener('click', () => openStats());
+$('#statBox [data-st="close"]').addEventListener('click', () => openStats(false));
+$('#stWho').addEventListener('change', e => { statWho = +e.target.value; renderStats(); });
+$('#stTable').addEventListener('click', e => { const tr = e.target.closest('tr[data-k]'); if (tr) { statWho = +tr.dataset.k; renderStats(); } });
 // ---------- «Обучение»: chapters of the game, each on a map of its own, with a card of steps that tick themselves ----------
 // A chapter opens its war (or stays in the menu), turns on the systems it is about and shows a card docked at the
 // side of the map: the steps in order, the one to do now, «Показать» to light up where it is done. Every step is a
@@ -13549,7 +13770,7 @@ function mpState(full) {
   if (!full) mpTiles.clear();
   const e = econ;
   return { t: full ? 'full' : 'st', units: units.map(encU), forms, generals, fronts: fronts.map(encF), tiles,
-    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, scars: e.scars, aidLog: (e.aidLog || []).slice(0, 12), last: e.last },
+    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, scars: e.scars, aidLog: (e.aidLog || []).slice(0, 12), last: e.last, stats: e.stats, statT0: e.statT0 },
     wars, game, gameDate, on: battlesOn, hpt: hoursPerTick, log: gameLog.slice(0, 40), countries, humans: mp.humans, rules: mp.rules };
 }
 // a tile of borders in bytes: runs of (value, count up to 255)
