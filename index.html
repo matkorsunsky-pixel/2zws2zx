@@ -1158,6 +1158,10 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 .ecline { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin: 2px 0 2px 24px; }
 .ecline select { padding: 5px 26px 5px 8px; font-size: 12px; }
 .ecline i { grid-column: 1 / -1; height: 4px; border-radius: 3px; background: linear-gradient(90deg, var(--accent) var(--e), var(--line2) var(--e)); }
+
+.ecaid { display: flex; flex-direction: column; gap: 6px; }
+.ecaid .row button { flex: 1; justify-content: center; font-size: 12px; padding: 7px 6px; }
+.ecaidlog li { grid-template-columns: 1fr auto; cursor: default; }
 </style>
 </head>
 <body>
@@ -1422,6 +1426,12 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       <section><h2>Удары</h2>
         <div class="row ecstrikes" id="ecStrikes"><button data-strike="drone">Удар дронами · 10 шт.</button><button data-strike="bomber">Бомбардировка · 3 самолёта</button><button data-strike="missile">Ракетный удар</button></div>
         <p class="hint">Дроны летят до 400 км от ваших войск или заводов дронов, бомбардировщики — до 800 км от авиазаводов, ракеты — до 2500 км от ракетных заводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
+      </section>
+      <section><h2>Помощь</h2>
+        <div class="ecaid"><select id="ecAidTo" aria-label="Кому помочь"></select>
+          <div class="row"><button data-aid="money">10% казны</button><button data-aid="eq">Снаряжение · 25%</button><button data-aid="arms">Оружие · 25%</button></div></div>
+        <ul class="eclist ecaidlog" id="ecAidLog"></ul>
+        <p class="hint">Передайте деньги, снаряжение или оружие для ударов любой воюющей стране. Свои по стороне, которые не воюют, помогают сами каждую неделю, если включена «Поддержка союзников».</p>
       </section>
       <section><h2>Ваши заводы</h2>
         <ul class="eclist" id="ecList"></ul>
@@ -4326,6 +4336,8 @@ const GORI08 = [[42.28, 43.62], [42.18, 43.78], [42.05, 43.85], [41.93, 44.0], [
   for (const w of WARS2) if (w.series === 'ukr') w.name = SERIES.ukr.name + ' — ' + day(w.date) + ': ' + w.stage;
 }
 WARS.push(...WARS2);
+// who backs a side without fighting: the West Ukraine from 2022 (money, weapons, equipment, with «Поддержка союзников» on)
+for (const w of WARS) if ((w.series === 'ukr' || /^svo20/.test(w.id)) && w.date >= '2022-02-24') for (const c of w.countries) if (c.name === 'Страны НАТО') c.aids = 'Украина';
 // ---------- the wars of our time: Karabakh, Syria, Gaza, Sudan and the break-up of Yugoslavia ----------
 // Each is drawn like the others: the land a side held as zones over the country it was taken from, the line of the
 // front as one side of the zone's polygon and the rest of it closing round through land the zone cannot take.
@@ -5413,7 +5425,7 @@ async function applyWar(id, opts = {}) {
     if (light) { vsrc = null; srcChanged(); storeReset(); clearTileDB(); occStore = new Map(); loadOcc(); }
     else startEarthStore();
     if (keep && !light) { const n1 = worldCells(win.L); view.s = keep.S / n1; view.x = -(keep.x * n1 - win.cx0) * view.s; view.y = -(keep.y * n1 - win.cy0) * view.s; userView = true; }
-    countries = w.countries.map(c => ({ name: c.name, color: c.color, side: c.side }));
+    countries = w.countries.map(c => Object.assign({ name: c.name, color: c.color, side: c.side }, c.aids ? { aids: c.aids } : {}));
     active = 1; player = w.player || 1;
     recolor();
     // the scenario is its outlines: every tile is filled from them when it is first looked at
@@ -8901,10 +8913,11 @@ const GAME_SYSTEMS = [
   ['pocketNote', 'Уведомления о котлах', 'Сообщения и записи в хронике, когда замыкается кольцо и когда котёл сдаётся. Выключите — котлы всё так же считаются, подсвечиваются и сдаются, но молча.'],
   ['reinforce', 'Подкрепления', 'Армия, потерявшая дивизии в котле или в бою, получает новые: по одной в сутки они выходят из тыла на опустевший участок фронта, пока армия не станет такой, как была.'],
   ['paid', 'Платное размещение войск', 'С экономикой: новые отряды стоят денег и снаряжения своего рода войск, потери восполняются только со склада снаряжения.'],
+  ['aid', 'Поддержка союзников', 'Страны той же стороны, что сами не воюют, каждую неделю передают воюющим деньги, снаряжение и оружие. Помогать можете и вы — вкладка «Экономика».'],
   ['econ', 'Экономика', 'Казна, заводы, дроны и ракеты: вкладка «Экономика» на панели и сумма денег вверху. Стартовый капитал — 1,829 трлн $.'],
   ['collapse', 'Ликвидация котлов', 'Пока идут бои, окружённый котёл держится три дня и ещё по полтора дня на каждый отряд внутри, потом сдаётся: земля отходит окружившим, отряды попадают в плен.'],
 ];
-let game = { aiMode: 'both', econ: true, paid: true, calendar: true, orders: true, arrows: true, cities: true, supply: true, weather: true, terrain: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
+let game = { aiMode: 'both', econ: true, paid: true, aid: true, calendar: true, orders: true, arrows: true, cities: true, supply: true, weather: true, terrain: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 // front lines (see «front lines» below): { id, owner, mode: 'hold' | 'attack', pts: [{ x, y, nx, ny }] on the border, n toward own land }
@@ -10403,8 +10416,8 @@ function econDay() {
   if (!game.econ || !W) return;
   const ks = new Set([...Object.keys(econ.money).map(Number), ...econ.facs.map(f => f.owner)]);
   if (player) ks.add(player);
-  // every country at war keeps a treasury and builds
-  for (let a = 1; a <= countries.length; a++) for (let b = 1; b <= countries.length; b++) if (a !== b && atWar(a, b)) { ks.add(a); break; }
+  // every country at war keeps a treasury and builds; with aid on, so do the friends of a side that do not fight
+  for (let a = 1; a <= countries.length; a++) for (let b = 1; b <= countries.length; b++) if (a !== b && (atWar(a, b) || (game.aid && aidGivesTo(a, b)))) { ks.add(a); break; }
   // factories on land the enemy took pass to it
   for (const f of econ.facs) {
     const o = ownerAtWorld(f.mx, f.my);
@@ -10436,7 +10449,38 @@ function econDay() {
     if (k !== player && !allied(k, player || 0) && game.ai && game.aiMode !== 'troops') econAi(k);
     if (k !== player && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeploy(k);
   }
+  econ.day = (econ.day || 0) + 1;
+  if (game.aid && econ.day % 7 === 0) econAid();
   renderEcon(); renderHud(); requestUi();
+}
+// ---------- aid: the friends of a side send money and arms ----------
+// A country of the same side that is not itself at war (America for Britain in 1941, the West for Ukraine) gives a
+// side at war a share of its treasury and of its arsenal every week. The player can also give to anyone at war.
+const atWarAny = k => countries.some((_, j) => atWar(k, j + 1));
+// a friend of the same side, or a country set to back a side (its «aids»: the West for Ukraine from 2022)
+const aidGivesTo = (a, b) => a !== b && !atWarAny(a) && atWarAny(b) && (allied(a, b) || (!!countries[a - 1] && !!countries[b - 1] && !!countries[a - 1].aids && countries[a - 1].aids === countries[b - 1].side));
+function aidSend(from, to, pack, quiet) {
+  const st = stock(from), dt = stock(to), got = [];
+  if (pack.money > 0) { const m = Math.min(pack.money, Math.max(0, money(from))); if (m > 0) { econ.money[from] -= m; econ.money[to] = money(to) + m; got.push(fmtMoney(m)); } }
+  let sets = 0;
+  for (const q of ['inf', 'art', 'tank', 'air']) { const n = Math.min(pack.eq || 0, st.eq[q] || 0) * (pack.eqShare || 1); if (n > 1e-6) { st.eq[q] -= n; dt.eq[q] = (dt.eq[q] || 0) + n; sets += n; } }
+  if (sets > .05) got.push(fmtNum(sets) + ' компл. снаряжения');
+  for (const w of ['drone', 'bomber', 'missile', 'aa']) { const n = Math.floor((st[w] || 0) * (pack.arms || 0)); if (n > 0) { st[w] -= n; dt[w] = (dt[w] || 0) + n; got.push(n + ' ' + { drone: 'дронов', bomber: 'бомбардировщиков', missile: 'ракет', aa: 'ракет ПВО' }[w]); } }
+  if (!got.length) return false;
+  (econ.aidLog || (econ.aidLog = [])).unshift({ t: fmtDate(gameDate), from, to, what: got.join(', ') }); econ.aidLog.length = Math.min(econ.aidLog.length, 40);
+  logEvent('Помощь: ' + ownerName(from) + ' → ' + ownerName(to) + ': ' + got.join(', '), from);
+  if (!quiet && (to === player || from === player)) toast(ownerName(from) + ' передаёт стране «' + ownerName(to) + '»: ' + got.join(', ') + '.');
+  return true;
+}
+function econAid() {
+  for (let a = 1; a <= countries.length; a++) {
+    if (a === player) continue;
+    const to = []; for (let b = 1; b <= countries.length; b++) if (aidGivesTo(a, b)) to.push(b);
+    if (!to.length) continue;
+    // 2% of the treasury a week, a fifth of the equipment, a third of the strike weapons, split among those it helps
+    for (const b of to) aidSend(a, b, { money: money(a) * .02 / to.length, eq: Infinity, eqShare: .2 / to.length, arms: .33 / to.length }, b !== player);
+  }
+  renderEcon();
 }
 // the other sides: build now and then, strike with what they have
 function econAi(k) {
@@ -10649,6 +10693,14 @@ function renderEcon(hudOnly) {
     box.append(b);
   }
   document.querySelectorAll('#ecStrikes button').forEach(b => { const k = b.dataset.strike; b.hidden = !ft.includes(k) && !st[k]; b.disabled = st[k] < STRIKE[k].need; b.classList.toggle('on', !!econMode && econMode.type === k); });
+  // aid: who can get it, what has come and gone
+  const at = $('#ecAidTo'), keep = at.value; at.textContent = '';
+  const cand = []; for (let b = 1; b <= countries.length; b++) if (b !== player && atWarAny(b)) cand.push(b);
+  cand.sort((x, y) => (atWar(x, player) ? 2 : allied(x, player) ? 0 : 1) - (atWar(y, player) ? 2 : allied(y, player) ? 0 : 1));
+  for (const b of cand) { const o = document.createElement('option'); o.value = b; o.textContent = countries[b - 1].name + (allied(b, player) ? ' · союзник' : atWar(b, player) ? ' · противник' : ''); at.append(o); }
+  if ([...at.options].some(o => o.value === keep)) at.value = keep;
+  $('#ecAidLog').textContent = '';
+  for (const e of (econ.aidLog || []).filter(e => e.to === player || e.from === player).slice(0, 6)) { const li = document.createElement('li'); li.innerHTML = '<span></span><small></small>'; li.querySelector('span').textContent = (e.from === player ? '→ ' + ownerName(e.to) : '← ' + ownerName(e.from)) + ': ' + e.what; li.querySelector('small').textContent = e.t; $('#ecAidLog').append(li); }
   const ul = $('#ecList'); ul.textContent = '';
   const mine = facsOf(player);
   $('#ecNone').hidden = mine.length > 0;
@@ -10675,6 +10727,11 @@ function renderEcon(hudOnly) {
     ul.append(li);
   }
 }
+document.querySelectorAll('#panel [data-aid]').forEach(b => b.addEventListener('click', () => {
+  const to = +$('#ecAidTo').value; if (!to || !player) { toast('Помогать некому: нет воюющих стран.'); return; }
+  const k = b.dataset.aid, ok = aidSend(player, to, k === 'money' ? { money: money(player) * .1 } : k === 'eq' ? { eq: Infinity, eqShare: .25 } : { arms: .25 });
+  if (!ok) toast('Передавать нечего.'); renderEcon(); renderHud();
+}));
 $('#hudMoney').addEventListener('click', () => { setPanel(true); showTab('econ'); renderEcon(); });
 document.querySelectorAll('#ecStrikes button').forEach(b => b.addEventListener('click', () => { const k = b.dataset.strike; econSetMode(econMode && econMode.type === k ? null : { kind: 'strike', type: k }); }));
 
