@@ -1159,6 +1159,16 @@ body.mode-watch #btnStats { display: none !important; }
 .sttable tr.on td { background: rgb(229 173 72 / .1); }
 .sttable td i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
 .stnote { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }
+/* --- the live front as the army --- */
+.lfbar { position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); top: calc(62px + env(safe-area-inset-top, 0px)); display: flex; flex-wrap: wrap; align-items: center; gap: 5px; max-width: calc(100% - 24px); padding: 6px 8px; border-radius: 14px; background: var(--glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid var(--line2); box-shadow: 0 8px 26px rgb(0 0 0 / .35); }
+.lfbar[hidden] { display: none; }
+.lfbar .lft { font-size: 12px; color: var(--ink); padding: 0 6px; font-variant-numeric: tabular-nums; }
+.lfbar .lbl { font-size: 11.5px; color: var(--muted); }
+.lfbar button { padding: 6px 10px; font-size: 12px; font-weight: 600; }
+.lfbar button.on { background: var(--grad-accent, var(--accent)); color: var(--accent-ink); border-color: transparent; }
+.lfbar button[data-lf="atk"].on { background: #c0392b; color: #fff; }
+body.mode-watch #lfBar { display: none !important; }
+body.lf #sidePick, body.lf #liveBar { display: none !important; }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
@@ -1630,6 +1640,10 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
+  <div class="lfbar" id="lfBar" hidden role="toolbar" aria-label="Силы на фронте"><span class="lft"></span>
+    <button data-lf="add" title="Кисть: батальоны на свои участки фронта (сначала из резерва, потом за деньги)">＋ Войска на фронт</button><button data-lf="atk" title="Кисть: участки, где наступать (с Shift — отменить)">Наступать</button><button data-lf="del" title="Кисть: батальоны с участков в резерв">В резерв</button>
+    <span class="lbl">по</span><button data-lfs="2">2</button><button data-lfs="5">5</button><button data-lfs="10">10</button><span class="lbl">бат.</span>
+    <button data-lfa="all" title="Отметить наступление на всех участках, где вы сильнее">Везде, где сильнее</button><button data-lfa="stop" title="Снять все отметки наступления">Стоп</button></div>
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <button class="hbtn" id="btnStats" title="Статистика войны: производство, потери, удары (J)" aria-label="Статистика"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/></svg></button>
@@ -1795,6 +1809,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <p id="campInfo"></p>
         <div class="csides" id="campSides"></div>
         <div class="ctroops" id="campTroopsBox" role="radiogroup" aria-label="Войска">
+          <button data-tr="l" role="radio"><b>Живой фронт</b><small>Рекомендуется. Войска — сила на каждом участке фронта: ставите кистью, наступаете, где сильнее. Быстро даже на огромных фронтах</small></button>
           <button data-tr="1" role="radio"><b>Войска расставлены</b><small>Дивизии обеих сторон уже стоят вдоль линии фронта — сразу в бой</small></button>
           <button data-tr="s" role="radio"><b>На участке фронта</b><small>Вы сами обводите рамкой участки фронта — войска встанут только там, остальной фронт пуст</small></button>
           <button data-tr="0" role="radio"><b>Без войск</b><small>Только карта, страны и города — войска расставляете сами</small></button>
@@ -2327,7 +2342,7 @@ function buildVectors(x0, y0, x1, y1) {
 let vecWorker = null, vecJob = null, vecWorkerOff = false;
 let vecSerial = 0, vecLast = 0, vecRetry = 0;
 // how often the outlines may be traced again: every 150 ms; in a battle of thousands every 600 ms
-function vecGap() { try { return battlesOn && units.length > 800 ? 600 : 150; } catch (e) { return 150; } }
+function vecGap() { try { return battlesOn && (units.length > 800 || lfOn()) ? 600 : 150; } catch (e) { return 150; } }
 function vecAsync(x0, y0, x1, y1) {
   if (vecWorkerOff) return false;
   if (vecJob) return true;
@@ -5894,6 +5909,7 @@ function drawUi() {
   if (W && !(watchMode && !game.econ)) drawScars(ctx);
   drawInfoHover(ctx);
   drawEcon(ctx);
+  drawLfOverlay(ctx);
   drawPocketTags(ctx);
   drawSpawnGhost(ctx);
   drawRouteDraft(ctx);
@@ -7952,10 +7968,13 @@ function drawLiveChain(c) {
     const l = Math.hypot(rr.nx, rr.ny) || 1, nx = rr.nx / l, ny = rr.ny / l;
     const x = rr.dx * vs + view.x, y = rr.dy * vs + view.y, h = ((key * 2654435761) >>> 0);
     // rank behind rank, each staggered by half a place along the border
-    for (let q = 0; q < ranks; q++) {
+    // the live front as the army: as many ranks as the side has battalions on this stretch, none where it has none
+    let ra = ranks, rb = ranks;
+    if (lfOn()) { ra = lfRanks(lfStrNear(rr.dx, rr.dy, rr.a)); rb = lfRanks(lfStrNear(rr.dx, rr.dy, rr.b)); }
+    for (let q = 0; q < Math.max(ra, rb); q++) {
       const d = off + q * mpx * 1.08, sh = (q & 1) * P / 2, lx = -ny * sh, ly = nx * sh;
-      c.drawImage(sprite(rr.a, kinds[(h >>> (q * 5)) % kinds.length]), x - nx * d + lx - half, y - ny * d + ly - half, mpx, mpx);
-      c.drawImage(sprite(rr.b, kinds[(h >>> (q * 5 + 13)) % kinds.length]), x + nx * d + lx - half, y + ny * d + ly - half, mpx, mpx);
+      if (q < ra) c.drawImage(sprite(rr.a, kinds[(h >>> (q * 5)) % kinds.length]), x - nx * d + lx - half, y - ny * d + ly - half, mpx, mpx);
+      if (q < rb) c.drawImage(sprite(rr.b, kinds[(h >>> (q * 5 + 13)) % kinds.length]), x + nx * d + lx - half, y + ny * d + ly - half, mpx, mpx);
     }
   };
   // few blocks on the screen: only those; else every block of the level, skipping those off it
@@ -8010,6 +8029,237 @@ function setLiveFront(on, quiet) {
   renderLiveBar(); const ck = $('#liveChk'); if (ck) ck.checked = on; requestDraw();
   if (!quiet) toast(on ? 'Живой фронт: вдоль границы встала плотная цепь войск обеих сторон — тяните границу, войска пойдут за ней' : 'Живой фронт выключен: войска стоят, граница двигается без них');
 }
+// ---------- the live front as the army: strength along the border instead of thousands of units ----------
+// The border is cut into stretches of a few kilometres (blocks of a fixed grid over the world, so they keep their
+// place whatever the zoom). On each stretch every side has a strength, in battalions; the soldiers of the live chain
+// are drawn as thick as it is. A side that attacks a stretch loses men and kills men, and if it is the stronger
+// there the border moves its way, cell by cell. The player puts battalions on the front with a brush (from the
+// reserve or bought), marks the stretches to attack, pulls troops back into the reserve; the AI does the same where
+// it is weak or strong. A whole front of a war costs a few hundred blocks a tick, not the paths of thousands of units.
+const LF_NW = 4096;                         // world blocks across: about 10 km at the equator, 6 at 50°
+const lfOn = () => !!(econ && econ.front);
+const lfState = () => econ.front || (econ.front = { s: {}, res: {}, atk: {} });
+let lfBorder = new Map(), lfMine = new Map(), lfScanT = 0;   // key → { a, b, x, y, nx, ny }; owner → [keys]
+const lfBC = () => worldCells(win.L) / LF_NW;          // cells of the window in a block
+function lfKey(x, y) { const n = worldCells(win.L); let bx = Math.floor((x + win.cx0) / n * LF_NW); bx = ((bx % LF_NW) + LF_NW) % LF_NW; return bx * LF_NW + Math.floor((y + win.cy0) / n * LF_NW); }
+// a side's battalions at a point of the border: the most on the stretches around it (the chain's points and the
+// stretches of the scan need not fall into the same block)
+function lfStrNear(x, y, o) {
+  const k = lfKey(x, y), bx = Math.floor(k / LF_NW), by = k % LF_NW; let v = 0;
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const w = lfStr((((bx + dx) % LF_NW) + LF_NW) % LF_NW * LF_NW + by + dy, o); if (w > v) v = w; }
+  return v;
+}
+const lfStr = (key, o) => { const e = econ.front && econ.front.s[key]; return e ? e[o] || 0 : 0; };
+function lfAdd(key, o, v) { const S = lfState().s, e = S[key] || (S[key] = {}); e[o] = Math.max(0, (e[o] || 0) + v); if (e[o] < .05) delete e[o]; if (!Object.keys(e).length) delete S[key]; }
+// the border stretches in the window: samples a block apart (twice), an edge where two countries at war meet
+function* lfScanGen() {
+  if (!own || !W || !win || !geoStore) return;
+  const bc = lfBC(), s = Math.max(2, Math.floor(bc / 2)), m = new Map();
+  for (let y = 0; y + s < H; y += s) {
+    if ((y / s & 15) === 0) yield* yieldPoint();
+    for (let x = 0, i = y * W; x + s < W; x += s, i += s) {
+      const o = own[i]; if (!o || o === 255) continue;
+      const r = own[i + s], d = own[i + s * W];
+      for (const [q, ex, ey, nx, ny] of [[r, x + s / 2, y, 1, 0], [d, x, y + s / 2, 0, 1]]) {
+        if (!q || q === o || q === 255 || warM[(o << 8) | q] !== 1) continue;
+        const key = lfKey(ex, ey);
+        let e = m.get(key);
+        if (!e) { e = { a: Math.min(o, q), b: Math.max(o, q), sx: 0, sy: 0, n: 0, nx: 0, ny: 0 }; m.set(key, e); }
+        if ((o === e.a && q === e.b) || (o === e.b && q === e.a)) { const sg = o === e.a ? 1 : -1; e.sx += ex; e.sy += ey; e.n++; e.nx += nx * sg; e.ny += ny * sg; }
+      }
+    }
+  }
+  const mine = new Map();
+  for (const [key, e] of m) { e.key = key; e.x = e.sx / e.n; e.y = e.sy / e.n; const l = Math.hypot(e.nx, e.ny) || 1; e.nx /= l; e.ny /= l; for (const o of [e.a, e.b]) (mine.get(o) || mine.set(o, []).get(o)).push(key); }
+  lfBorder = m; lfMine = mine; lfScanT = performance.now();
+}
+// troops whose stretch is gone (the border moved away from it): to the nearest stretch of their own within a few
+// blocks, else into the reserve
+function lfMigrate() {
+  const S = lfState().s, res = econ.front.res;
+  for (const key of Object.keys(S)) {
+    const e = S[key], b = lfBorder.get(+key);
+    for (const o of Object.keys(e).map(Number)) {
+      if (b && (b.a === o || b.b === o)) continue;
+      const v = e[o]; delete e[o];
+      const bx = Math.floor(key / LF_NW), by = key % LF_NW;
+      let best = null, bd = 9e9;
+      for (const k2 of lfMine.get(o) || []) { const d = Math.max(Math.abs(Math.floor(k2 / LF_NW) - bx), Math.abs(k2 % LF_NW - by)); if (d < bd) { bd = d; best = k2; } }
+      if (best !== null && bd <= 6) lfAdd(best, o, v); else res[o] = (res[o] || 0) + v;
+    }
+    if (!Object.keys(e).length) delete S[key];
+  }
+}
+// who attacks a stretch: the player where marked; the AI where it is clearly the stronger
+function lfAttacks(o, key, so, se) {
+  if (isHuman(o)) return econ.front.atk[key] === o;
+  if (!game.ai) return false;
+  return so >= 3 && so > se * 1.3;
+}
+// the land of b next to a's in a block goes over to a, one layer of cells
+function lfErode(key, a, b) {
+  const bc = lfBC(), n = worldCells(win.L), bx = Math.floor(key / LF_NW), by = key % LF_NW;
+  let x0 = Math.floor(bx * bc - win.cx0) - 1, y0 = Math.floor(by * bc - win.cy0) - 1, x1 = Math.ceil((bx + 1) * bc - win.cx0) + 1, y1 = Math.ceil((by + 1) * bc - win.cy0) + 1;
+  x0 = Math.max(1, x0); y0 = Math.max(1, y0); x1 = Math.min(W - 1, x1); y1 = Math.min(H - 1, y1);
+  if (x1 <= x0 || y1 <= y0) return 0;
+  const flip = [];
+  for (let y = y0; y < y1; y++) for (let x = x0, i = y * W + x0; x < x1; x++, i++) if (own[i] === b && (own[i - 1] === a || own[i + 1] === a || own[i - W] === a || own[i + W] === a)) flip.push(i);
+  for (const i of flip) { occTrack(i, b, a); own[i] = a; }
+  if (flip.length) { addDirty(x0, y0, x1, y1); markFrontDirty(x0, y0, x1, y1); }
+  return flip.length;
+}
+// a tick of the live front: h hours of battle on every stretch
+function* lfTickGen(h) {
+  yield* lfScanGen();
+  lfMigrate();
+  const S = lfState().s, acc = econ.front.acc || (econ.front.acc = {}), km = metersPerCell() / 1000;
+  let moved = 0, i = 0;
+  for (const [key, e] of lfBorder) {
+    if ((++i & 63) === 0) yield* yieldPoint();
+    const sa = lfStr(key, e.a), sb = lfStr(key, e.b);
+    if (!sa && !sb) continue;
+    const aa = lfAttacks(e.a, key, sa, sb), ab = lfAttacks(e.b, key, sb, sa);
+    if (!aa && !ab) continue;
+    // the attacker: the one that attacks, or the stronger if both do
+    const [A, B, sA, sB] = (aa && (!ab || sa >= sb)) ? [e.a, e.b, sa, sb] : [e.b, e.a, sb, sa];
+    const r1 = .8 + Math.random() * .4, r2 = .8 + Math.random() * .4;
+    const lossA = Math.min(sA, .012 * h * sB * r1), lossB = Math.min(sB, .009 * h * sA * r2);
+    lfAdd(key, A, -lossA); lfAdd(key, B, -lossB);
+    stAdd(A, 'lfLost', lossA); stAdd(B, 'lfLost', lossB); stAdd(A, 'lfKilled', lossB); stAdd(B, 'lfKilled', lossA);
+    const nA = sA - lossA, nB = sB - lossB;
+    if (nA > nB * 1.15 && nA >= 1) {
+      // the advance: up to a kilometre an hour against nobody, slower the closer the fight
+      const kmh = .25 * Math.min(4, nA / (nB + .5) - 1);
+      const a2 = (acc[key] || 0) + kmh * h / km; let layers = Math.floor(a2); acc[key] = a2 - layers;
+      for (; layers > 0; layers--) moved += lfErode(key, A, B);
+    }
+  }
+  if (moved) { econ.front.cells = (econ.front.cells || 0) + moved; checkCities(); renderScore(); }
+  lfRenderBar();
+}
+// a day: the AI sends battalions to its stretches where the enemy is strongest against it; with the economy they
+// are bought, without it they come at a steady rate; a player without the economy gets them into the reserve
+function lfDay() {
+  if (!lfOn()) return;
+  const st = lfState();
+  for (const [o, keys] of lfMine) {
+    if (!countries[o - 1]) continue;
+    const free = Math.ceil(keys.length * .12);
+    if (isHuman(o)) { if (!game.econ) st.res[o] = (st.res[o] || 0) + free; continue; }
+    let n = game.econ && game.paid ? Math.min(Math.ceil(keys.length * .3), lfAfford(o)) : free;
+    if (n <= 0) continue;
+    if (game.econ && game.paid) lfPay(o, n);
+    n += Math.floor(st.res[o] || 0); st.res[o] = (st.res[o] || 0) % 1;
+    // the most threatened stretches first: enemy strength there over own
+    const need = keys.map(k => { const e = lfBorder.get(k), en = e.a === o ? e.b : e.a; return [k, lfStr(k, en) - lfStr(k, o) + Math.random()]; }).sort((x, y) => y[1] - x[1]);
+    for (let j = 0; n > 0 && need.length; j = (j + 1) % need.length) { const add = Math.min(n, 2); lfAdd(need[j][0], o, add); n -= add; if (j === need.length - 1 && need[j][1] < -20) break; }
+  }
+}
+// a battalion: a fifth of a division of the line's arm, in money and equipment of the time
+const lfPrice = o => unitCost({ era, type: liveKinds()[0], owner: o, ech: 'II' });
+function lfAfford(o) { const st = stock(o), p = lfPrice(o); return Math.max(0, Math.min(Math.floor(money(o) * .05 / p), Math.floor((st.eq.inf || 0) / .2))); }
+function lfPay(o, n) {
+  if (!game.econ || !game.paid) return true;
+  const st = stock(o), p = lfPrice(o) * n, eq = .2 * n;
+  if (money(o) < p || (st.eq.inf || 0) < eq) return false;
+  econ.money[o] -= p; st.eq.inf -= eq; stAdd(o, 'armySpent', p); stAdd(o, 'lfBought', n);
+  return true;
+}
+// at the start of a war: every stretch of every side gets its battalions
+function lfInit(per = 6) {
+  econ.front = { s: {}, res: {}, atk: {} };
+  drain(lfScanGen());
+  for (const [key, e] of lfBorder) { lfAdd(key, e.a, per); lfAdd(key, e.b, per); }
+  setLiveFront(true, true); lfRenderBar();
+}
+// ---- the player's brush on the front ----
+let lfBrush = { mode: null, step: 5 }, lfStroke = null;
+const LF_R = 26;                                         // the brush, in screen pixels
+function lfBrushAt(g, alt) {
+  const o = player; if (!o || !lfOn()) return;
+  const r = LF_R / view.s, st = lfState(), now = performance.now();
+  const keys = (lfMine.get(o) || []).filter(k => { const e = lfBorder.get(k); return e && Math.hypot(e.x - g.x, e.y - g.y) <= r; });
+  if (!keys.length) return;
+  if (mpGuest() && !mpApplying) { const fresh = keys.filter(k => !lfStroke.seen.has(k)); fresh.forEach(k => lfStroke.seen.add(k)); if (fresh.length) mpGuestCmd({ t: 'lf', mode: lfBrush.mode, keys: fresh, step: lfBrush.step, alt }); return; }
+  for (const k of keys) {
+    if (lfStroke.seen.has(k)) continue; lfStroke.seen.add(k);
+    lfApply(o, lfBrush.mode, k, lfBrush.step, alt);
+  }
+  requestDrawFast(); lfRenderBar();
+}
+function lfApply(o, mode, k, step, alt) {
+  const st = lfState();
+  if (mode === 'add') {
+    let n = step; const fromRes = Math.min(n, Math.floor(st.res[o] || 0)); st.res[o] = (st.res[o] || 0) - fromRes; n -= fromRes;
+    let got = fromRes;
+    if (n > 0) { if (lfPay(o, n)) got += n; else if (!lfStroke || !lfStroke.broke) { if (lfStroke) lfStroke.broke = true; if (o === player) toast(game.econ && game.paid ? 'Не хватает денег или стрелкового снаряжения на новые батальоны: ' + fmtMoney(lfPrice(o)) + ' и 0,2 компл. за батальон.' : 'Резерв пуст.'); } }
+    if (got) { lfAdd(k, o, got); if (lfStroke) lfStroke.n += got; }
+  } else if (mode === 'atk') { if (alt) { if (st.atk[k] === o) delete st.atk[k]; } else st.atk[k] = o; if (lfStroke) lfStroke.n++; }
+  else if (mode === 'del') { const v = Math.min(step, lfStr(k, o)); if (v > 0) { lfAdd(k, o, -v); st.res[o] = (st.res[o] || 0) + v; if (lfStroke) lfStroke.n += v; } }
+}
+function lfStrokeEnd() {
+  const s = lfStroke; lfStroke = null; if (!s || !s.n) return;
+  toast(lfBrush.mode === 'add' ? 'На фронт: +' + Math.round(s.n) + ' бат.' : lfBrush.mode === 'atk' ? (s.alt ? 'Наступление отменено на ' : 'Наступать: отмечено ') + s.n + ' ' + plural(s.n, 'участок', 'участка', 'участков') : 'В резерв: ' + Math.round(s.n) + ' бат.');
+  scheduleSave();
+}
+// the battalions of every side on the stretches on screen: a bar for each, the attack marks; the brush
+function drawLfOverlay(c) {
+  if (!lfOn() || !lfBorder.size || !W) return;
+  const vw = uiCv.width / dpr, vh = uiCv.height / dpr, st = econ.front, bcPx = lfBC() * view.s, showBars = bcPx > 9;
+  for (const [key, e] of lfBorder) {
+    const x = e.x * view.s + view.x, y = e.y * view.s + view.y;
+    if (x < -20 || y < -20 || x > vw + 20 || y > vh + 20) continue;
+    const atk = st.atk[key];
+    if (atk) {
+      // an arrow from the attacker's side across the line
+      const sg = atk === e.a ? 1 : -1, ax = e.nx * sg, ay = e.ny * sg, L = Math.max(7, Math.min(16, bcPx * .6));
+      c.beginPath(); c.moveTo(x - ax * L, y - ay * L); c.lineTo(x + ax * L * .6, y + ay * L * .6);
+      c.lineWidth = 2.2; c.strokeStyle = 'rgba(230,70,50,.95)'; c.stroke();
+      c.beginPath(); c.moveTo(x + ax * L, y + ay * L); c.lineTo(x + ax * L * .3 - ay * 5, y + ay * L * .3 + ax * 5); c.lineTo(x + ax * L * .3 + ay * 5, y + ay * L * .3 - ax * 5); c.closePath(); c.fillStyle = 'rgba(230,70,50,.95)'; c.fill();
+    }
+    if (!showBars && !lfBrush.mode) continue;
+    const sa = lfStr(key, e.a), sb = lfStr(key, e.b); if (!sa && !sb) continue;
+    const w = Math.max(8, Math.min(26, bcPx * .8)), t = sa + sb, ca = rgb[e.a] || [120, 120, 120], cb = rgb[e.b] || [120, 120, 120];
+    c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(x - w / 2 - 1, y - 3, w + 2, 6);
+    c.fillStyle = `rgb(${ca})`; c.fillRect(x - w / 2, y - 2, w * sa / t, 4);
+    c.fillStyle = `rgb(${cb})`; c.fillRect(x - w / 2 + w * sa / t, y - 2, w * sb / t, 4);
+    if (bcPx > 30) { c.font = `600 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,.85)'; const tx = Math.round(sa) + ' : ' + Math.round(sb); c.strokeText(tx, x, y - 4); c.fillStyle = '#eee'; c.fillText(tx, x, y - 4); }
+  }
+  if (lfBrush.mode && hover && tool === 'units') {
+    const x = hover.x * view.s + view.x, y = hover.y * view.s + view.y;
+    c.beginPath(); c.arc(x, y, LF_R, 0, Math.PI * 2); c.lineWidth = 1.6; c.setLineDash([4, 3]);
+    c.strokeStyle = lfBrush.mode === 'atk' ? 'rgba(230,80,60,.95)' : lfBrush.mode === 'del' ? 'rgba(180,180,180,.9)' : 'rgba(229,173,72,.95)'; c.stroke(); c.setLineDash([]);
+  }
+}
+// strength of a side on a stretch, for the soldiers of the chain: how many ranks (0: no one stands there)
+const lfRanks = v => v <= .05 ? 0 : v < 4 ? 1 : v < 10 ? 2 : 3;
+// the bar of the live front in this mode: the brushes, the step, the totals
+function lfRenderBar() {
+  const box = $('#lfBar'); if (!box) return;
+  const show = lfOn() && !!W && !watchMode;
+  box.hidden = !show; document.body.classList.toggle('lf', show); if (!show) return;
+  const o = player, st = econ.front;
+  let mine = 0, foe = 0; for (const [key, e] of lfBorder) { if (e.a === o || e.b === o) { mine += lfStr(key, o); foe += lfStr(key, e.a === o ? e.b : e.a); } }
+  box.querySelector('.lft').textContent = o ? 'На фронте: ' + Math.round(mine) + ' бат. · против вас: ' + Math.round(foe) + ' · резерв: ' + Math.floor(st.res[o] || 0) + (game.econ && game.paid ? ' · батальон ' + fmtMoney(lfPrice(o)) : '') : 'Выберите страну';
+  box.querySelectorAll('[data-lf]').forEach(b => b.classList.toggle('on', b.dataset.lf === lfBrush.mode));
+  box.querySelectorAll('[data-lfs]').forEach(b => b.classList.toggle('on', +b.dataset.lfs === lfBrush.step));
+}
+function lfSetBrush(m) {
+  lfBrush.mode = lfBrush.mode === m ? null : m;
+  if (lfBrush.mode && tool !== 'units') setTool('units');
+  cv.style.cursor = lfBrush.mode ? 'crosshair' : toolCursor();
+  lfRenderBar(); requestUi();
+  if (lfBrush.mode) toast(lfBrush.mode === 'add' ? 'Ведите кистью вдоль своей линии фронта: на каждый участок встанет ' + lfBrush.step + ' бат. (сначала из резерва).' : lfBrush.mode === 'atk' ? 'Ведите кистью по участкам, где наступать (с Shift — отменить). Наступает тот, кто сильнее.' : 'Ведите кистью: батальоны уходят с участков в резерв.');
+}
+$('#lfBar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.lf) lfSetBrush(b.dataset.lf);
+  else if (b.dataset.lfs) { lfBrush.step = +b.dataset.lfs; lfRenderBar(); }
+  else if (b.dataset.lfa === 'all') { const st = lfState(); for (const k of lfMine.get(player) || []) { const e = lfBorder.get(k), en = e.a === player ? e.b : e.a; if (lfStr(k, player) > lfStr(k, en) * 1.15) st.atk[k] = player; } toast('Наступать везде, где вы сильнее.'); requestUi(); }
+  else if (b.dataset.lfa === 'stop') { const st = lfState(); for (const k of Object.keys(st.atk)) if (st.atk[k] === player) delete st.atk[k]; toast('Наступление остановлено: войска держат линию.'); requestUi(); }
+});
+// the scan when time stands (the brush needs the stretches) and on a guest, who runs no battle
+setInterval(() => { if (lfOn() && W && geoStore && (!battlesOn || mpGuest()) && performance.now() - lfScanT > 600) runJob('lfscan', (function* () { yield* lfScanGen(); lfRenderBar(); requestUi(); })()); }, 700);
 // the bar over the map with the border tool: the switch and the arms that follow
 function renderLiveBar() {
   const box = $('#liveBar');
@@ -9060,7 +9310,7 @@ const frontById = id => fronts.find(f => f.id === id);
 const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <= 0;
 // the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
 function calendarTick() { drain(calendarTickGen()); }
-function* calendarTickGen() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { yield* econDayGen(); yield* yieldPoint(); popDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
+function* calendarTickGen() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { yield* econDayGen(); yield* yieldPoint(); popDay(); lfDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
 // ---------- the frame budget: the heavy work of a battle in slices, a few milliseconds a frame ----------
 // A tick of battle, a pass over the fronts, a day of the economy: each is a generator that gives way whenever its
 // slice of the frame is used up, and goes on in the next frame. The picture keeps its 60 frames a second however
@@ -9095,7 +9345,7 @@ function* battleTickGen() {
 }
 function* battleTickRun() {
   if (!own) return;
-  if (!units.length) { yield* calendarTickGen(); return; }
+  if (!units.length && !lfOn()) { yield* calendarTickGen(); return; }
   engaged = []; inBattle.clear();
   const h = hoursPerTick;
   if (!gridOk() || units.length < 20000 || performance.now() - bgrid.t > 300) buildBattleGrid();
@@ -9146,13 +9396,14 @@ function* battleTickRun() {
     f.plan = clamp((f.plan || 0) + (f.mode === 'attack' ? -.004 : .005) * h, 0, 1);
   }
   yield* yieldPoint();
+  if (lfOn()) yield* lfTickGen(h);
   if (game.ai && game.aiMode !== 'econ') yield* aiFrontsGen(h);
   if (goalCheck()) startMarch();
   yield* calendarTickGen();
   yield* yieldPoint();
   if (aiDeployQ.size) aiDeployNext(2);
   yield* yieldPoint();
-  if (game.reinforce) yield* reinforceTickGen(h);
+  if (game.reinforce && !lfOn()) yield* reinforceTickGen(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
     noteLosses(dead);
@@ -10870,7 +11121,7 @@ function* econDayGen() {
     econ.money[k] = money(k) + inc - exp; stAdd(k, 'inc', inc); stAdd(k, 'exp', exp);
     econ.last[k] = { inc, exp, eraInc, tax, facInc, army };
     if (!isHuman(k) && !humanAllied(k) && game.ai && game.aiMode !== 'troops') econAi(k);
-    if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeployQ.add(k);   // carried out a country or two a tick (battleTick)
+    if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy() && !lfOn()) aiDeployQ.add(k);   // carried out a country or two a tick (battleTick)
   }
   econ.day = (econ.day || 0) + 1;
   if (game.aid && econ.day % 7 === 0) econAid();
@@ -10927,7 +11178,8 @@ function econAi(k) {
     }
   }
   // a few dozen enemy units picked at random and kept if within reach (not all of them: battles have thousands)
-  const foes = units.filter(u => atWar(k, u.owner));
+  let foes = units.filter(u => atWar(k, u.owner));
+  if (!foes.length && lfOn()) foes = [...lfBorder.values()].filter(e => (atWar(k, e.a) && lfStr(e.key, e.a) > 1) || (atWar(k, e.b) && lfStr(e.key, e.b) > 1));
   const targetsNear = kind => {
     const out = [];
     for (let i = 0; i < 40 && foes.length; i++) { const u = foes[Math.floor(Math.random() * foes.length)]; if (econCanReach(k, kind, toWorld(u.x, u.y))) out.push(u); }
@@ -10995,9 +11247,12 @@ function econImpact(k, kind, g, k2, quiet) {
     if (f.hp <= 0) fac = f;
   }
   if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
+  // battalions of the live front under the blast
+  let lfHit = 0;
+  if (lfOn()) for (const [key, e] of lfBorder) { if (Math.hypot(e.x - g.x, e.y - g.y) > R + lfBC()) continue; for (const o of [e.a, e.b]) if (atWar(k, o)) { const v = lfStr(key, o), d = Math.min(v, (v * .12 + .6) * S.dmg * k2); if (d > 0) { lfAdd(key, o, -d); lfHit += d; stAdd(o, 'lfLost', d); stAdd(k, 'lfKilled', d); } } }
   const civ = strikeCivilians(kind, g, S.radius); addScar(g, S.radius);
   stAdd(k, 'hitUnits', hit.length); stAdd(k, 'civKilled', civ); stAdd(fineOwner(g.x, g.y), 'civLost', civ); if (fac) { stAdd(k, 'facKilled'); stAdd(fac.owner, 'facLost'); }
-  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
+  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '') + (lfHit >= .5 ? ', выбито батальонов: ' + Math.round(lfHit) : '') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
   logEvent(txt, k);
   if (!quiet || (player && fineOwner(g.x, g.y) === player && (kind === 'missile' || fac))) toast(txt);
   renderEcon(); if (infoSel) renderInfoCard(); requestDraw();
@@ -11934,6 +12189,7 @@ cv.addEventListener('pointerdown', e => {
   }
   if (e.button !== 0) return;
   if (tool === 'info') { pointers.delete(e.pointerId); infoClick(toGrid(p)); return; }
+  if (tool === 'units' && lfBrush.mode && lfOn()) { lfStroke = { seen: new Set(), n: 0, alt: e.shiftKey }; drag = { mode: 'lfbrush', alt: e.shiftKey }; lfBrushAt(toGrid(p), e.shiftKey); return; }
   const g = toGrid(p);
   const gx = Math.floor(g.x), gy = Math.floor(g.y);
   const inside = gx >= 0 && gy >= 0 && gx < W && gy < H;
@@ -12087,6 +12343,8 @@ cv.addEventListener('pointermove', e => {
     const g = toGrid(p);
     for (const m of drag.group) moveUnit(m.v, g.x - m.ox, g.y - m.oy);
     drag.moved = true; requestDrawFast();
+  } else if (drag.mode === 'lfbrush') {
+    lfBrushAt(toGrid(p), drag.alt); requestUi();
   } else if (drag.mode === 'box' || drag.mode === 'sector') {
     drag.b = toGrid(p); requestUi();
   } else if (drag.mode === 'region') {
@@ -12122,6 +12380,7 @@ function endPointer(e) {
     warpStep(); fxEnd(); resistSettle(); if (drag.wm !== 'smooth') { cleanBox(drag.ub); fxSummary(); } $('#hint').textContent = HINTS.warp;
     if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
   }
+  if (drag.mode === 'lfbrush') { drag = null; lfStrokeEnd(); requestUi(); return; }
   if (drag.mode === 'sector') {
     const { a, b, only } = drag; drag = null; requestUi();
     if (Math.abs(b.x - a.x) * view.s < 12 || Math.abs(b.y - a.y) * view.s < 12) { toast('Зажмите кнопку мыши и протяните рамку по линии фронта.'); return; }
@@ -12271,6 +12530,7 @@ window.addEventListener('keydown', e => {
   if (tool === 'units' && (lineMode()) && selFront && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteFront(selFront); return; }
   if (tool === 'units' && selUnit && (e.code === 'Delete' || e.code === 'Backspace')) { e.preventDefault(); deleteUnit(); return; }
   if (e.code === 'Escape' && !$('#statBox').hidden) { openStats(false); return; }
+  if (e.code === 'Escape' && lfBrush.mode) { lfBrush.mode = null; lfRenderBar(); cv.style.cursor = toolCursor(); requestUi(); return; }
   if (e.code === 'Escape' && econMode) { econSetMode(null); return; }
   if (e.code === 'Escape' && selGen) { closeGen(); return; }
   if (e.code === 'Escape' && targets().length) { selectUnit(null); return; }
@@ -13238,7 +13498,7 @@ function renderCampDetail() {
   $('#scrCampaign .mhead h2').textContent = campMode === 'watch' ? 'Смотреть войну' : 'Своя игра';
   $('#scrCampaign .mhead p').textContent = campMode === 'watch' ? 'Выберите войну и этап, с которого начать' : 'Выберите войну, этап и сторону';
   const fb = $('#campStages .cfilm'); if (fb) fb.hidden = campMode !== 'watch';
-  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === 'l' ? 'live' : b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const pc = w.countries[campPlayer - 1];
   $('#campAs').innerHTML = ''; $('#campAs').append(campMode === 'watch' ? 'Взгляд со стороны: ' : 'Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
   drawCampPreview(w);
@@ -13518,7 +13778,7 @@ function deploySize() {
   setUnitSize(want, true);
   return true;
 }
-let campTroops = (v => v === 's' ? 'sector' : v === '1')(LS.get('mezha-troops', '1'));
+let campTroops = (v => v === 'l' ? 'live' : v === 's' ? 'sector' : v === '1')(LS.get('mezha-troops2', 'l'));
 async function startScenario(id, pl, mode) {
   if (mp && !mp.starting) mpLeave();
   const watch = mode === 'watch' || (mode === undefined && watchMode);
@@ -13547,6 +13807,8 @@ async function startScenario(id, pl, mode) {
   setMode(watch);
   closeMenu(); renderHud(); scheduleSave();
   // troops on the sectors the player chooses: the tool is ready and says what to do
+  if (!watch && campTroops === 'live' && wars.length) { lfInit(); setTool('units'); setTimeout(() => toast('Живой фронт: у каждой стороны силы на участках фронта. «＋ Войска на фронт» — кисть подкреплений, «Наступать» — где ударить. Пуск — P.'), 900); }
+  else if (watch || campTroops !== 'live') { lfRenderBar(); }
   if (!watch && campTroops === 'sector' && wars.length) { setTool('units'); setUnitMode('sector', true); setTimeout(() => toast('Обведите рамкой участок фронта — там встанут войска обеих сторон (с Shift — только ваши). Участков может быть сколько угодно.'), 900); }
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
@@ -13575,7 +13837,7 @@ function renderStats() {
   const grid = $('#stGrid'); grid.textContent = '';
   const has = t => ft.includes(t) || r['made_' + t];
   grid.append(
-    card('Армия', [['Сейчас в строю', fmtInt(now)], ['Развёрнуто за войну', fmtInt(r.deployed)], ['Потеряно отрядов', fmtInt(r.lost), r.lost ? 'bad' : ''], ['Уничтожено у противника', fmtInt(r.kills), r.kills ? 'good' : ''], ['Соотношение потерь', r.lost ? ((r.kills || 0) / r.lost).toFixed(2).replace('.', ',') + ' : 1' : r.kills ? '∞' : '—']]),
+    card('Армия', [['Сейчас в строю', fmtInt(now)], ['Развёрнуто за войну', fmtInt(r.deployed)], ['Потеряно отрядов', fmtInt(r.lost), r.lost ? 'bad' : ''], ['Уничтожено у противника', fmtInt(r.kills), r.kills ? 'good' : ''], ['Батальонов потеряно (живой фронт)', r.lfLost ? fmtInt(r.lfLost) : null, 'bad'], ['Батальонов противника выбито', r.lfKilled ? fmtInt(r.lfKilled) : null, 'good'], ['Соотношение потерь', r.lost ? ((r.kills || 0) / r.lost).toFixed(2).replace('.', ',') + ' : 1' : r.kills ? '∞' : '—']]),
     card('Производство', [['Стрелковое оружие, компл.', fmtNum(r.made_inf || 0)], ['Артиллерия, компл.', fmtNum(r.made_art || 0)], ['Бронетехника, компл.', fmtNum(r.made_tank || 0)], ['Авиация, компл.', fmtNum(r.made_air || 0)],
       ...Object.keys(STRIKE).filter(v => r['made_' + v] || (variantsOf(STRIKE[v].kind).includes(v) && has(STRIKE[v].kind))).map(v => [STRIKE[v].kind === 'bomber' ? 'Бомбардировщиков' : STRIKE[v].name, fmtInt(r['made_' + v])]), [econYear() < 1955 ? 'Зенитных батарей' : 'Ракет ПВО', has('aa') ? fmtInt(r.made_aa) : null]]),
     card('Удары', [['Ударов нанесено', fmtInt(r.strikes)], ...Object.keys(STRIKE).filter(v => r['launch_' + v]).map(v => [(STRIKE[v].kind === 'bomber' ? 'Вылетов бомбардировщиков' : 'Запущено: ' + STRIKE[v].name.toLowerCase()), fmtInt(r['launch_' + v])]),
@@ -13873,7 +14135,7 @@ async function mpHost(rules) {
   mpLeave(true);
   mp = { role: 'host', live: false, rules, peers: [], humans: {}, allTiles: new Set(), war: rules.war, chat: [] };
   game.econ = true; game.paid = true;
-  const was = campTroops; campTroops = true;
+  const was = campTroops; campTroops = 'live';
   mp.starting = true;
   try { await startScenario(rules.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
   setBattles(false);
@@ -13907,7 +14169,7 @@ function mpState(full) {
   if (!full) mpTiles.clear();
   const e = econ;
   return { t: full ? 'full' : 'st', units: units.map(encU), forms, generals, fronts: fronts.map(encF), tiles,
-    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, scars: e.scars, aidLog: (e.aidLog || []).slice(0, 12), last: e.last, stats: e.stats, statT0: e.statT0 },
+    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, scars: e.scars, aidLog: (e.aidLog || []).slice(0, 12), last: e.last, stats: e.stats, statT0: e.statT0, front: e.front },
     wars, game, gameDate, on: battlesOn, hpt: hoursPerTick, log: gameLog.slice(0, 40), countries, humans: mp.humans, rules: mp.rules };
 }
 // a tile of borders in bytes: runs of (value, count up to 255)
@@ -13968,6 +14230,7 @@ function mpOnMsg(peer, m) {
     case 'fronts': fronts = fronts.filter(f => f.owner !== k).concat((m.list || []).filter(f => f.owner === k).map(decF)); requestDraw(); return;
     case 'build': { const ok = econBuild(k, m.type, fromWorld({ mx: m.mx, my: m.my }), true); mpTellPeer(peer, ok ? factName(m.type) + ': стройка начата.' : 'Строить можно только на своей земле и при деньгах в казне.'); return; }
     case 'strike': { const ok = econStrike(k, m.kind, fromWorld({ mx: m.mx, my: m.my }), true); if (!ok) mpTellPeer(peer, 'Удар не состоялся: не хватает оружия или цель слишком далеко.'); return; }
+    case 'lf': { if (!lfOn()) return; lfStroke = { seen: new Set(), n: 0 }; for (const key of m.keys || []) { const e = lfBorder.get(key); if (e && (e.a === k || e.b === k)) lfApply(k, m.mode, key, Math.min(10, +m.step || 5), !!m.alt); } lfStroke = null; return; }
     case 'line': { const f = econ.facs.find(x => x.id === m.id); if (f && f.owner === k) setLine(f, m.line); return; }
     case 'aid': { const to = +m.to, pk = Object.assign({}, m.pack); if (pk.eq === 'inf') pk.eq = Infinity; if (countries[to - 1] && to !== k && !atWar(k, to)) aidSend(k, to, pk, true); return; }
   }
@@ -14210,7 +14473,7 @@ $('#wcPlay').addEventListener('click', () => { const keep = campTroops; campTroo
 $('#wcFold').addEventListener('click', () => $('#watchCard').classList.toggle('fold'));
 $('#hudModeW').addEventListener('click', () => { if (watchMode || !curWarId) return; if (units.length && !confirm('Перейти в просмотр? Текущая партия закончится — её можно сохранить в файл в меню.')) return; startScenario(curWarId, player || 1, 'watch'); });
 $('#hudModeP').addEventListener('click', () => { if (watchMode) $('#wcPlay').click(); });
-document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1'; LS.set('mezha-troops', b.dataset.tr); renderCampDetail(); }));
+document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 'l' ? 'live' : b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1'; LS.set('mezha-troops2', b.dataset.tr); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
 let menuBgDone = false;
