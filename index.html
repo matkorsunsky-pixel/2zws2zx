@@ -12283,9 +12283,15 @@ function vpOf(k) { let s = 0; for (const c of cities) if (cityOwner(c) === k) s 
 // a treasury is opened the first time a country needs one: the player's with the starting capital, the others' in
 // proportion to their cities
 function money(k) {
+  // a sandbox before its first day: an untouched treasury follows the country's land as it is drawn
+  if (econ.money[k] !== undefined && !econ.day && econ.money[k] === econ.base[k] && !battlesOn && (!curWarId || (WARS.find(q => q.id === curWarId) || {}).peace)) delete econ.money[k];
   if (econ.money[k] === undefined) {
-    const mine = player ? vpOf(player) : 0, theirs = vpOf(k);
-    econ.money[k] = (isHuman(k) || !mine ? 1 : clamp(theirs / mine, .25, 3)) * START_CAPITAL * eraScale();
+    const mine = player ? vpOf(player) : 0, theirs = vpOf(k), w = curWarId && WARS.find(q => q.id === curWarId);
+    let f = isHuman(k) || !mine ? 1 : clamp(theirs / mine, .25, 3);
+    // a sandbox (one's own map, a blank Earth, today's world): the treasury goes by the country's land, a share
+    // of the land of the world as big as Ukraine's (~0.4%) gives about the capital of the age
+    if ((!w || w.peace) && own && W && countries[k - 1]) { const A = areas(); let tot = A.tot; if (!tot) { tot = 0; for (let j = 1; j < A.n.length; j++) tot += A.n[j]; } const sh = tot ? (A.n[k] || 0) / tot : 0; f = clamp(Math.sqrt(sh / .004), .1, 4); }
+    econ.money[k] = f * START_CAPITAL * eraScale();
     econ.base[k] = econ.money[k];
   }
   return econ.money[k];
@@ -13973,6 +13979,7 @@ function makeSample() {
   return { canvas: c, w, h, own: sample };
 }
 function loadSample() {
+  freshWorld();
   const s = makeSample();
   setMap(s.canvas, s.w, s.h);
   geoStack = []; renderGeoPanel();
@@ -14848,10 +14855,15 @@ $('#fileProj').addEventListener('change', () => closeMenu());
 document.querySelectorAll('#menu [data-back]').forEach(b => b.addEventListener('click', () => showScreen(null)));
 // sandbox
 function freshWorld() {
-  econ = econBlank(); econMode = null; infoSel = infoHover = null; renderInfoCard();
+  // a new map starts from nothing: no treasury, factories, stats, front or generals of the war played before
+  econ = econBlank(); econMode = null; econFx = []; infoSel = infoHover = null; renderInfoCard();
+  fg = null; fgOwn = null; fgSig = ''; lfBorder = new Map(); lfMine = new Map(); lfGenPick = 0; curWarId = null; lfHist = null;
+  lfRegCache = new Map(); armyPotCache = new Map(); storeAreaCache = null; storeAreaStamp = 0;
+  ['#mobBox', '#genBox', '#armyBox'].forEach(s => { const el = $(s); if (el) el.hidden = true; });
   setBattles(false);
   units = []; forms = []; cities = []; arrows = []; generals = []; gameLog = []; selUnit = null; selUnits = []; selGen = null; fronts = []; selFront = null;
-  countries = []; exclaves = []; wars = [];
+  countries = []; exclaves = []; wars = []; recalcWars();
+  setTimeout(() => { renderEcon(); renderHud(); lfRenderBar(); });
 }
 document.querySelectorAll('#scrSandbox .scard').forEach(b => b.addEventListener('click', () => ach('ACH_SANDBOX')));
 $('#sbEarth').addEventListener('click', () => { freshWorld(); openEarth(); mapTitle = 'Чистая Земля'; renderLog(); renderGenerals(); closeMenu(); });
