@@ -1169,6 +1169,24 @@ body.mode-watch #btnStats { display: none !important; }
 .lfbar button[data-lf="atk"].on { background: #c0392b; color: #fff; }
 body.mode-watch #lfBar { display: none !important; }
 body.lf #sidePick, body.lf #liveBar { display: none !important; }
+.lfbar .lffree { display: none; max-width: 170px; padding: 5px 24px 5px 8px; font-size: 12px; }
+.lfbar.free .lffree { display: inline-block; } .lfbar.free .lfmob { display: none; }
+.mobbox { position: fixed; right: 16px; top: 140px; z-index: 236; width: 400px; max-width: calc(100vw - 32px); max-height: calc(100vh - 240px); display: flex; flex-direction: column; border-radius: 16px; background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid var(--line2); box-shadow: 0 14px 44px rgb(0 0 0 / .5); color: var(--ink); }
+.mobbox[hidden] { display: none; }
+.mobbox header { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 6px; }
+.mobbox header b { font-size: 15px; } .mobbox header small { flex: 1; color: var(--muted); font-size: 11.5px; }
+.mobbox header button { width: 26px; height: 26px; padding: 0; border-radius: 8px; }
+.mobbox .mobnote { margin: 0 14px 8px; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.mobbox h5 { margin: 4px 14px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.mobbox ul { margin: 0 14px 8px; padding-left: 16px; font-size: 12px; }
+#mobList { overflow: auto; padding: 0 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.mobrow { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; padding: 6px 6px; border-radius: 10px; }
+.mobrow:hover { background: rgb(255 255 255 / .04); }
+.mobrow b { display: block; font-size: 12.5px; } .mobrow small { color: var(--muted); font-size: 11px; }
+.mobrow button { padding: 5px 8px; font-size: 11.5px; white-space: nowrap; }
+/* ordinary troops are gone: their panels with them */
+#fUnits, #armyBar, #genCards, #genEmpty, #genAdd, #genFold, #sidePick, #deployBtn, #dDeploy { display: none !important; }
+.mpf:has(#mpCap) { display: none; }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
@@ -1290,7 +1308,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <button data-tool="eraser" data-tip="Ластик · 3" aria-label="Ластик"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M4.5 15.5l9-9a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L12 20H8.5z"/><path d="M9 11l6 6"/></svg><kbd>3</kbd></button>
     <button data-tool="fill" data-tip="Заливка · 4" aria-label="Заливка"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l9 9-7 7a2 2 0 0 1-2.8 0L3.8 12.6a2 2 0 0 1 0-2.8z"/><path d="M4 12h14"/><path d="M21 16s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z"/></svg><kbd>4</kbd></button>
     <span class="rail-sep"></span>
-    <button data-tool="units" data-tip="Войска · 7" aria-label="Войска"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 6l18 12M21 6L3 18"/></svg><kbd>7</kbd></button>
+    <button data-tool="units" data-tip="Фронт: силы и наступление · 7" aria-label="Фронт"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 6l18 12M21 6L3 18"/></svg><kbd>7</kbd></button>
     <button data-tool="arrows" data-tip="Стрелки · 8" aria-label="Стрелки"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c4-1 7-4 9-9"/><path d="M9 6l6-1 1 6"/></svg><kbd>8</kbd></button>
     <button data-tool="cities" data-tip="Города · 9" aria-label="Города"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z"/></svg><kbd>9</kbd></button>
     <span class="rail-sep"></span>
@@ -1496,7 +1514,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
           <label for="warSel" class="sub"><b>Войны и конфликты</b></label>
           <select id="warSel" aria-label="Выберите войну"></select>
           <p class="hint" id="warInfo"></p>
-          <label class="check"><input type="checkbox" id="warTroops" checked><span>С войсками, уже расставленными на фронте</span></label>
+          <label class="check"><input type="checkbox" id="warTroops" checked><span>С силами живого фронта на всех участках</span></label>
       <button id="warGo" class="primary">Открыть сценарий</button>
           <p class="hint">Открывает карту Земли, раскрашенную по воюющим странам и союзам, с ключевыми городами, датой и известными полководцами. Границы 1904, 1914, 1919, 1939 годов взяты с исторических карт, линия фронта СВО — с карты DeepState, Корея 1950 года делится по 38-й параллели; остальные сценарии собраны из современных стран и областей. Побережья и границы точные на любом приближении. Текущая карта будет заменена: если она нужна, сначала сохраните проект.</p>
         </div>
@@ -1640,7 +1658,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
-  <div class="lfbar" id="lfBar" hidden role="toolbar" aria-label="Силы на фронте"><span class="lft"></span>
+  <div class="lfbar" id="lfBar" hidden role="toolbar" aria-label="Силы на фронте"><select id="lfSide" class="lffree" aria-label="За какую страну"></select><span class="lft"></span><button data-lfa="mob" class="lfmob" title="Призыв в областях: люди становятся батальонами резерва">Мобилизация</button><button data-lfa="spread" class="lfmob" title="Весь резерв — на самые угрожаемые участки фронта">Резерв на фронт</button>
     <button data-lf="add" title="Кисть: батальоны на свои участки фронта (сначала из резерва, потом за деньги)">＋ Войска на фронт</button><button data-lf="atk" title="Кисть: участки, где наступать (с Shift — отменить)">Наступать</button><button data-lf="del" title="Кисть: батальоны с участков в резерв">В резерв</button>
     <span class="lbl">по</span><button data-lfs="2">2</button><button data-lfs="5">5</button><button data-lfs="10">10</button><span class="lbl">бат.</span>
     <button data-lfa="all" title="Отметить наступление на всех участках, где вы сильнее">Везде, где сильнее</button><button data-lfa="stop" title="Снять все отметки наступления">Стоп</button></div>
@@ -1766,6 +1784,9 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <label>Ответ гостя<textarea id="mpAnsIn" rows="3" placeholder="MEZHA-ANS-…"></textarea></label><button class="primary" data-mp="accept">Подключить</button></div></div>
   <div id="mpPickBox" hidden><label>Ваша страна<select id="mpPick"></select></label><button class="primary" data-mp="pick">Играть за неё</button></div>
   <div class="mpchat" id="mpChat"></div><input id="mpSay" placeholder="Сообщение… Enter — отправить" maxlength="300"></div></div>
+<div class="mobbox" id="mobBox" hidden role="dialog" aria-label="Мобилизация"><header><b>Мобилизация</b><small>призыв в областях вашей страны</small><button data-mb="close" aria-label="Закрыть">×</button></header>
+  <p class="mobnote">Частичная — 0,4% жителей, 12 дней подготовки, область снова доступна через месяц. Всеобщая — 1,5% жителей, 20 дней, через два месяца. Призванные уходят из населения области; на каждый батальон нужно 0,2 комплекта стрелкового оружия.</p>
+  <h5 id="mobQueueH" hidden>Готовятся</h5><ul id="mobQueue"></ul><div id="mobList"></div><p id="mobNone" class="mobnote" hidden>Областей не найдено: приблизьте карту к своей стране.</p></div>
 <div class="statbox" id="statBox" hidden role="dialog" aria-label="Статистика войны"><header><div><b>Статистика войны</b><small id="stPeriod"></small></div><select id="stWho" aria-label="Страна"></select><button data-st="close" aria-label="Закрыть">×</button></header>
   <div class="stbody"><div class="stgrid" id="stGrid"></div><h4>Сравнение стран</h4><div class="sttable"><table id="stTable"></table></div><p class="stnote">Считается с начала партии. Щелчок по строке таблицы открывает страну.</p></div></div>
 <div class="menu" id="menu" hidden>
@@ -1809,10 +1830,8 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <p id="campInfo"></p>
         <div class="csides" id="campSides"></div>
         <div class="ctroops" id="campTroopsBox" role="radiogroup" aria-label="Войска">
-          <button data-tr="l" role="radio"><b>Живой фронт</b><small>Рекомендуется. Войска — сила на каждом участке фронта: ставите кистью, наступаете, где сильнее. Быстро даже на огромных фронтах</small></button>
-          <button data-tr="1" role="radio"><b>Войска расставлены</b><small>Дивизии обеих сторон уже стоят вдоль линии фронта — сразу в бой</small></button>
-          <button data-tr="s" role="radio"><b>На участке фронта</b><small>Вы сами обводите рамкой участки фронта — войска встанут только там, остальной фронт пуст</small></button>
-          <button data-tr="0" role="radio"><b>Без войск</b><small>Только карта, страны и города — войска расставляете сами</small></button>
+          <button data-tr="mob" role="radio"><b>Война с мобилизацией</b><small>Рекомендуется. ИИ воюет против вас; новые батальоны — только призывом в областях. Ставите их кистью на фронт и наступаете</small></button>
+          <button data-tr="free" role="radio"><b>Свободный фронт</b><small>Без ИИ: вы сами расставляете силы любой страны и двигаете границы живым фронтом</small></button>
         </div>
         <div class="cgo"><button class="bigbtn" id="campGo">В бой</button><span id="campAs"></span></div>
       </div>
@@ -1923,7 +1942,7 @@ const HINTS = {
   region: 'Обведите рамкой город или район: внутри всё станет детальным, до улиц. Снаружи останется общая карта.',
   arrows: 'Зажмите ЛКМ и ведите линию удара. Щелчок по стрелке выделяет её, Delete удаляет.',
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
-  units: 'Как в Hearts of Iron: армия — это генерал в полосе внизу и его дивизии. Щелчок по генералу выбирает армию: над полосой её организация, сила, подготовка плана и приказы. «Фронт» (G) — протянуть линию фронта вдоль границы; «Наступление» (T) — провести по земле врага линию, куда выйти; «Выполнить план» — в атаку, «Стоп» — держать линию. «Оборона» (V) и «Область» (N) — линия или участок своей земли, где армия встанет. Время идёт по P (скорость + и −): на паузе войска стоят. Бьются только те, кому приказано наступать; дивизия без организации отступает, атакующие без неё отдыхают и сами идут дальше; стоящие на месте окапываются, фронт готовит план. «Ставить» (Q) — щелчок ставит дивизию (C — сразу ×10 или ×100), «Двигать» (E) — рамка выбирает, ПКМ — приказ, протянуть ПКМ — маршрут. Значки одного размера на любом масштабе; где они сливаются — стопка с числом дивизий.',
+  units: 'Фронт: на панели сверху — кисть «＋ Войска на фронт» (силы на участки вдоль границы), «Наступать» (где ударить), «В резерв». В войне с мобилизацией новые батальоны дают призывы в областях — кнопка «Мобилизация».',
 };
 
 // ---------- state ----------
@@ -8038,6 +8057,11 @@ function setLiveFront(on, quiet) {
 // it is weak or strong. A whole front of a war costs a few hundred blocks a tick, not the paths of thousands of units.
 const LF_NW = 4096;                         // world blocks across: about 10 km at the equator, 6 at 50°
 const lfOn = () => !!(econ && econ.front);
+// two ways to play the live front: «free» — no AI, the player moves the armies of every side; «mob» — a war with the
+// AI, where new battalions come only from mobilisation in the regions
+const lfMode = () => (econ.front && econ.front.mode) || 'mob';
+let lfSide = 0;
+const lfWho = () => lfMode() === 'free' ? (lfSide && countries[lfSide - 1] ? lfSide : player || active) : player;
 const lfState = () => econ.front || (econ.front = { s: {}, res: {}, atk: {} });
 let lfBorder = new Map(), lfMine = new Map(), lfScanT = 0;   // key → { a, b, x, y, nx, ny }; owner → [keys]
 const lfBC = () => worldCells(win.L) / LF_NW;          // cells of the window in a block
@@ -8064,13 +8088,13 @@ function* lfScanGen() {
         if (!q || q === o || q === 255 || warM[(o << 8) | q] !== 1) continue;
         const key = lfKey(ex, ey);
         let e = m.get(key);
-        if (!e) { e = { a: Math.min(o, q), b: Math.max(o, q), sx: 0, sy: 0, n: 0, nx: 0, ny: 0 }; m.set(key, e); }
-        if ((o === e.a && q === e.b) || (o === e.b && q === e.a)) { const sg = o === e.a ? 1 : -1; e.sx += ex; e.sy += ey; e.n++; e.nx += nx * sg; e.ny += ny * sg; }
+        if (!e) { e = { a: Math.min(o, q), b: Math.max(o, q), sx: 0, sy: 0, n: 0, nx: 0, ny: 0, pts: [] }; m.set(key, e); }
+        if ((o === e.a && q === e.b) || (o === e.b && q === e.a)) { const sg = o === e.a ? 1 : -1; e.sx += ex; e.sy += ey; e.n++; e.nx += nx * sg; e.ny += ny * sg; if (e.pts.length < 24) e.pts.push(ex, ey, nx * sg, ny * sg); }
       }
     }
   }
   const mine = new Map();
-  for (const [key, e] of m) { e.key = key; e.x = e.sx / e.n; e.y = e.sy / e.n; const l = Math.hypot(e.nx, e.ny) || 1; e.nx /= l; e.ny /= l; for (const o of [e.a, e.b]) (mine.get(o) || mine.set(o, []).get(o)).push(key); }
+  for (const [key, e] of m) { e.s = s; e.key = key; e.x = e.sx / e.n; e.y = e.sy / e.n; const l = Math.hypot(e.nx, e.ny) || 1; e.nx /= l; e.ny /= l; for (const o of [e.a, e.b]) (mine.get(o) || mine.set(o, []).get(o)).push(key); }
   lfBorder = m; lfMine = mine; lfScanT = performance.now();
 }
 // troops whose stretch is gone (the border moved away from it): to the nearest stretch of their own within a few
@@ -8092,21 +8116,22 @@ function lfMigrate() {
 }
 // who attacks a stretch: the player where marked; the AI where it is clearly the stronger
 function lfAttacks(o, key, so, se) {
-  if (isHuman(o)) return econ.front.atk[key] === o;
+  if (lfMode() === 'free' || isHuman(o)) return econ.front.atk[key] === o;
   if (!game.ai) return false;
   return so >= 3 && so > se * 1.3;
 }
-// the land of b next to a's in a block goes over to a, one layer of cells
-function lfErode(key, a, b) {
-  const bc = lfBC(), n = worldCells(win.L), bx = Math.floor(key / LF_NW), by = key % LF_NW;
-  let x0 = Math.floor(bx * bc - win.cx0) - 1, y0 = Math.floor(by * bc - win.cy0) - 1, x1 = Math.ceil((bx + 1) * bc - win.cx0) + 1, y1 = Math.ceil((by + 1) * bc - win.cy0) + 1;
-  x0 = Math.max(1, x0); y0 = Math.max(1, y0); x1 = Math.min(W - 1, x1); y1 = Math.min(H - 1, y1);
-  if (x1 <= x0 || y1 <= y0) return 0;
-  const flip = [];
-  for (let y = y0; y < y1; y++) for (let x = x0, i = y * W + x0; x < x1; x++, i++) if (own[i] === b && (own[i - 1] === a || own[i + 1] === a || own[i - W] === a || own[i + W] === a)) flip.push(i);
-  for (const i of flip) { occTrack(i, b, a); own[i] = a; }
-  if (flip.length) { addDirty(x0, y0, x1, y1); markFrontDirty(x0, y0, x1, y1); }
-  return flip.length;
+// an advance on a stretch: at every point of its line a round bite of the enemy's land, deep as the advance, wide
+// enough to meet the bites of the points beside it, so the front bends as a curve and not by squares
+function lfAdvance(e, A, B, depth) {
+  const pts = e.pts, r = Math.max(e.s * 1.15, depth * 1.2, 1.2), sg = A === e.a ? 1 : -1;
+  let bx0 = W, by0 = H, bx1 = 0, by1 = 0, flipped = 0;
+  for (let j = 0; j < pts.length; j += 4) {
+    const nx = pts[j + 2] * sg, ny = pts[j + 3] * sg, cx = pts[j] + nx * (depth - r), cy = pts[j + 1] + ny * (depth - r), R2 = r * r;
+    const x0 = Math.max(1, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r)), y0 = Math.max(1, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+    for (let y = y0; y < y1; y++) { const dy = y + .5 - cy; for (let x = x0, i = y * W + x0; x < x1; x++, i++) { if (own[i] !== B) continue; const dx = x + .5 - cx; if (dx * dx + dy * dy > R2) continue; occTrack(i, B, A); own[i] = A; flipped++; if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1; } }
+  }
+  if (flipped) { addDirty(bx0, by0, bx1, by1); markFrontDirty(bx0, by0, bx1, by1); }
+  return flipped;
 }
 // a tick of the live front: h hours of battle on every stretch
 function* lfTickGen(h) {
@@ -8130,8 +8155,8 @@ function* lfTickGen(h) {
     if (nA > nB * 1.15 && nA >= 1) {
       // the advance: up to a kilometre an hour against nobody, slower the closer the fight
       const kmh = .25 * Math.min(4, nA / (nB + .5) - 1);
-      const a2 = (acc[key] || 0) + kmh * h / km; let layers = Math.floor(a2); acc[key] = a2 - layers;
-      for (; layers > 0; layers--) moved += lfErode(key, A, B);
+      const a2 = (acc[key] || 0) + kmh * h / km, layers = Math.floor(a2); acc[key] = a2 - layers;
+      if (layers > 0) moved += lfAdvance(e, A, B, layers);
     }
   }
   if (moved) { econ.front.cells = (econ.front.cells || 0) + moved; checkCities(); renderScore(); }
@@ -8142,17 +8167,106 @@ function* lfTickGen(h) {
 function lfDay() {
   if (!lfOn()) return;
   const st = lfState();
+  // mobilisations under way: the battalions come into the reserve once trained
+  if (st.mob && st.mob.length) {
+    for (const m of st.mob) if (--m.left <= 0) {
+      st.res[m.o] = (st.res[m.o] || 0) + m.n;
+      logEvent(ownerName(m.o) + ': из области «' + m.name + '» прибыло ' + m.n + ' бат.', m.o);
+      if (m.o === player) toast('Мобилизация в области «' + m.name + '» закончена: +' + m.n + ' бат. в резерве. Ставьте их кистью «＋ Войска на фронт».');
+    }
+    st.mob = st.mob.filter(m => m.left > 0);
+  }
+  if (lfMode() === 'free') return;
+  // the AI: a call-up once a week where it is weaker than its enemies, and its reserve to the threatened stretches
   for (const [o, keys] of lfMine) {
-    if (!countries[o - 1]) continue;
-    const free = Math.ceil(keys.length * .12);
-    if (isHuman(o)) { if (!game.econ) st.res[o] = (st.res[o] || 0) + free; continue; }
-    let n = game.econ && game.paid ? Math.min(Math.ceil(keys.length * .3), lfAfford(o)) : free;
-    if (n <= 0) continue;
-    if (game.econ && game.paid) lfPay(o, n);
-    n += Math.floor(st.res[o] || 0); st.res[o] = (st.res[o] || 0) % 1;
-    // the most threatened stretches first: enemy strength there over own
-    const need = keys.map(k => { const e = lfBorder.get(k), en = e.a === o ? e.b : e.a; return [k, lfStr(k, en) - lfStr(k, o) + Math.random()]; }).sort((x, y) => y[1] - x[1]);
-    for (let j = 0; n > 0 && need.length; j = (j + 1) % need.length) { const add = Math.min(n, 2); lfAdd(need[j][0], o, add); n -= add; if (j === need.length - 1 && need[j][1] < -20) break; }
+    if (!countries[o - 1] || isHuman(o) || !game.ai) continue;
+    if (((econ.day || 0) + o) % 7 === 0) lfAiMobilize(o, keys);
+    lfSpread(o, Math.floor(st.res[o] || 0));
+  }
+  renderMobBox();
+}
+// the reserve to the front: the most threatened stretches first (enemy strength there over own)
+function lfSpread(o, n) {
+  const st = lfState(), keys = lfMine.get(o) || [];
+  n = Math.min(n, Math.floor(st.res[o] || 0)); if (n <= 0 || !keys.length) return 0;
+  st.res[o] -= n; const total = n;
+  const need = keys.map(k => { const e = lfBorder.get(k), en = e.a === o ? e.b : e.a; return [k, lfStr(k, en) - lfStr(k, o) + Math.random()]; }).sort((x, y) => y[1] - x[1]);
+  for (let j = 0; n > 0; j = (j + 1) % need.length) { const add = Math.min(n, 2); lfAdd(need[j][0], o, add); n -= add; }
+  return total;
+}
+// ---- mobilisation in the regions ----
+// A call-up takes men of a region (they leave its population) and, with the economy, money and rifles; after the
+// days of training they come into the reserve as battalions. A region needs a month or two to call up again.
+const MOB = { part: { name: 'Частичная', rate: .004, days: 12, cd: 30 }, full: { name: 'Всеобщая', rate: .015, days: 20, cd: 60 } };
+function lfMobInfo(o, f, lv) {
+  const P = regionPop(f), L = MOB[lv], st = lfState(), raw = Math.floor(P.now * L.rate / 650);
+  const eq = game.econ ? Math.floor((stock(o).eq.inf || 0) / .2) : Infinity, n = Math.min(raw, eq);
+  return { raw, n, wait: Math.max(0, ((st.mobT || {})[regionKey(f)] || 0) - (econ.day || 0)), cost: game.econ ? n * lfPrice(o) * .4 : 0, days: L.days };
+}
+function lfMobilize(o, f, lv, quiet) {
+  if (mpGuest() && !mpApplying) return mpGuestCmd({ t: 'lfmob', reg: regionKey(f), lv });
+  const I = lfMobInfo(o, f, lv), L = MOB[lv], st = lfState();
+  const no = m => { if (!quiet) toast(m); return false; };
+  if (I.wait) return no('Область «' + f.name + '» ещё не оправилась от прошлого призыва: ' + I.wait + ' ' + plural(I.wait, 'день', 'дня', 'дней') + '.');
+  if (I.raw < 1) return no('В области «' + f.name + '» слишком мало людей для призыва.');
+  if (I.n < 1) return no('Нет стрелкового снаряжения для новых батальонов: постройте военный завод на линии «Стрелковое оружие».');
+  if (game.econ && money(o) < I.cost) return no('Не хватает денег на призыв: нужно ' + fmtMoney(I.cost) + '.');
+  if (game.econ) { econ.money[o] -= I.cost; stock(o).eq.inf -= I.n * .2; stAdd(o, 'armySpent', I.cost); }
+  const p = econ.pop || (econ.pop = {}), rk = regionKey(f), ps = p[rk] || (p[rk] = {}); ps.mob = (ps.mob || 0) + I.n * 650;
+  (st.mob || (st.mob = [])).push({ o, reg: rk, name: f.name, n: I.n, left: L.days });
+  (st.mobT || (st.mobT = {}))[rk] = (econ.day || 0) + L.cd;
+  stAdd(o, 'mobilized', I.n); if (o === player) tutorNote('mob');
+  logEvent(ownerName(o) + ': ' + L.name.toLowerCase() + ' мобилизация в области «' + f.name + '» — ' + I.n + ' бат. через ' + L.days + ' дн.', o);
+  if (!quiet) toast(L.name + ' мобилизация в области «' + f.name + '»: ' + fmtInt(I.n * 650) + ' человек, ' + I.n + ' бат. будут готовы через ' + L.days + ' дн.' + (I.cost ? ' Стоимость ' + fmtMoney(I.cost) + '.' : ''));
+  lfRenderBar(); renderMobBox(); scheduleSave();
+  return true;
+}
+// the regions a country holds (by the middle of each one's largest part), the most populous first; kept for a day
+let lfRegCache = null;
+function lfRegionsOf(o) {
+  if (!geoStore || !W) return [];
+  if (lfRegCache && lfRegCache.o === o && lfRegCache.day === econ.day && lfRegCache.win === win) return lfRegCache.list;
+  if (!popModel) popModelBuild();
+  const out = [];
+  for (const f of decodeRegions().a1) {
+    let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } }
+    if (!best || ownerAtWorld((best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2) !== o) continue;
+    out.push(f);
+  }
+  out.sort((a, b) => regionPop(b).now - regionPop(a).now);
+  lfRegCache = { o, day: econ.day, win, list: out };
+  return out;
+}
+function lfAiMobilize(o, keys) {
+  const st = lfState(); let mine = st.res[o] || 0, foe = 0;
+  for (const k of keys) { const e = lfBorder.get(k); mine += lfStr(k, o); foe += lfStr(k, e.a === o ? e.b : e.a); }
+  if (mine > foe * 1.1 + 5) return;
+  let done = 0;
+  for (const f of lfRegionsOf(o).slice(0, 8)) { if (done >= 2) break; if (lfMobilize(o, f, foe > mine * 1.5 ? 'full' : 'part', true)) done++; }
+}
+// the window of the call-up: the player's regions with their people and what a call-up would give
+function renderMobBox() {
+  const box = $('#mobBox'); if (!box || box.hidden) return;
+  const o = player, list = $('#mobList'); list.textContent = '';
+  if (!o || !lfOn()) return;
+  const st = lfState();
+  const q = $('#mobQueue'); q.textContent = '';
+  for (const m of (st.mob || []).filter(m => m.o === o)) { const li = document.createElement('li'); li.textContent = m.name + ': ' + m.n + ' бат. через ' + m.left + ' ' + plural(m.left, 'день', 'дня', 'дней'); q.append(li); }
+  $('#mobQueueH').hidden = !q.children.length;
+  const regs = lfRegionsOf(o).slice(0, 60);
+  $('#mobNone').hidden = regs.length > 0;
+  for (const f of regs) {
+    const P = regionPop(f), row = document.createElement('div'); row.className = 'mobrow';
+    row.innerHTML = '<div><b></b><small></small></div>';
+    row.querySelector('b').textContent = f.name; row.querySelector('small').textContent = fmtPeople(P.now) + ' человек';
+    for (const lv of ['part', 'full']) {
+      const I = lfMobInfo(o, f, lv), b = document.createElement('button');
+      b.textContent = MOB[lv].name + ' · +' + I.n + ' бат.'; b.title = fmtInt(I.n * 650) + ' человек, ' + I.days + ' дн. подготовки' + (I.cost ? ', ' + fmtMoney(I.cost) : '') + (I.n < I.raw ? ' (снаряжения хватает на ' + I.n + ' из ' + I.raw + ')' : '');
+      b.disabled = I.wait > 0 || I.n < 1; if (I.wait) b.textContent = 'через ' + I.wait + ' дн.';
+      b.addEventListener('click', () => lfMobilize(o, f, lv));
+      row.append(b); if (I.wait) break;
+    }
+    list.append(row);
   }
 }
 // a battalion: a fifth of a division of the line's arm, in money and equipment of the time
@@ -8176,7 +8290,7 @@ function lfInit(per = 6) {
 let lfBrush = { mode: null, step: 5 }, lfStroke = null;
 const LF_R = 26;                                         // the brush, in screen pixels
 function lfBrushAt(g, alt) {
-  const o = player; if (!o || !lfOn()) return;
+  const o = lfWho(); if (!o || !lfOn()) return;
   const r = LF_R / view.s, st = lfState(), now = performance.now();
   const keys = (lfMine.get(o) || []).filter(k => { const e = lfBorder.get(k); return e && Math.hypot(e.x - g.x, e.y - g.y) <= r; });
   if (!keys.length) return;
@@ -8190,15 +8304,18 @@ function lfBrushAt(g, alt) {
 function lfApply(o, mode, k, step, alt) {
   const st = lfState();
   if (mode === 'add') {
+    // free: as many as wanted; a war: only what the reserve holds (mobilisation fills it)
+    if (lfMode() === 'free') { lfAdd(k, o, step); if (lfStroke) lfStroke.n += step; return; }
     let n = step; const fromRes = Math.min(n, Math.floor(st.res[o] || 0)); st.res[o] = (st.res[o] || 0) - fromRes; n -= fromRes;
     let got = fromRes;
-    if (n > 0) { if (lfPay(o, n)) got += n; else if (!lfStroke || !lfStroke.broke) { if (lfStroke) lfStroke.broke = true; if (o === player) toast(game.econ && game.paid ? 'Не хватает денег или стрелкового снаряжения на новые батальоны: ' + fmtMoney(lfPrice(o)) + ' и 0,2 компл. за батальон.' : 'Резерв пуст.'); } }
+    if (n > 0) { if (false) got += n; else if (!lfStroke || !lfStroke.broke) { if (lfStroke) lfStroke.broke = true; if (o === player) toast('Резерв пуст. Объявите мобилизацию в областях — кнопка «Мобилизация» на панели сверху.'); } }
     if (got) { lfAdd(k, o, got); if (lfStroke) lfStroke.n += got; }
   } else if (mode === 'atk') { if (alt) { if (st.atk[k] === o) delete st.atk[k]; } else st.atk[k] = o; if (lfStroke) lfStroke.n++; }
   else if (mode === 'del') { const v = Math.min(step, lfStr(k, o)); if (v > 0) { lfAdd(k, o, -v); st.res[o] = (st.res[o] || 0) + v; if (lfStroke) lfStroke.n += v; } }
 }
 function lfStrokeEnd() {
   const s = lfStroke; lfStroke = null; if (!s || !s.n) return;
+  tutorNote('lf' + lfBrush.mode);
   toast(lfBrush.mode === 'add' ? 'На фронт: +' + Math.round(s.n) + ' бат.' : lfBrush.mode === 'atk' ? (s.alt ? 'Наступление отменено на ' : 'Наступать: отмечено ') + s.n + ' ' + plural(s.n, 'участок', 'участка', 'участков') : 'В резерв: ' + Math.round(s.n) + ' бат.');
   scheduleSave();
 }
@@ -8237,27 +8354,36 @@ const lfRanks = v => v <= .05 ? 0 : v < 4 ? 1 : v < 10 ? 2 : 3;
 function lfRenderBar() {
   const box = $('#lfBar'); if (!box) return;
   const show = lfOn() && !!W && !watchMode;
-  box.hidden = !show; document.body.classList.toggle('lf', show); if (!show) return;
-  const o = player, st = econ.front;
+  box.hidden = !show; document.body.classList.toggle('lf', show); if (!show) { $('#mobBox').hidden = true; return; }
+  const free = lfMode() === 'free', o = lfWho(), st = econ.front;
+  box.classList.toggle('free', free); if (free) $('#mobBox').hidden = true;
   let mine = 0, foe = 0; for (const [key, e] of lfBorder) { if (e.a === o || e.b === o) { mine += lfStr(key, o); foe += lfStr(key, e.a === o ? e.b : e.a); } }
-  box.querySelector('.lft').textContent = o ? 'На фронте: ' + Math.round(mine) + ' бат. · против вас: ' + Math.round(foe) + ' · резерв: ' + Math.floor(st.res[o] || 0) + (game.econ && game.paid ? ' · батальон ' + fmtMoney(lfPrice(o)) : '') : 'Выберите страну';
+  const busy = (st.mob || []).filter(m => m.o === o).reduce((t, m) => t + m.n, 0);
+  box.querySelector('.lft').textContent = !o ? 'Выберите страну' : free ? ownerName(o) + ': ' + Math.round(mine) + ' бат. · против: ' + Math.round(foe) : 'На фронте: ' + Math.round(mine) + ' бат. · против вас: ' + Math.round(foe) + ' · резерв: ' + Math.floor(st.res[o] || 0) + (busy ? ' · готовятся: ' + busy : '');
+  const sel = $('#lfSide');
+  if (free) { const sig = countries.map(c => c.name).join(); if (sel.dataset.sig !== sig) { sel.dataset.sig = sig; sel.textContent = ''; countries.forEach((c, i) => { if (!atWarAny(i + 1)) return; const op = document.createElement('option'); op.value = i + 1; op.textContent = c.name; sel.append(op); }); } sel.value = String(o); }
   box.querySelectorAll('[data-lf]').forEach(b => b.classList.toggle('on', b.dataset.lf === lfBrush.mode));
   box.querySelectorAll('[data-lfs]').forEach(b => b.classList.toggle('on', +b.dataset.lfs === lfBrush.step));
+  box.querySelector('[data-lfa="mob"]').classList.toggle('on', !$('#mobBox').hidden);
 }
 function lfSetBrush(m) {
   lfBrush.mode = lfBrush.mode === m ? null : m;
   if (lfBrush.mode && tool !== 'units') setTool('units');
   cv.style.cursor = lfBrush.mode ? 'crosshair' : toolCursor();
   lfRenderBar(); requestUi();
-  if (lfBrush.mode) toast(lfBrush.mode === 'add' ? 'Ведите кистью вдоль своей линии фронта: на каждый участок встанет ' + lfBrush.step + ' бат. (сначала из резерва).' : lfBrush.mode === 'atk' ? 'Ведите кистью по участкам, где наступать (с Shift — отменить). Наступает тот, кто сильнее.' : 'Ведите кистью: батальоны уходят с участков в резерв.');
+  if (lfBrush.mode) toast(lfBrush.mode === 'add' ? 'Ведите кистью вдоль линии фронта: на каждый участок встанет ' + lfBrush.step + ' бат.' + (lfMode() === 'free' ? '' : ' из резерва.') : lfBrush.mode === 'atk' ? 'Ведите кистью по участкам, где наступать (с Shift — отменить). Наступает тот, кто сильнее.' : 'Ведите кистью: батальоны уходят с участков в резерв.');
 }
 $('#lfBar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.lf) lfSetBrush(b.dataset.lf);
   else if (b.dataset.lfs) { lfBrush.step = +b.dataset.lfs; lfRenderBar(); }
-  else if (b.dataset.lfa === 'all') { const st = lfState(); for (const k of lfMine.get(player) || []) { const e = lfBorder.get(k), en = e.a === player ? e.b : e.a; if (lfStr(k, player) > lfStr(k, en) * 1.15) st.atk[k] = player; } toast('Наступать везде, где вы сильнее.'); requestUi(); }
-  else if (b.dataset.lfa === 'stop') { const st = lfState(); for (const k of Object.keys(st.atk)) if (st.atk[k] === player) delete st.atk[k]; toast('Наступление остановлено: войска держат линию.'); requestUi(); }
+  else if (b.dataset.lfa === 'mob') { const mb = $('#mobBox'); mb.hidden = !mb.hidden; renderMobBox(); lfRenderBar(); }
+  else if (b.dataset.lfa === 'spread') { const n = lfSpread(player, Math.floor(lfState().res[player] || 0)); toast(n ? 'Из резерва на фронт: ' + n + ' бат. — на самые угрожаемые участки.' : 'Резерв пуст.'); lfRenderBar(); requestUi(); }
+  else if (b.dataset.lfa === 'all') { const st = lfState(), me = lfWho(); for (const k of lfMine.get(me) || []) { const e = lfBorder.get(k), en = e.a === me ? e.b : e.a; if (lfStr(k, me) > lfStr(k, en) * 1.15) st.atk[k] = me; } toast('Наступать везде, где вы сильнее.'); requestUi(); }
+  else if (b.dataset.lfa === 'stop') { const st = lfState(), me = lfWho(); for (const k of Object.keys(st.atk)) if (st.atk[k] === me) delete st.atk[k]; toast('Наступление остановлено: войска держат линию.'); requestUi(); }
 });
+$('#lfSide').addEventListener('change', e => { lfSide = +e.target.value; lfRenderBar(); requestUi(); });
+$('#mobBox [data-mb="close"]').addEventListener('click', () => { $('#mobBox').hidden = true; lfRenderBar(); });
 // the scan when time stands (the brush needs the stretches) and on a guest, who runs no battle
 setInterval(() => { if (lfOn() && W && geoStore && (!battlesOn || mpGuest()) && performance.now() - lfScanT > 600) runJob('lfscan', (function* () { yield* lfScanGen(); lfRenderBar(); requestUi(); })()); }, 700);
 // the bar over the map with the border tool: the switch and the arms that follow
@@ -11520,12 +11646,12 @@ function popModelBuild() {
   }
   // big cities: which region each one is in
   const cw = new Map();
-  for (const c of MODERN.cities) { const f = regionOfPoint(lonToX(c[2]), latToY(c[1])); if (f) cw.set(f, (cw.get(f) || 0) + (c[4] ? 3 : 1) * Math.max(1, c[3] || 1)); }
+  for (const c of MODERN.cities) { const f = regionOfPoint(lonToX(c[2]), latToY(c[1])); if (f) cw.set(f, (cw.get(f) || 0) + (c[4] ? 1.5 : 1) * Math.sqrt(Math.max(1, c[3] || 1))); }
   const base = new Map();
   for (const [code, fs] of byCode) {
     const total = (COUNTRY_POP[code] || 0) * 1e6 || fs.reduce((t, f) => t + area.get(f), 0) * 30;   // unknown: 30 per km²
     const A = fs.reduce((t, f) => t + area.get(f), 0) || 1, C = fs.reduce((t, f) => t + (cw.get(f) || 0), 0);
-    for (const f of fs) base.set(f, total * (C ? .4 * area.get(f) / A + .6 * (cw.get(f) || 0) / C : area.get(f) / A));
+    for (const f of fs) base.set(f, total * (C ? .55 * area.get(f) / A + .45 * (cw.get(f) || 0) / C : area.get(f) / A));
   }
   popModel = { area, base };
 }
@@ -11556,7 +11682,7 @@ function regionPop(f) {
   if (!popModel) popModelBuild();
   const st = (econ.pop || {})[regionKey(f)] || {};
   const start = popModel.base.get(f) * eraLerp(WORLD_POP, econYear() - Math.floor((econ.day || 0) / 365));
-  const now = Math.max(0, start * (1 + .00003 * (econ.day || 0)) - (st.dead || 0) - (st.fled || 0));
+  const now = Math.max(0, start * (1 + .00003 * (econ.day || 0)) - (st.dead || 0) - (st.fled || 0) - (st.mob || 0));
   return { start, now, dead: st.dead || 0, fled: st.fled || 0, strikes: st.strikes || 0, area: popModel.area.get(f) };
 }
 function popHit(f, dead, strike) {
@@ -12119,6 +12245,7 @@ function drawSpawnGhost(c) {
 }
 function setTool(t) {
   if (watchMode && t !== 'pan' && t !== 'info') return;
+  if (t === 'units' && !lfOn() && geoStore && W && wars && wars.length) { lfInit(); econ.front.mode = game.ai ? 'mob' : 'free'; }
   if (mpOn() && !['pan', 'units', 'info', 'arrows'].includes(t)) { toast('В сетевой игре границы двигают только войска.'); return; }
   if (t !== 'info' && infoHover) { infoHover = null; requestUi(); }
   tool = t;
@@ -13124,7 +13251,7 @@ const phone = () => matchMedia('(max-width: 760px)').matches;
 setPanel(!phone() && LS.get('mezha-panel', '1') === '1');
 if (phone()) { const st = $('#genStrip'); if (st && !st.classList.contains('folded')) $('#genFold').click(); }
 
-const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Войска', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', info: 'Сведения', pan: 'Двигать карту' };
+const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Фронт', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', info: 'Сведения', pan: 'Двигать карту' };
 function renderToolHead(t) {
   $('#toolName').textContent = TOOL_NAMES[t] || '';
   $('#toolDesc').textContent = HINTS[t] || '';
@@ -13498,7 +13625,7 @@ function renderCampDetail() {
   $('#scrCampaign .mhead h2').textContent = campMode === 'watch' ? 'Смотреть войну' : 'Своя игра';
   $('#scrCampaign .mhead p').textContent = campMode === 'watch' ? 'Выберите войну и этап, с которого начать' : 'Выберите войну, этап и сторону';
   const fb = $('#campStages .cfilm'); if (fb) fb.hidden = campMode !== 'watch';
-  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === 'l' ? 'live' : b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = b.dataset.tr === (campTroops === 'free' ? 'free' : 'mob'); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const pc = w.countries[campPlayer - 1];
   $('#campAs').innerHTML = ''; $('#campAs').append(campMode === 'watch' ? 'Взгляд со стороны: ' : 'Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
   drawCampPreview(w);
@@ -13759,6 +13886,7 @@ function* deployFrontsGen(opts = {}) {
 }
 // troops on the fronts of the map as it is now, at any moment of a game
 function deployNow() {
+  if (geoStore && W && wars.length) { lfInit(); if (!econ.front.mode) econ.front.mode = game.ai ? 'mob' : 'free'; econ.front.mode = game.ai ? 'mob' : 'free'; setTool('units'); toast('Живой фронт: силы встали на всех участках фронта.'); return; }
   if (!wars.length) { toast('Сейчас никто не воюет: сначала объявите войну — тогда появится линия фронта.'); return; }
   pushHist();
   // a game of the old dense troops (hundreds of thousands of small units on the fronts): they give way to divisions
@@ -13778,7 +13906,7 @@ function deploySize() {
   setUnitSize(want, true);
   return true;
 }
-let campTroops = (v => v === 'l' ? 'live' : v === 's' ? 'sector' : v === '1')(LS.get('mezha-troops2', 'l'));
+let campTroops = LS.get('mezha-troops3', 'mob') === 'free' ? 'free' : 'mob';
 async function startScenario(id, pl, mode) {
   if (mp && !mp.starting) mpLeave();
   const watch = mode === 'watch' || (mode === undefined && watchMode);
@@ -13786,12 +13914,15 @@ async function startScenario(id, pl, mode) {
   playStop(); setBattles(false);
   if (!watch) { const w0 = WARS.find(x => x.id === id), y = w0 ? +w0.date.slice(0, 4) : 0, gi = ERA_GROUPS.findIndex(([a, b]) => y >= a && y < b); if (w0 && !w0.peace && gi >= 0) achCount('eras', gi, ERA_GROUPS.length, 'ACH_ALL_ERAS'); }
   if (!watch && watchMode) setMode(false);
+  // the mode of the war: free — no AI, no economy; with mobilisation — the AI and the economy
+  const lfm = campTroops === 'free' ? 'free' : 'mob';
+  if (!watch) { game.ai = lfm === 'mob'; game.econ = lfm === 'mob'; game.paid = lfm === 'mob'; applySystems(); }
   econ = econBlank(); econMode = null; infoSel = infoHover = null; renderInfoCard();
   try {
     $('#warSel').value = id; renderWarPanel();
     await applyWar(id);
     if (pl && countries[pl - 1]) takeControl(pl);
-    if (!watch && campTroops === true && wars.length) {
+    if (false) {
       // the theatre at its own detail first, so the troops stand on the borders as they are drawn
       btn.textContent = 'Расставляю войска…';
       clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
@@ -13807,14 +13938,17 @@ async function startScenario(id, pl, mode) {
   setMode(watch);
   closeMenu(); renderHud(); scheduleSave();
   // troops on the sectors the player chooses: the tool is ready and says what to do
-  if (!watch && campTroops === 'live' && wars.length) { lfInit(); setTool('units'); setTimeout(() => toast('Живой фронт: у каждой стороны силы на участках фронта. «＋ Войска на фронт» — кисть подкреплений, «Наступать» — где ударить. Пуск — P.'), 900); }
-  else if (watch || campTroops !== 'live') { lfRenderBar(); }
-  if (!watch && campTroops === 'sector' && wars.length) { setTool('units'); setUnitMode('sector', true); setTimeout(() => toast('Обведите рамкой участок фронта — там встанут войска обеих сторон (с Shift — только ваши). Участков может быть сколько угодно.'), 900); }
+  units = []; forms = []; fronts = [];
+  if (!watch && wars.length) {
+    lfInit(); econ.front.mode = lfm; setTool('units');
+    setTimeout(() => toast(lfm === 'free' ? 'Свободный фронт: выберите страну на панели сверху, кистью ставьте её силы и отмечайте наступление. Границы можно тянуть и инструментом «Граница». Пуск — P.' : 'Война с мобилизацией: у каждой стороны силы на участках фронта. «Мобилизация» — призыв в областях, «＋ Войска на фронт» — кисть из резерва, «Наступать» — где ударить. Пуск — P.'), 900);
+  } else lfRenderBar();
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
 // ---------- «Статистика»: the war in numbers ----------
 let statWho = 0, statTimer = 0;
 function fmtInt(v) { return Math.round(v || 0).toLocaleString('ru-RU'); }
+function lfFrontOf(k) { let t = 0; for (const [key, e] of lfBorder) if (e.a === k || e.b === k) t += lfStr(key, k); return t; }
 function statsOf(k) { return (econ.stats && econ.stats[k]) || {}; }
 function openStats(on) {
   const box = $('#statBox'); if (on === undefined) on = box.hidden;
@@ -13837,7 +13971,7 @@ function renderStats() {
   const grid = $('#stGrid'); grid.textContent = '';
   const has = t => ft.includes(t) || r['made_' + t];
   grid.append(
-    card('Армия', [['Сейчас в строю', fmtInt(now)], ['Развёрнуто за войну', fmtInt(r.deployed)], ['Потеряно отрядов', fmtInt(r.lost), r.lost ? 'bad' : ''], ['Уничтожено у противника', fmtInt(r.kills), r.kills ? 'good' : ''], ['Батальонов потеряно (живой фронт)', r.lfLost ? fmtInt(r.lfLost) : null, 'bad'], ['Батальонов противника выбито', r.lfKilled ? fmtInt(r.lfKilled) : null, 'good'], ['Соотношение потерь', r.lost ? ((r.kills || 0) / r.lost).toFixed(2).replace('.', ',') + ' : 1' : r.kills ? '∞' : '—']]),
+    card('Армия', [['Батальонов на фронте', fmtInt(lfFrontOf(k))], ['В резерве', fmtInt((econ.front && econ.front.res[k]) || 0)], ['Мобилизовано батальонов', fmtInt(r.mobilized)], ['Батальонов потеряно (живой фронт)', r.lfLost ? fmtInt(r.lfLost) : null, 'bad'], ['Батальонов противника выбито', r.lfKilled ? fmtInt(r.lfKilled) : null, 'good'], ['Соотношение потерь', r.lfLost ? ((r.lfKilled || 0) / r.lfLost).toFixed(2).replace('.', ',') + ' : 1' : r.lfKilled ? '∞' : '—']]),
     card('Производство', [['Стрелковое оружие, компл.', fmtNum(r.made_inf || 0)], ['Артиллерия, компл.', fmtNum(r.made_art || 0)], ['Бронетехника, компл.', fmtNum(r.made_tank || 0)], ['Авиация, компл.', fmtNum(r.made_air || 0)],
       ...Object.keys(STRIKE).filter(v => r['made_' + v] || (variantsOf(STRIKE[v].kind).includes(v) && has(STRIKE[v].kind))).map(v => [STRIKE[v].kind === 'bomber' ? 'Бомбардировщиков' : STRIKE[v].name, fmtInt(r['made_' + v])]), [econYear() < 1955 ? 'Зенитных батарей' : 'Ракет ПВО', has('aa') ? fmtInt(r.made_aa) : null]]),
     card('Удары', [['Ударов нанесено', fmtInt(r.strikes)], ...Object.keys(STRIKE).filter(v => r['launch_' + v]).map(v => [(STRIKE[v].kind === 'bomber' ? 'Вылетов бомбардировщиков' : 'Запущено: ' + STRIKE[v].name.toLowerCase()), fmtInt(r['launch_' + v])]),
@@ -13848,13 +13982,13 @@ function renderStats() {
     card('Помощь и города', [['Получено денег', fmtMoney(r.aidInMoney || 0)], ['Получено снаряжения, компл.', fmtNum(r.aidInEq || 0)], ['Передано денег', fmtMoney(r.aidOutMoney || 0)], ['Передано снаряжения, компл.', fmtNum(r.aidOutEq || 0)], ['Взято городов', fmtInt(r.citiesTaken), r.citiesTaken ? 'good' : ''], ['Потеряно городов', fmtInt(r.citiesLost), r.citiesLost ? 'bad' : '']])
   );
   // the countries side by side
-  const tb = $('#stTable'), rows = ks.map(k => ({ k, r: statsOf(k), n: units.filter(u => u.owner === k).length })).sort((a, b) => b.n - a.n || (b.r.kills || 0) - (a.r.kills || 0)).slice(0, 14);
-  tb.innerHTML = '<thead><tr><th>Страна</th><th>В строю</th><th>Развёрнуто</th><th>Потери</th><th>Уничтожил</th><th>Ударов</th><th>Сбито у него</th><th>Мирных погибло</th><th>Произведено снаряж.</th><th>Казна</th></tr></thead>';
+  const tb = $('#stTable'), rows = ks.map(k => ({ k, r: statsOf(k), n: lfFrontOf(k) })).sort((a, b) => b.n - a.n || (b.r.kills || 0) - (a.r.kills || 0)).slice(0, 14);
+  tb.innerHTML = '<thead><tr><th>Страна</th><th>На фронте, бат.</th><th>Мобилизовано</th><th>Потери, бат.</th><th>Выбил, бат.</th><th>Ударов</th><th>Сбито у него</th><th>Мирных погибло</th><th>Произведено снаряж.</th><th>Казна</th></tr></thead>';
   const body = document.createElement('tbody');
   for (const { k, r, n } of rows) {
     const tr = document.createElement('tr'); tr.dataset.k = k; if (k === statWho) tr.className = 'on';
     const c = rgb[k] || [120, 120, 120], made = (r.made_inf || 0) + (r.made_art || 0) + (r.made_tank || 0) + (r.made_air || 0);
-    const vals = [fmtInt(n), fmtInt(r.deployed), fmtInt(r.lost), fmtInt(r.kills), fmtInt(r.strikes), fmtInt(r.downed), fmtPeople(r.civLost || 0), fmtNum(made), game.econ ? fmtMoney(money(k)) : '—'];
+    const vals = [fmtInt(n), fmtInt(r.mobilized), fmtInt(r.lfLost), fmtInt(r.lfKilled), fmtInt(r.strikes), fmtInt(r.downed), fmtPeople(r.civLost || 0), fmtNum(made), game.econ ? fmtMoney(money(k)) : '—'];
     const td0 = document.createElement('td'); const i = document.createElement('i'); i.style.background = `rgb(${c})`; td0.append(i, document.createTextNode(countries[k - 1].name + (k === player ? ' (вы)' : ''))); tr.append(td0);
     for (const v of vals) { const td = document.createElement('td'); td.textContent = v; tr.append(td); }
     body.append(tr);
@@ -13890,12 +14024,12 @@ const TUTOR = [
     ['Откройте вкладку «Война»: союзы, объявление войны и мира, хроника событий.', '.ptabs [data-tab="war"]', () => tabOn('war')],
     ['Переключитесь в «Смотреть» и обратно в «Играть»: режимы меняются в любой момент.', '#hudMode', s => tuN('mode', s) >= 2 && !watchMode]
   ] },
-  { id: 'troops', name: 'Войска и их цена', about: 'Рода войск и их задачи, платное размещение из казны и снаряжения, выделение и приказы.', scen: ['vov42', 1, 'play'], troops: false, sys: { econ: true, paid: true }, steps: [
-    ['Возьмите инструмент «Войска» — клавиша 7.', '#tools [data-tool="units"]', () => tool === 'units'],
-    ['Щёлкните по своей земле: появится отряд. Он стоит денег и снаряжения — следите за суммой наверху.', '#hudMoney', s => myUnits() > s.units],
-    ['Поставьте ещё два отряда. У каждого рода свои заслуги: пехота держит фронт, танки прорывают, артиллерия поддерживает соседей, ПВО прикрывает от ударов, разведка видит дальше.', '#armyBar', s => myUnits() >= s.units + 2],
-    ['Выделите свои отряды: зажмите Shift и протяните рамку.', null, () => selUnits.some(u => u.owner === player)],
-    ['Протяните путь правой кнопкой мыши — отряды пойдут по нему.', null, () => units.some(u => u.owner === player && u.order)]
+  { id: 'troops', name: 'Живой фронт и мобилизация', about: 'Силы на участках фронта, призыв в областях, кисть подкреплений и наступление.', scen: ['vov42', 1, 'play'], steps: [
+    ['Возьмите инструмент «Фронт» — клавиша 7. Сверху появится панель сил: сколько у вас на фронте и против вас.', '#tools [data-tool="units"]', () => tool === 'units'],
+    ['Нажмите «Мобилизация» и объявите призыв в любой области: люди станут батальонами через 12–20 дней.', '#lfBar [data-lfa="mob"]', s => tuN('mob', s) > 0],
+    ['Пустите время (P) и дождитесь батальонов в резерве — или нажмите «Резерв на фронт», когда они придут.', '#hudClock', () => !!econ.front && (econ.front.res[player] || 0) >= 1],
+    ['Возьмите кисть «＋ Войска на фронт» и проведите вдоль своей линии фронта.', '#lfBar [data-lf="add"]', s => tuN('lfadd', s) > 0],
+    ['Возьмите кисть «Наступать» и проведите по участкам, где хотите ударить: там встанут красные стрелки.', '#lfBar [data-lf="atk"]', s => tuN('lfatk', s) > 0]
   ] },
   { id: 'time', name: 'Время и бои', about: 'Пуск и пауза, скорость, наступление и оборона армий, опыт дивизий.', scen: ['vov42', 1, 'play'], troops: true, steps: [
     ['Запустите время: кнопка ▶ наверху или клавиша P.', '#hudClock', () => battlesOn],
@@ -14230,6 +14364,7 @@ function mpOnMsg(peer, m) {
     case 'fronts': fronts = fronts.filter(f => f.owner !== k).concat((m.list || []).filter(f => f.owner === k).map(decF)); requestDraw(); return;
     case 'build': { const ok = econBuild(k, m.type, fromWorld({ mx: m.mx, my: m.my }), true); mpTellPeer(peer, ok ? factName(m.type) + ': стройка начата.' : 'Строить можно только на своей земле и при деньгах в казне.'); return; }
     case 'strike': { const ok = econStrike(k, m.kind, fromWorld({ mx: m.mx, my: m.my }), true); if (!ok) mpTellPeer(peer, 'Удар не состоялся: не хватает оружия или цель слишком далеко.'); return; }
+    case 'lfmob': { const f = decodeRegions().a1.find(x => regionKey(x) === m.reg); if (f && lfOn()) { mpApplying = true; try { lfMobilize(k, f, m.lv === 'full' ? 'full' : 'part', false); } finally { mpApplying = false; } } return; }
     case 'lf': { if (!lfOn()) return; lfStroke = { seen: new Set(), n: 0 }; for (const key of m.keys || []) { const e = lfBorder.get(key); if (e && (e.a === k || e.b === k)) lfApply(k, m.mode, key, Math.min(10, +m.step || 5), !!m.alt); } lfStroke = null; return; }
     case 'line': { const f = econ.facs.find(x => x.id === m.id); if (f && f.owner === k) setLine(f, m.line); return; }
     case 'aid': { const to = +m.to, pk = Object.assign({}, m.pack); if (pk.eq === 'inf') pk.eq = Infinity; if (countries[to - 1] && to !== k && !atWar(k, to)) aidSend(k, to, pk, true); return; }
@@ -14473,7 +14608,7 @@ $('#wcPlay').addEventListener('click', () => { const keep = campTroops; campTroo
 $('#wcFold').addEventListener('click', () => $('#watchCard').classList.toggle('fold'));
 $('#hudModeW').addEventListener('click', () => { if (watchMode || !curWarId) return; if (units.length && !confirm('Перейти в просмотр? Текущая партия закончится — её можно сохранить в файл в меню.')) return; startScenario(curWarId, player || 1, 'watch'); });
 $('#hudModeP').addEventListener('click', () => { if (watchMode) $('#wcPlay').click(); });
-document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 'l' ? 'live' : b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1'; LS.set('mezha-troops2', b.dataset.tr); renderCampDetail(); }));
+document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 'free' ? 'free' : 'mob'; LS.set('mezha-troops3', campTroops); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
 let menuBgDone = false;
@@ -14839,7 +14974,7 @@ $('#hideCursor').addEventListener('change', e => { hideCursor = e.target.checked
 $('#warSel').addEventListener('change', renderWarPanel);
 $('#warGo').addEventListener('click', async () => {
   await applyWar($('#warSel').value);
-  if ($('#warTroops').checked && wars.length) { clearTimeout(settleT); maybeReload(); const n = deployFronts(); if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.'); }
+  if ($('#warTroops').checked && wars.length) { clearTimeout(settleT); maybeReload(); if (geoStore) { deployNow(); return; } const n = deployFronts(); if (n) toast('Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.'); }
 });
 $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
@@ -14885,7 +15020,7 @@ renderWarPanel();
 const skipMenu = /[?&]nomenu/.test(location.search);
 // the menu must never stand between the player and the game: if it fails to open, the game still loads
 if (!skipMenu) { try { openMenu(false); } catch (e) { console.error(e); $('#menu').hidden = true; menuPaused = false; } }
-restoreSaved().then(ok => { firstRun = !ok; if (ok && vsrc && vsrc.def.war && WARS.find(w => w.id === vsrc.def.war)) { curWarId = vsrc.def.war; $('#hudMode').hidden = false; if (LS.get('mezha-mode', 'play') === 'watch') setMode(true); } if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
+restoreSaved().then(ok => { firstRun = !ok; if (units.length) { units = []; forms = []; fronts = []; selUnit = null; selUnits = []; } if (ok && vsrc && vsrc.def.war && WARS.find(w => w.id === vsrc.def.war)) { curWarId = vsrc.def.war; $('#hudMode').hidden = false; if (LS.get('mezha-mode', 'play') === 'watch') setMode(true); } if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
 })();
 </script>
 </body>
