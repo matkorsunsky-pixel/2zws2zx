@@ -2255,6 +2255,32 @@ function vecPaths(outs) {
   }
   return { fills, coasts, fronts, borders, olds };
 }
+// the same, as text of SVG paths: made in the background thread, where building thousands of Path2D lines one call
+// at a time would hold the frame; the browser reads a path from text in one go
+function vecStrings(outs, war) {
+  const fills = new Map(), coasts = new Map(), fr = [], bo = [];
+  const R = v => Math.round(v * 100) / 100;
+  for (const { L, px, py, pt } of outs) {
+    let f = fills.get(L); if (!f) { f = []; fills.set(L, f); }
+    const q = px.length;
+    f.push('M' + R(px[0]) + ' ' + R(py[0]));
+    for (let k = 1; k < q; k++) f.push('L' + R(px[k]) + ' ' + R(py[k]));
+    f.push('Z');
+    const o = L & 255; let prev = null;
+    for (let k = 0; k < q; k++) {
+      const nb = pt[k], a = (k + 1) % q;
+      let path = null;
+      if (nb === 0) { path = coasts.get(o); if (!path) { path = []; coasts.set(o, path); } }
+      else if (nb > 0 && (nb & 255) !== o && L < nb) path = war[o << 8 | (nb & 255)] === 1 ? fr : bo;
+      if (path) { if (path !== prev) path.push('M' + R(px[k]) + ' ' + R(py[k])); path.push('L' + R(px[a]) + ' ' + R(py[a])); }
+      prev = path;
+    }
+  }
+  return { fills: [...fills].map(([L, a]) => [L, a.join('')]), coasts: [...coasts].map(([o, a]) => [o, a.join('')]), fronts: fr.join(''), borders: bo.join('') };
+}
+function vecFromStrings(v) {
+  return { fills: new Map(v.fills.map(([L, d]) => [L, new Path2D(d)])), coasts: new Map(v.coasts.map(([o, d]) => [o, new Path2D(d)])), fronts: new Path2D(v.fronts), borders: new Path2D(v.borders), olds: new Path2D() };
+}
 // exact scenario outlines only need the last pixel steps taken off; enlarged coarse cells need more
 const vecIters = () => geoStore && !vsrc ? 24 : 6;
 function buildVectors(x0, y0, x1, y1) {
@@ -2278,13 +2304,13 @@ function vecAsync(x0, y0, x1, y1) {
   vecLast = performance.now();
   try {
     if (!vecWorker) {
-      const src = traceOutlines.toString() + '\n' + labelsFrom.toString() + '\nonmessage = e => { const d = e.data, outs = traceOutlines(d.lab || labelsFrom(d), d.ww, d.wh, d.ox, d.oy, d.iters);' +
-        ' postMessage({ id: d.id, outs }, outs.flatMap(o => [o.px.buffer, o.py.buffer, o.pt.buffer])); };';
+      const src = traceOutlines.toString() + '\n' + labelsFrom.toString() + '\n' + vecStrings.toString() + '\nonmessage = e => { const d = e.data, outs = traceOutlines(d.lab || labelsFrom(d), d.ww, d.wh, d.ox, d.oy, d.iters);' +
+        ' postMessage({ id: d.id, s: vecStrings(outs, d.war) }); };';
       vecWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
       vecWorker.onmessage = e => {
         const job = vecJob; vecJob = null;
         if (!job || e.data.id !== job.id || job.W !== W || job.H !== H || job.win !== win) { requestDraw(); return; }
-        vec = Object.assign({ win: job.rect, version: job.version, t: performance.now(), serial: ++vecSerial }, vecPaths(e.data.outs));
+        vec = Object.assign({ win: job.rect, version: job.version, t: performance.now(), serial: ++vecSerial }, vecFromStrings(e.data.s));
         requestDraw();
       };
       vecWorker.onerror = () => { vecWorkerOff = true; vecJob = null; requestDraw(); };
@@ -2293,7 +2319,7 @@ function vecAsync(x0, y0, x1, y1) {
     const sw = getSrcWin();
     const pk = showPockets && pockets.length ? rows(pocket) : null, oc = sw || occBox ? rows(occ) : null, ow = rows(own), src = sw ? rows(sw) : null, set = sw && settled.size ? settledArr.slice() : null;
     vecJob = { id: Math.random(), rect: [x0, y0, x1, y1], version: vecVersion, W, H, win };
-    vecWorker.postMessage({ id: vecJob.id, own: ow, pk, oc, src, set, ww, wh, ox: x0, oy: y0, iters: vecIters() }, [ow.buffer, ...[pk, oc, src, set].filter(Boolean).map(a => a.buffer)]);
+    vecWorker.postMessage({ id: vecJob.id, own: ow, pk, oc, src, set, ww, wh, ox: x0, oy: y0, iters: vecIters(), war: warM }, [ow.buffer, ...[pk, oc, src, set].filter(Boolean).map(a => a.buffer)]);
     return true;
   } catch (e) { vecWorkerOff = true; vecJob = null; return false; }
 }
@@ -3209,9 +3235,29 @@ function commitWindow() {
   for (let i = own.length - 1; i >= n4 * 4; i--) if (own[i] !== winOwn0[i]) { last = i; if (first < 0) first = i >> 2; break; }
   if (first < 0) return false;
   if (last < 0) for (let i = n4 - 1; i >= 0; i--) if (a32[i] !== b32[i]) { last = i * 4 + 3; break; }
-  let by0 = Math.floor(first * 4 / W), by1 = Math.floor(last / W), bx0 = W, bx1 = -1;
-  for (let y = by0; y <= by1; y++) for (let x = 0, i = y * W; x < W; x++, i++) if (own[i] !== winOwn0[i]) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; }
-  if (bx1 < 0) return false;
+  const by0 = Math.floor(first * 4 / W), by1 = Math.floor(last / W);
+  // the changes are written block by block, a block for each tile of the store the window covers: a front all
+  // along a long line used to be written as one box around all of it, most of the window, for a stall of a tenth
+  // of a second
+  const ox = ((win.cx0 % TS) + TS) % TS, oy = ((win.cy0 % TS) + TS) % TS;
+  // the rows with a change, four cells at a time
+  const rowHit = new Uint8Array(H);
+  for (let y = by0; y <= by1; y++) { const w0 = (y * W) >> 2, w1 = Math.min(n4 - 1, ((y + 1) * W - 1) >> 2); for (let i = w0; i <= w1; i++) if (a32[i] !== b32[i]) { rowHit[y] = 1; break; } if (!rowHit[y] && (y + 1) * W > n4 * 4) for (let i = Math.max(y * W, n4 * 4); i < (y + 1) * W; i++) if (own[i] !== winOwn0[i]) { rowHit[y] = 1; break; } }
+  let res = false;
+  for (let ty = -oy; ty <= by1; ty += TS) {
+    const ry0 = Math.max(by0, ty), ry1 = Math.min(by1, ty + TS - 1);
+    if (ry1 < ry0) continue;
+    for (let tx = -ox; tx < W; tx += TS) {
+      const cx0 = Math.max(0, tx), cx1 = Math.min(W - 1, tx + TS - 1);
+      let bx0 = W, bx1 = -1, yy0 = -1, yy1 = -1;
+      for (let y = ry0; y <= ry1; y++) { if (!rowHit[y]) continue; const r = y * W; let hit = false; for (let x = cx0; x <= cx1; x++) if (own[r + x] !== winOwn0[r + x]) { hit = true; if (x < bx0) bx0 = x; break; } if (!hit) continue; for (let x = cx1; x >= bx0; x--) if (own[r + x] !== winOwn0[r + x]) { if (x > bx1) bx1 = x; break; } if (yy0 < 0) yy0 = y; yy1 = y; }
+      if (bx1 >= 0 && commitRect(bx0, yy0, bx1, yy1)) res = true;
+    }
+  }
+  commitOcc();
+  return res;
+}
+function commitRect(bx0, by0, bx1, by1) {
   // dragging a border can leave a lone cell of the old owner behind; up close it would grow into a blot
   // (and threads one cell wide: the old border the drag swept over)
   for (let pass = 0; pass < 2; pass++) for (let y = Math.max(1, by0 - 3); y < Math.min(H - 1, by1 + 4); y++) for (let x = Math.max(1, bx0 - 3); x < Math.min(W - 1, bx1 + 4); x++) {
@@ -3242,7 +3288,6 @@ function commitWindow() {
   }
   const res = storeWrite(win.L, win.cx0 + x0, win.cy0 + y0, w, h, msk, src, 0);
   for (let y = y0; y < y1; y++) winOwn0.set(own.subarray(y * W + x0, y * W + x1), y * W + x0);
-  commitOcc();
   return res;
 }
 function captureStore(keys) { const m = new Map(); for (const k of keys) { const t = store.get(k); m.set(k, t === undefined ? undefined : typeof t === 'number' ? t : t.slice()); } return m; }
@@ -5722,7 +5767,7 @@ function drawMap() {
     // the same view with the land changed under it (troops on the move, a border let go): the old picture fades
     // into the new one, so the front line glides instead of jumping from one tracing to the next
     const viewKey = [view.x, view.y, view.s, cv.width, cv.height].join(), now = performance.now();
-    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast') {
+    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast' && !(gfx === 'auto' && battlesOn && units.length > 1500)) {   // a big battle: no cross-fade
       if (!fadeCv) fadeCv = document.createElement('canvas');
       if (fadeCv.width !== mapCv.width || fadeCv.height !== mapCv.height) { fadeCv.width = mapCv.width; fadeCv.height = mapCv.height; }
       const fc = fadeCv.getContext('2d');
@@ -6108,7 +6153,7 @@ function resistSettle() {
 // to a third at 1350 km; cut off in a pocket it is out of supply as before. The «Снабжение» map shows it.
 const SUP_FULL = 450, SUP_FADE = 900;
 let supLvl = null, supF = 1, supW = 0, supH = 0, supCo = null, supBusy = 0, supShow = false, supCv = null, supT = 0;
-function supplyCompute() {
+function supplyCompute(bg) {
   if (!own || !W) return;
   // supply is worked out on a coarser grid (blocks of supF × supF cells, ≤ ~350 000 of them): it changes over tens
   // of kilometres, and a map of millions of cells would take a third of a second each time
@@ -6123,6 +6168,16 @@ function supplyCompute() {
   const seed = (x, y, o) => { const gx = Math.floor(x / f), gy = Math.floor(y / f); if (gx < 0 || gy < 0 || gx >= cw || gy >= ch) return; const i = gy * cw + gx, c = co[i]; if (!real(c) || !al[c << 8 | o]) return; dist[i] = 0; so[i] = o; };
   for (const c of cities) { const o = cityOwner(c); if (o && o !== 255) seed(c.x, c.y, o); }
   for (const u of units) if (unitDef(u).def[2] === 'hq') seed(u.x, u.y, u.owner);
+  const km = (geo ? metersPerCell() / 1000 : 1) * f, job = { co, al, war, dist, so, cw, ch, km, full: SUP_FULL, fade: SUP_FADE };
+  const done = lv => { supLvl = lv; supF = f; supW = cw; supH = ch; supCo = co; if (supShow) supPaint(); };
+  // in battle the sweeps run in a background thread; the old map serves until the new one is ready
+  if (bg && supWorkerOn()) { const id = ++supSeq; supWorker.onmessage = e => { if (e.data.id === id && W) { done(e.data.lv); requestDraw(); } }; supWorker.postMessage(Object.assign({ id }, job)); return; }
+  done(supCore(job));
+}
+// the sweeps of the supply map: from the fronts to find the deep rear, then from the hubs through friendly land
+function supCore({ co, al, war, dist, so, cw, ch, km, full, fade }) {
+  const n = cw * ch, INF = 0xffffffff, deep = 500 * 3 / km;
+  const real = o => o && o < 254;
   // the deep rear supplies itself: land more than 500 km from any front line is a hub too
   // (distances in thirds of a block: 3 straight, 4 diagonal — round, not diamond-shaped; two sweeps over the grid)
   const fd = new Uint32Array(n).fill(INF);
@@ -6142,7 +6197,6 @@ function supplyCompute() {
     if (y < ch - 1) { const j = i + cw; if (fd[j] + 3 < v) v = fd[j] + 3; if (x < cw - 1 && fd[j + 1] + 4 < v) v = fd[j + 1] + 4; if (x > 0 && fd[j - 1] + 4 < v) v = fd[j - 1] + 4; }
     fd[i] = v;
   }
-  const km = (geo ? metersPerCell() / 1000 : 1) * f, deep = 500 * 3 / km;
   for (let i = 0; i < n; i++) if (real(co[i]) && fd[i] > deep) { dist[i] = 0; so[i] = co[i]; }
   // the same sweeps from the hubs, through land of the hub's side only
   const relax = (i, j, w, o) => { const d = dist[j]; if (d !== INF && d + w < dist[i] && al[o << 8 | so[j]]) { dist[i] = d + w; so[i] = so[j]; } };
@@ -6157,11 +6211,16 @@ function supplyCompute() {
     if (y < ch - 1) { relax(i, i + cw, 3, o); if (x < cw - 1) relax(i, i + cw + 1, 4, o); if (x > 0) relax(i, i + cw - 1, 4, o); }
   }
   const lv = new Uint8Array(n);
-  for (let i = 0; i < n; i++) { const d = dist[i]; lv[i] = d === INF ? 0 : Math.max(1, Math.round(255 * clamp(1 - Math.max(0, d / 3 * km - SUP_FULL) / SUP_FADE, .3, 1))); }
-  supLvl = lv; supF = f; supW = cw; supH = ch; supCo = co;
-  if (supShow) supPaint();
+  for (let i = 0; i < n; i++) { const d = dist[i]; lv[i] = d === INF ? 0 : Math.max(1, Math.round(255 * Math.min(1, Math.max(.3, 1 - Math.max(0, d / 3 * km - full) / fade)))); }
+  return lv;
 }
-function supplySoon() { if (supBusy) return; supBusy = setTimeout(() => { supBusy = 0; supplyCompute(); requestDraw(); }, battlesOn ? 1500 : 400); }
+function supplySoon() { if (supBusy) return; supBusy = setTimeout(() => { supBusy = 0; supplyCompute(battlesOn); requestDraw(); }, battlesOn ? 1500 : 400); }
+let supWorker = null, supSeq = 0, supWorkerOff = false;
+function supWorkerOn() {
+  if (supWorker) return true; if (supWorkerOff) return false;
+  try { supWorker = new Worker(URL.createObjectURL(new Blob([supCore.toString() + '\nonmessage = e => { const lv = supCore(e.data); postMessage({ id: e.data.id, lv }, [lv.buffer]); };'], { type: 'text/javascript' }))); supWorker.onerror = () => { supWorkerOff = true; supWorker = null; }; return true; }
+  catch (e) { supWorkerOff = true; return false; }
+}
 // a division's supply, 0.3 … 1 (on land of no hub at all: as far from one as can be)
 function supplyOf(u) {
   if (!game.supply || !supLvl) return 1;
@@ -6365,11 +6424,33 @@ const terrainMarch = u => game.terrain ? 1 - .45 * terrainAt(u).rough : 1;
 const terrainDefend = u => { if (!game.terrain) return 1; const t = terrainAt(u); return 1 + .5 * t.rough + (t.river ? .25 : 0); };
 const terrainAttack = u => game.terrain && terrainAt(u).river ? .85 : 1;
 // relief and rivers over the countries (in the cells of the working window)
+// relief and rivers for the view on screen are drawn once into layers of their own and laid over the map from
+// there: in battle the land changes several times a second while the view stands still, and scaling the relief
+// picture and tracing every river for each of those redraws cost more than all the rest of the map
+const terrCv = document.createElement('canvas'), rivCv = document.createElement('canvas');
+let terrKey = '';
 function drawTerrain(c) {
   if (!geoStore || !win) return;
+  if (c !== mctx) return drawTerrainOn(c);
+  const relief = layers.relief && reliefImg && reliefImg.complete && reliefMeta, rivers = layers.rivers && riverSets;
+  if (!relief && !rivers) return;
+  const w = c.canvas.width, h = c.canvas.height, key = [view.x, view.y, view.s, w, h, win.L, win.cx0, win.cy0, !!relief, !!rivers, layers.staff, pal().river].join();
+  if (key !== terrKey) {
+    terrKey = key;
+    for (const cv_ of [terrCv, rivCv]) { if (cv_.width !== w || cv_.height !== h) { cv_.width = w; cv_.height = h; } const x = cv_.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h); x.setTransform(c.getTransform()); }
+    if (relief) drawTerrainOn(terrCv.getContext('2d'), 'relief', true);
+    if (rivers) drawTerrainOn(rivCv.getContext('2d'), 'rivers');
+  }
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  if (relief) { c.globalCompositeOperation = 'soft-light'; c.globalAlpha = layers.staff ? .7 : .95; c.drawImage(terrCv, 0, 0); }
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+  if (rivers) c.drawImage(rivCv, 0, 0);
+  c.restore();
+}
+function drawTerrainOn(c, only, plain) {
   const n = worldCells(win.L);
-  if (layers.relief && reliefImg && reliefImg.complete && reliefMeta) {
-    c.save(); c.globalCompositeOperation = 'soft-light'; c.globalAlpha = layers.staff ? .7 : .95; c.imageSmoothingEnabled = true;
+  if (only !== 'rivers' && layers.relief && reliefImg && reliefImg.complete && reliefMeta) {
+    c.save(); if (!plain) { c.globalCompositeOperation = 'soft-light'; c.globalAlpha = layers.staff ? .7 : .95; } c.imageSmoothingEnabled = true;
     // only the part of the picture on screen is scaled and blended, not the whole world
     const iw = reliefImg.naturalWidth, ih = reliefImg.naturalHeight, ry0 = reliefMeta.y0, ry1 = reliefMeta.y1;
     const fx0 = clamp((-view.x / view.s + win.cx0) / n - .01, 0, 1), fx1 = clamp(((stage.clientWidth - view.x) / view.s + win.cx0) / n + .01, 0, 1);
@@ -6377,7 +6458,7 @@ function drawTerrain(c) {
     if (fx1 > fx0 && fy1 > fy0) c.drawImage(reliefImg, fx0 * iw, fy0 * ih, (fx1 - fx0) * iw, (fy1 - fy0) * ih, fx0 * n - win.cx0, (ry0 + fy0 * (ry1 - ry0)) * n - win.cy0, (fx1 - fx0) * n, (fy1 - fy0) * (ry1 - ry0) * n);
     c.restore();
   }
-  if (layers.rivers && riverSets) {
+  if (only !== 'relief' && layers.rivers && riverSets) {
     const vx0 = (-view.x / view.s + win.cx0) / n, vx1 = ((stage.clientWidth - view.x) / view.s + win.cx0) / n;
     const vy0 = (-view.y / view.s + win.cy0) / n, vy1 = ((stage.clientHeight - view.y) / view.s + win.cy0) / n;
     const worldPx = n * view.s;   // the width of the world on screen
@@ -8903,12 +8984,16 @@ const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <=
 // the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
 function calendarTick() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { econDay(); popDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
 function battleTick() {
+  fuCache = {};
+  try { battleTickRun(); } finally { fuCache = null; }
+}
+function battleTickRun() {
   if (!own) return;
   if (!units.length) { calendarTick(); return; }
   engaged = []; inBattle.clear();
   const h = hoursPerTick;
   if (!gridOk() || units.length < 20000 || performance.now() - bgrid.t > 300) buildBattleGrid();
-  if (units.length < 20000 || battleTicks % 3 === 0) computeSupport();
+  if (units.length < 1500 || battleTicks % 3 === 0) computeSupport();   // support changes slowly: with thousands of units, every third tick
   // hundreds of thousands of units: a share of them each tick, all of them over a few ticks
   const slices = Math.max(1, Math.ceil(units.length / 12000)), part = battleTicks % slices, list = units.slice();
   for (let ui = part; ui < list.length; ui += slices) {
@@ -8953,6 +9038,7 @@ function battleTick() {
   if (game.ai && game.aiMode !== 'econ') aiFronts(h);
   if (goalCheck()) startMarch();
   calendarTick();
+  if (aiDeployQ.size) aiDeployNext(2);
   if (game.reinforce) reinforceTick(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
@@ -8967,7 +9053,7 @@ function battleTick() {
   requestDrawFast();
   const perSec = Math.max(1, Math.round(battleSpeed));
   ++battleTicks;
-  if (battleTicks % perSec === 0 || dead.length) { if (geoStore && battleTicks % (perSec * 20) === 0) setTimeout(commitWindow, 0); if (dead.length) renderCountries(); else updateCountryShares(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); renderArmyBar(); }
+  if (battleTicks % perSec === 0 || dead.length) { if (geoStore && battleTicks % (perSec * 20) === 0) scheduleCommit(); if (dead.length) renderCountries(); else updateCountryShares(); renderUnitPanel(); updateSupply(); checkCities(); renderScore(); scheduleSave(); renderArmyBar(); }
   else updateGameInfo();
   if (battleTicks % (perSec * 3) === 0) computePocketsSoon(() => { renderPockets(); logPockets(); });
   if (game.collapse) collapseTick();
@@ -9378,9 +9464,9 @@ function marchFrame(t) {
   }
   if (t - fillBeat > 250) { fillBeat = t; lineFill(); }
   requestDrawFast();
-  if (t - marchBeat > 1000) { marchBeat = t; if (geoStore && ++marchCommits % 20 === 0) setTimeout(commitWindow, 0); renderCountries(); checkCities(); renderScore(); }
+  if (t - marchBeat > 1000) { marchBeat = t; if (geoStore && ++marchCommits % 20 === 0) scheduleCommit(); renderCountries(); checkCities(); renderScore(); }
   if (any) marchRaf = requestAnimationFrame(marchFrame);
-  else { edited(); checkCities(); renderScore(); }
+  else { editedSoon(); checkCities(); renderScore(); }
 }
 function drawOrders(c) {
   if (!game.orders) return;
@@ -9482,24 +9568,29 @@ function clearLine(owner, a, b) {
   }
   return true;
 }
+let fpBuf = null;
 function findPath(owner, a, b) {
   const { k, gw, gh, g } = passGrid(owner);
   const at = p => clamp(Math.floor(p.y / k), 0, gh - 1) * gw + clamp(Math.floor(p.x / k), 0, gw - 1);
   const near = i => { if (g[i]) return i; const x = i % gw, y = (i / gw) | 0; for (let r = 1; r <= 4; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < gw && yy < gh && g[yy * gw + xx]) return yy * gw + xx; } return -1; };
   const s = near(at(a)), t = near(at(b));
   if (s < 0 || t < 0) return null;
-  const N = gw * gh, gs = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+  // the search's arrays are kept between searches and told apart by a stamp: allocating and clearing three grids
+  // for each of dozens of paths a tick was most of the cost
+  const N = gw * gh;
+  if (!fpBuf || fpBuf.N !== N) fpBuf = { N, gs: new Float32Array(N), came: new Int32Array(N), st: new Uint32Array(N), dn: new Uint32Array(N), gen: 0 };
+  const gen = ++fpBuf.gen, GS = fpBuf.gs, CA = fpBuf.came, ST = fpBuf.st, DN = fpBuf.dn;
   const tx = t % gw, ty = (t / gw) | 0, hf = i => { const dx = Math.abs(i % gw - tx), dy = Math.abs(((i / gw) | 0) - ty); return Math.max(dx, dy) + .414 * Math.min(dx, dy); };
   // a binary heap of [f, index]
   const hf_ = [], hi = [];
   const push = (f, i) => { let j = hf_.length; hf_.push(f); hi.push(i); while (j) { const p = (j - 1) >> 1; if (hf_[p] <= f) break; hf_[j] = hf_[p]; hi[j] = hi[p]; j = p; } hf_[j] = f; hi[j] = i; };
   const pop = () => { const i = hi[0], lf = hf_.pop(), li = hi.pop(); if (hf_.length) { let j = 0; for (;;) { let c = 2 * j + 1; if (c >= hf_.length) break; if (c + 1 < hf_.length && hf_[c + 1] < hf_[c]) c++; if (hf_[c] >= lf) break; hf_[j] = hf_[c]; hi[j] = hi[c]; j = c; } hf_[j] = lf; hi[j] = li; } return i; };
-  gs[s] = 0; push(hf(s), s);
+  ST[s] = gen; GS[s] = 0; CA[s] = -1; push(hf(s), s);
   let steps = 0;
   while (hf_.length && steps++ < 250000) {
     const i = pop();
-    if (done[i]) continue;
-    done[i] = 1;
+    if (DN[i] === gen) continue;
+    DN[i] = gen;
     if (i === t) break;
     const x = i % gw, y = (i / gw) | 0;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -9507,15 +9598,15 @@ function findPath(owner, a, b) {
       const xx = x + dx, yy = y + dy;
       if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue;
       const j = yy * gw + xx;
-      if (!g[j] || done[j]) continue;
+      if (!g[j] || DN[j] === gen) continue;
       if (dx && dy && (!g[y * gw + xx] || !g[yy * gw + x])) continue;   // no cutting a corner of enemy land
-      const c = gs[i] + (dx && dy ? 1.414 : 1);
-      if (c < gs[j]) { gs[j] = c; came[j] = i; push(c + hf(j), j); }
+      const c = GS[i] + (dx && dy ? 1.414 : 1);
+      if (ST[j] !== gen || c < GS[j]) { ST[j] = gen; GS[j] = c; CA[j] = i; push(c + hf(j), j); }
     }
   }
-  if (!done[t]) return null;
+  if (DN[t] !== gen) return null;
   const cells = [];
-  for (let i = t; i !== s && i >= 0; i = came[i]) cells.push({ x: (i % gw + .5) * k, y: (((i / gw) | 0) + .5) * k });
+  for (let i = t; i !== s && i >= 0; i = CA[i]) cells.push({ x: (i % gw + .5) * k, y: (((i / gw) | 0) + .5) * k });
   cells.reverse();
   cells[cells.length - 1] = { x: b.x, y: b.y };
   // the corners only: from each point straight on to the farthest one in clear sight
@@ -9604,7 +9695,13 @@ function markAttack(list, dir) {
 // in the «Фронт» mode (G), and made by the deployment for every army. Its units stand evenly spread along it, follow
 // it when the border moves, and on «Наступать» push across it into the enemy's land. A line of defence («Оборона», V)
 // is drawn anywhere and held where it is.
-const frontUnits = f => units.filter(u => u.fl === f.id);
+// the units of each front: within a battle tick, one pass over all units for all fronts instead of one per question
+let fuCache = null;
+const frontUnits = f => {
+  if (!fuCache) return units.filter(u => u.fl === f.id);
+  if (fuCache.u !== units || fuCache.n !== units.length) { const m = new Map(); for (const u of units) if (u.fl) { let a = m.get(u.fl); if (!a) m.set(u.fl, a = []); a.push(u); } fuCache = { u: units, n: units.length, m }; }
+  const a = fuCache.m.get(f.id); return a ? a.slice() : [];
+};
 const fineGrid = () => !!(vsrc && geoStore);
 // whose land a point is, finer than a cell wherever the cell is as the scenario drew it: units of a few metres
 // stand on the real border even when a cell of the working grid is a kilometre across
@@ -10229,16 +10326,29 @@ function reinforceTick(h) {
     }
   }
 }
+// the number for a new division of a country: one more than its highest; the highest of every country is found in one
+// pass over the troops and kept while the troops are the same list (a pass for each new division was a stall in battle)
+let divNoCache = null;
+function nextDivNo(o) {
+  if (!divNoCache || divNoCache.u !== units) {
+    const m = new Map();
+    for (const v of units) if (v.label) { const r = /^(\d+)-я/.exec(v.label); if (r && +r[1] > (m.get(v.owner) || 0)) m.set(v.owner, +r[1]); }
+    divNoCache = { u: units, m };
+  }
+  const n = (divNoCache.m.get(o) || 0) + 1; divNoCache.m.set(o, n); return n;
+}
 function reinforce(f) {
   if (f.kind === 'front' ? !(f.guides && tracePath(f)) : !(f.pts && f.pts.length > 1)) return false;
   const P = f.pts, ls = frontUnits(f), o = f.owner;
   // the emptiest stretch: the point of the line farthest from every unit of the side
   let best = null, bd = -1;
   const step = Math.max(1, Math.floor(P.length / 80));
+  // a long line: every few of its units are enough to find the gap (the cost grew with the square of the line)
+  const lsS = ls.length > 150 ? ls.filter((_, i) => i % Math.ceil(ls.length / 150) === 0) : ls;
   for (let i = 0; i < P.length; i += step) {
     const p = P[i];
     let d = Infinity;
-    for (const u of ls) { const t = u.order ? (u.route && u.route.length ? u.route[u.route.length - 1] : u.order) : u, e = Math.hypot(t.x - p.x, t.y - p.y); if (e < d) d = e; }   // where it stands or is going
+    for (const u of lsS) { const t = u.order ? (u.route && u.route.length ? u.route[u.route.length - 1] : u.order) : u, e = Math.hypot(t.x - p.x, t.y - p.y); if (e < d) d = e; }   // where it stands or is going
     if (d === Infinity) { forNear({ x: p.x, y: p.y }, unitCellsAt(p.y) * 6, v => { if (v.owner === o) { const e = Math.hypot(v.x - p.x, v.y - p.y); if (e < d) d = e; } }); if (d === Infinity) d = 1e9 - i * 1e3 * ((f.rsentN || 0) % 3 + 1); }
     if (d > bd) { bd = d; best = p; }
   }
@@ -10254,7 +10364,7 @@ function reinforce(f) {
   const ref = ls[0] || units.find(u => u.owner === o) || { era, ech: 'XX' };
   const u = { x: from.x, y: from.y, era: ref.era || era, type, owner: o, ech: ref.ech || 'XX', label: '', fl: f.id, ft: .5, org: 45 };
   if (f.gen && genById(f.gen)) u.gen = f.gen;
-  if (u.ech === 'XX') { let n = 0; for (const v of units) if (v.owner === o && v.label) { const m = /^(\d+)-я/.exec(v.label); if (m) n = Math.max(n, +m[1]); } nameDivision(u, n + 1); }
+  if (u.ech === 'XX') nameDivision(u, nextDivNo(o));
   units.push(u);
   f.rsentN = (f.rsentN || 0) + 1;
   const back = u.ech === 'XX' ? S * .55 : S * 1.5;
@@ -10518,11 +10628,14 @@ function econBuild(k, type, g, quiet) {
 // the other sides put new divisions in the field from their equipment, as the player does: one of each kind a day
 // at most, to one of their fronts (the emptiest stretch of it), or by their biggest city
 const DEPLOY_PREF = { inf: ['rifles', 'motor', 'cav', 'mg'], art: ['art', 'mlrs', 'at', 'archers', 'siege'], tank: ['tank', 'mech', 'tank1', 'heavycav'], air: ['air', 'heli', 'uav'] };
-function aiDeploy(k) {
+// the countries waiting to put down their new troops: a whole day of them at once was a stall of tens of ms
+const aiDeployQ = new Set();
+function aiDeployNext(n) { pathBudget = 2; try { for (const k of aiDeployQ) { if (n-- <= 0) break; aiDeployQ.delete(k); if (countries[k - 1] && paidDeploy()) aiDeploy(k); } } finally { pathBudget = Infinity; } }
+function aiDeploy(k, reps = 1) {
   const st = stock(k), mine = units.filter(u => u.owner === k);
   const eras = new Map(); for (const u of mine) eras.set(u.era, (eras.get(u.era) || 0) + 1);
   const ek = eras.size ? [...eras].sort((a, b) => b[1] - a[1])[0][0] : era, E = ERAS[ek] || ERAS.ww2;
-  for (const q of ['inf', 'tank', 'art', 'air']) {
+  for (const q of ['inf', 'tank', 'art', 'air']) for (let r = 0; r < reps; r++) {
     if ((st.eq[q] || 0) < 1) continue;
     const pref = DEPLOY_PREF[q], d = pref.map(r => E.units.find(x => ROLE_OF[x[2]] === r)).find(Boolean);
     if (!d) continue;
@@ -10536,7 +10649,7 @@ function aiDeploy(k) {
       units.push(u);
     }
     if (!payFor(k, [u])) { units.splice(units.indexOf(u), 1); continue; }
-    if (u.ech === 'XX' && !/дивизия/.test(u.label || '')) { let n = 0; for (const v of units) if (v.owner === k && v.label) { const m = /^(\d+)-я/.exec(v.label); if (m) n = Math.max(n, +m[1]); } nameDivision(u, n + 1); }
+    if (u.ech === 'XX' && !/дивизия/.test(u.label || '')) nameDivision(u, nextDivNo(k));
   }
 }
 // one day of the economy, for every country with a treasury or a factory
@@ -10575,7 +10688,7 @@ function econDay() {
     econ.money[k] = money(k) + inc - exp;
     econ.last[k] = { inc, exp, eraInc, tax, facInc, army };
     if (!isHuman(k) && !humanAllied(k) && game.ai && game.aiMode !== 'troops') econAi(k);
-    if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeploy(k);
+    if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeployQ.add(k);   // carried out a country or two a tick (battleTick)
   }
   econ.day = (econ.day || 0) + 1;
   if (game.aid && econ.day % 7 === 0) econAid();
@@ -10886,10 +10999,7 @@ function popModelBuild() {
   }
   // big cities: which region each one is in
   const cw = new Map();
-  for (const c of MODERN.cities) {
-    const mx = lonToX(c[2]), my = latToY(c[1]);
-    for (const f of R.a1) { if (!f.parts.some(p => mx >= p.box[0] && mx <= p.box[2] && my >= p.box[1] && my <= p.box[3] && inRings(p.rings, mx, my))) continue; cw.set(f, (cw.get(f) || 0) + (c[4] ? 3 : 1) * Math.max(1, c[3] || 1)); break; }
-  }
+  for (const c of MODERN.cities) { const f = regionOfPoint(lonToX(c[2]), latToY(c[1])); if (f) cw.set(f, (cw.get(f) || 0) + (c[4] ? 3 : 1) * Math.max(1, c[3] || 1)); }
   const base = new Map();
   for (const [code, fs] of byCode) {
     const total = (COUNTRY_POP[code] || 0) * 1e6 || fs.reduce((t, f) => t + area.get(f), 0) * 30;   // unknown: 30 per km²
@@ -10899,11 +11009,27 @@ function popModelBuild() {
   popModel = { area, base };
 }
 const regionKey = f => f.code + ':' + f.name;
+// the regions by place: a grid of 512 × 512 squares over the world, each listing the parts of regions whose box
+// touches it, so a point is tested against a handful of outlines instead of all of them
+let regionGrid = null;
+const RG = 512;
+function regionGridBuild() {
+  const R = decodeRegions(), g = Array.from({ length: RG * RG }, () => null);
+  for (const f of R.a1) for (const p of f.parts) {
+    const b = p.box, x0 = Math.max(0, Math.floor(b[0] * RG)), x1 = Math.min(RG - 1, Math.floor(b[2] * RG)), y0 = Math.max(0, Math.floor(b[1] * RG)), y1 = Math.min(RG - 1, Math.floor(b[3] * RG));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * RG + x; (g[i] || (g[i] = [])).push([f, p]); }
+  }
+  regionGrid = g;
+}
 function regionOfPoint(mx, my) {
-  const R = decodeRegions(); mx -= Math.floor(mx);
-  for (const f of R.a1) for (const p of f.parts) { const b = p.box; if (mx < b[0] || mx > b[2] || my < b[1] || my > b[3]) continue; if (inRings(p.rings, mx, my)) return f; }
+  if (!regionGrid) regionGridBuild();
+  mx -= Math.floor(mx); if (my < 0 || my >= 1) return null;
+  const list = regionGrid[Math.floor(my * RG) * RG + Math.floor(mx * RG)];
+  if (list) for (const [f, p] of list) { const b = p.box; if (mx < b[0] || mx > b[2] || my < b[1] || my > b[3]) continue; if (inRings(p.rings, mx, my)) return f; }
   return null;
 }
+// built when the browser is idle after a war opens, so the first strike or day of battle does not wait for it
+function popModelSoon() { if (popModel) return; const run = () => { if (!popModel) { try { popModelBuild(); } catch (e) { } } }; window.requestIdleCallback ? requestIdleCallback(run, { timeout: 8000 }) : setTimeout(run, 1500); }
 // a region now: its people at the start (for the year of the war), grown since, less the dead
 function regionPop(f) {
   if (!popModel) popModelBuild();
@@ -10933,6 +11059,7 @@ function strikeCivilians(kind, g, Rkm) {
 // a day of war: the people of the regions where battles are fought die and flee a little
 function popDay() {
   if (!geoStore || !battlesOn) return;
+  if (!popModel) { popModelSoon(); return; }
   const seen = new Map(), fighting = units.filter(u => u.fighting || inBattle.has(u));
   for (let i = 0; i < Math.min(40, fighting.length); i++) {
     const u = fighting[Math.floor(Math.random() * fighting.length)], w = toWorld(u.x, u.y), f = regionOfPoint(w.mx, w.my);
@@ -12263,12 +12390,15 @@ let saveT = 0, saveFn = null;
 const flushSave = () => { if (saveFn) { clearTimeout(saveT); const f = saveFn; saveFn = null; f(); } };
 window.addEventListener('pagehide', () => { if (geoStore && own) { commitWindow(); scheduleSave(); } flushSave(); });
 function scheduleSave() {
+  // in battle the state changes every tick: saved at most every eight seconds, not put off again and again
+  const inBattleNow = typeof battlesOn !== 'undefined' && battlesOn;
+  if (inBattleNow && saveFn) return;
   clearTimeout(saveT);
   saveT = setTimeout(saveFn = () => {
     saveFn = null;
     if (!own) return;
     dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, placeCount, echScale, warpMode, mapTitle, wars, settled: [...settled], warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units: packUnits(units), forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth, fronts, econ }).catch(() => {});
-  }, typeof units !== "undefined" && units.length > 20000 ? 4000 : 600);
+  }, inBattleNow ? 8000 : typeof units !== "undefined" && units.length > 20000 ? 4000 : 600);
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
 async function restoreSaved() {
@@ -13107,6 +13237,7 @@ async function startScenario(id, pl, mode) {
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
     makeObjectives(); supplyCompute(); renderWeather();
+    if (geoStore) popModelSoon();
     if (!watch && game.econ) { econPrebuild(); econ.stock = {}; econ.money = {}; econ.base = {}; }
     econMode = null; setTimeout(() => renderEcon());
   } finally { btn.disabled = false; btn.textContent = campMode === 'watch' ? 'Смотреть' : 'В бой'; }
