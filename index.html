@@ -8335,11 +8335,89 @@ function lfMigrate() {
     if (!Object.keys(e).length) delete S[key];
   }
 }
-// who attacks a stretch: the player where marked; the AI where it is clearly the stronger
+// who attacks a stretch: the player where marked; the AI on the sector of its main blow when it is the stronger
+// there, elsewhere only where the enemy is much the weaker; an attack lasts while the stretch's spirit holds, then
+// the troops stop to rest and dig in, and go again once they have recovered — the blows come in waves
 function lfAttacks(o, key, so, se) {
   if (lfMode() === 'free' || isHuman(o)) return econ.front.atk[key] === o;
-  if (!game.ai) return false;
-  return so >= 3 && so > se * 1.3;
+  if (!game.ai || so < 1.5) return false;
+  const F = econ.front, org = lfOrg(key, o), was = F.ai && F.ai[key] === o;
+  if (org < (was ? .3 : .75)) return false;
+  const e = lfBorder.get(key), en = e.a === o ? e.b : e.a;
+  const ratio = so * org / (se * lfOrg(key, en) * lfDefMul(key, en) + .5);
+  return lfPlanHas(o, key) ? ratio > 1.15 : so >= 3 && ratio > 1.8;
+}
+// the spirit (0 … 1) and the trenches (0 … 1) of a side on a stretch
+const lfOrg = (key, o) => { const m = econ.front.org && econ.front.org[key]; return m && m[o] !== undefined ? m[o] : 1; };
+const lfEnt = (key, o) => { const m = econ.front.ent && econ.front.ent[key]; return m && m[o] !== undefined ? m[o] : econ.front.ent0 || .3; };
+function lfSetKO(name, key, o, v) { const F = econ.front, T = F[name] || (F[name] = {}), m = T[key] || (T[key] = {}); m[o] = clamp(v, 0, 1); }
+// how much the ground and the trenches multiply a defender's strength on a stretch: mountains, a river in front,
+// a town to hold, and the trenches dug while it stood
+let lfGround = new Map(), lfGroundWin = null;
+function lfGroundOf(key) {
+  if (lfGroundWin !== win) { lfGround = new Map(); lfGroundWin = win; }
+  let g = lfGround.get(key); if (g !== undefined) return g;
+  const e = lfBorder.get(key); if (!e) return 1;
+  let rough = 0, river = 0;
+  if (game.terrain !== false) for (let j = 0; j < Math.min(e.pts.length, 24); j += 8) { const t = terrainAt({ x: e.pts[j], y: e.pts[j + 1] }); rough = Math.max(rough, t.rough); if (t.river) river = 1; }
+  const km = metersPerCell() / 1000; let town = 0;
+  for (const c of cities) { const d = Math.hypot(c.x - e.x, c.y - e.y) * km; if (d < 6 + Math.min(25, c.vp || 1) * .5) town = Math.max(town, Math.min(1, .35 + (c.vp || 1) / 20)); }
+  g = 1 + .6 * rough + .35 * river + .5 * town;
+  lfGround.set(key, g); return g;
+}
+const lfDefMul = (key, o) => lfGroundOf(key) * (1 + .5 * lfEnt(key, o));
+// the AI's sector of the main blow, as a set of its stretches
+const lfPlanHas = (o, key) => { const p = econ.front.plan && econ.front.plan[o]; return !!p && p.k.includes(key); };
+// choosing the main blow: the sector (a few stretches around a centre) where the enemy is the weakest for the ground
+// it holds, where there are towns to take and where the AI's own battalions already stand; none when the country
+// is far the weaker overall — then it holds its line and strikes back only where the enemy has worn himself out
+function lfAiPlan(o, keys) {
+  const F = econ.front, P = F.plan || (F.plan = {});
+  let mine = F.res[o] || 0, foe = 0;
+  const km = metersPerCell() / 1000, info = [];
+  for (const k of keys) {
+    const e = lfBorder.get(k), en = e.a === o ? e.b : e.a, me = lfStr(k, o), they = lfStr(k, en) * lfOrg(k, en) * lfDefMul(k, en);
+    mine += me; foe += lfStr(k, en);
+    let prize = 0; for (const c of cities) if (cellOwner(c.x, c.y) === en && Math.hypot(c.x - e.x, c.y - e.y) * km < 40) prize += Math.min(25, c.vp || 1);
+    info.push({ k, x: e.x, y: e.y, en, v: 3 / (1 + they) + me / (me + they + 1) + prize * .08, nx: e.a === o ? e.nx : -e.nx, ny: e.a === o ? e.ny : -e.ny });
+  }
+  if (!info.length || mine < foe * .7) { delete P[o]; return; }
+  const R = lfBC() * Math.max(4.5, Math.sqrt(info.length) * .9), step = Math.max(1, Math.floor(info.length / 80));
+  let best = null, bv = -1;
+  for (let j = 0; j < info.length; j += step) {
+    const c = info[j]; let v = 0;
+    for (const q of info) if (q.en === c.en && Math.abs(q.x - c.x) < R && Math.abs(q.y - c.y) < R) v += q.v;
+    if (v > bv) { bv = v; best = c; }
+  }
+  const sec = info.filter(q => q.en === best.en && Math.hypot(q.x - best.x, q.y - best.y) < R).sort((a, b) => Math.hypot(a.x - best.x, a.y - best.y) - Math.hypot(b.x - best.x, b.y - best.y)).slice(0, Math.max(14, Math.ceil(info.length / 3)));
+  let nx = 0, ny = 0; for (const q of sec) { nx += q.nx; ny += q.ny; } const l = Math.hypot(nx, ny) || 1;
+  const old = P[o];
+  P[o] = { k: sec.map(q => q.k), x: best.x, y: best.y, nx: nx / l, ny: ny / l, en: best.en, day: econ.day || 0, cells: F.cells || 0 };
+  if (!old || Math.hypot(old.x - best.x, old.y - best.y) > R) logEvent(ownerName(o) + ': направление главного удара — против ' + ownerName(best.en) + '.', o);
+}
+// the AI moves its battalions along the line once a day: every stretch keeps what its defence needs against the
+// enemy in front of it; what is over that, a part each day, goes first to the stretches in danger and then to
+// the sector of the main blow, until it is half as strong again as the enemy dug in there
+function lfAiRedeploy(o, keys) {
+  const plan = econ.front.plan && econ.front.plan[o];
+  const need = [], pool = [];
+  for (const k of keys) {
+    const e = lfBorder.get(k), en = e.a === o ? e.b : e.a, me = lfStr(k, o), they = lfStr(k, en) * lfOrg(k, en);
+    const req = Math.max(1.5, they * 1.05 / lfDefMul(k, o)), main = plan && plan.k.includes(k);
+    if (me < req) need.push([k, req - me, 0]);
+    else if (main) { const want = they * lfDefMul(k, en) * 1.5 + 3; if (me < want) need.push([k, want - me, 1]); }
+    else if (me > req + 1) pool.push([k, (me - req) * .35]);
+  }
+  need.sort((a, b) => a[2] - b[2] || b[1] - a[1]);
+  let pi = 0;
+  for (const n of need) {
+    while (n[1] > .2 && pi < pool.length) {
+      const p = pool[pi], v = Math.min(p[1], n[1]);
+      lfAdd(p[0], o, -v); lfAdd(n[0], o, v); p[1] -= v; n[1] -= v;
+      if (p[1] <= .05) pi++;
+    }
+    if (pi >= pool.length) break;
+  }
 }
 // an advance on a stretch: at every point of its line a round bite of the enemy's land, deep as the advance, wide
 // enough to meet the bites of the points beside it, so the front bends as a curve and not by squares
@@ -8369,11 +8447,14 @@ function lfWarHarm(e, B, cells) {
   stAdd(B, 'civLost', dead);
   if (city && Math.random() < .15) addScar(e, Math.max(2, Math.sqrt(area)));
 }
-// a tick of the live front: h hours of battle on every stretch
+// a tick of the live front: h hours of battle on every stretch. The defender's strength counts with the ground and
+// his trenches, both sides' with their spirit; an attack wears the attacker's spirit down (and the defender's, the
+// harder it is pressed), a quiet stretch gets it back and digs in; ground lost leaves the trenches behind
 function* lfTickGen(h) {
   yield* lfScanGen();
   lfMigrate();
-  const S = lfState().s, acc = econ.front.acc || (econ.front.acc = {}), km = metersPerCell() / 1000;
+  const F = econ.front, acc = F.acc || (F.acc = {}), ai = {}, km = metersPerCell() / 1000;
+  const fought = new Set();
   let moved = 0, i = 0;
   for (const [key, e] of lfBorder) {
     if ((++i & 63) === 0) yield* yieldPoint();
@@ -8381,21 +8462,38 @@ function* lfTickGen(h) {
     if (!sa && !sb) continue;
     const aa = lfAttacks(e.a, key, sa, sb), ab = lfAttacks(e.b, key, sb, sa);
     if (!aa && !ab) continue;
+    fought.add(key);
     // the attacker: the one that attacks, or the stronger if both do
     const [A, B, sA, sB] = (aa && (!ab || sa >= sb)) ? [e.a, e.b, sa, sb] : [e.b, e.a, sb, sa];
+    if (!isHuman(A) && lfMode() !== 'free') ai[key] = A;
+    const oA = lfOrg(key, A), oB = lfOrg(key, B), D = lfDefMul(key, B);
+    const eA = sA * (.25 + .75 * oA), eB = sB * (.25 + .75 * oB) * D;
     const r1 = .8 + Math.random() * .4, r2 = .8 + Math.random() * .4;
-    const lossA = Math.min(sA, .012 * h * sB * r1), lossB = Math.min(sB, .009 * h * sA * r2);
+    const lossA = Math.min(sA, .012 * h * eB * r1), lossB = Math.min(sB, .009 * h * eA * r2 / Math.sqrt(D));
     lfAdd(key, A, -lossA); lfAdd(key, B, -lossB);
     stAdd(A, 'lfLost', lossA); stAdd(B, 'lfLost', lossB); stAdd(A, 'lfKilled', lossB); stAdd(B, 'lfKilled', lossA);
-    const nA = sA - lossA, nB = sB - lossB;
-    if (nA > nB * 1.15 && nA >= 1) {
+    lfSetKO('org', key, A, oA - .007 * h * (1 + Math.min(2, eB / (eA + .5))));
+    lfSetKO('org', key, B, oB - .004 * h * Math.min(2, eA / (eB + .5)));
+    const nA = (sA - lossA) * (.25 + .75 * oA), nB = (sB - lossB) * (.25 + .75 * oB) * D;
+    if (nA > nB * 1.15 && sA - lossA >= 1) {
       // the advance: up to a kilometre an hour against nobody, slower the closer the fight
       const kmh = .25 * Math.min(4, nA / (nB + .5) - 1);
       const a2 = (acc[key] || 0) + kmh * h / km, layers = Math.floor(a2); acc[key] = a2 - layers;
-      if (layers > 0) moved += lfAdvance(e, A, B, layers);
+      if (layers > 0) { const f = lfAdvance(e, A, B, layers); if (f) { moved += f; lfSetKO('ent', key, B, lfEnt(key, B) * .5); lfSetKO('ent', key, A, 0); } }
     }
   }
-  if (moved) { econ.front.cells = (econ.front.cells || 0) + moved; checkCities(); renderScore(); }
+  // the quiet stretches: the spirit comes back, the trenches deepen
+  for (const [key, e] of lfBorder) {
+    if (fought.has(key)) continue;
+    if ((++i & 127) === 0) yield* yieldPoint();
+    for (const o of [e.a, e.b]) {
+      if (!lfStr(key, o)) continue;
+      const g = lfOrg(key, o); if (g < 1) lfSetKO('org', key, o, g + .006 * h);
+      const t = lfEnt(key, o); if (t < 1) lfSetKO('ent', key, o, t + .004 * h);
+    }
+  }
+  F.ai = ai;
+  if (moved) { F.cells = (F.cells || 0) + moved; checkCities(); renderScore(); }
   lfRenderBar();
 }
 // a day: the AI sends battalions to its stretches where the enemy is strongest against it; with the economy they
@@ -8418,7 +8516,13 @@ function lfDay() {
     if (!countries[o - 1] || isHuman(o) || !game.ai) continue;
     if (((econ.day || 0) + o) % 7 === 0) lfAiMobilize(o, keys);
     lfSpread(o, Math.floor(st.res[o] || 0));
+    // the main blow is chosen again every few days, sooner when it has stalled (no ground taken) or lost its stretches
+    const p = st.plan && st.plan[o], day = econ.day || 0;
+    if (!p || day - p.day >= 6 || (day - p.day >= 3 && (st.cells || 0) === p.cells) || !p.k.some(k => lfBorder.has(k))) lfAiPlan(o, keys);
+    lfAiRedeploy(o, keys);
   }
+  // the stretches no longer on the front forget their spirit and trenches
+  for (const T of [st.org, st.ent]) if (T) for (const k of Object.keys(T)) if (!lfBorder.has(+k)) delete T[k];
   renderMobBox();
 }
 // the reserve to the front: the most threatened stretches first (enemy strength there over own)
@@ -8476,7 +8580,7 @@ function lfRegionsOf(o) {
 function lfAiMobilize(o, keys) {
   const st = lfState(); let mine = st.res[o] || 0, foe = 0;
   for (const k of keys) { const e = lfBorder.get(k); mine += lfStr(k, o); foe += lfStr(k, e.a === o ? e.b : e.a); }
-  if (mine > foe * 1.1 + 5) return;
+  if (mine > foe * (st.plan && st.plan[o] ? 1.5 : 1.1) + 5) return;  // one that attacks keeps its edge
   let done = 0;
   for (const f of lfRegionsOf(o).slice(0, 8)) { if (done >= 2) break; if (lfMobilize(o, f, foe > mine * 1.5 ? 'full' : 'part', true)) done++; }
 }
@@ -8516,10 +8620,43 @@ function lfPay(o, n) {
   return true;
 }
 // at the start of a war: every stretch of every side gets its battalions
-function lfInit(per = 6) {
-  econ.front = { s: {}, res: {}, atk: {} };
+// the forces at the start of a war, by its sides: battalions on each stretch (the side that struck first is the
+// stronger at its border), and how deep the line is dug in (old fronts that stood for years)
+const LF_START = {
+  ww1: { s: { 'Германская империя': 9, 'Австро-Венгрия': 7, 'Российская империя': 7, 'Франция': 8 } },
+  ww2: { s: { 'Германия': 12, 'Польша': 5, 'Франция': 7 } },
+  vov41: { s: { 'Германия': 14, 'Финляндия': 7, 'Румыния': 7, 'Венгрия': 6, 'СССР': 6 } },
+  1812: { s: { 'Французская империя': 13, 'Рейнский союз': 7, 'Варшавское герцогство': 7, 'Российская империя': 7 } },
+  cold: { ent: .9 },
+  korea: { s: { 'КНДР': 12, 'Республика Корея': 5 } },
+  rj1904: { s: { 'Японская империя': 9, 'Российская империя': 6 } },
+  civil1919: { s: { 'Красные (РСФСР)': 8 } },
+  winter1939: { s: { 'СССР': 12, 'Финляндия': 6 }, ent: .7 },
+  vietnam1968: { s: { 'Северный Вьетнам': 9, 'США': 10 } },
+  iraniraq1980: { s: { 'Ирак': 9, 'Иран': 6 } },
+  afghan1985: { s: { 'СССР': 10 } },
+  falklands1982: { s: { 'Великобритания': 10 } },
+  gulf1991: { s: { 'США': 16, 'Великобритания': 12, 'Франция': 10, 'Ирак': 7 }, ent: .7 },
+  georgia2008: { s: { 'Россия': 12, 'Грузия': 6 } },
+  donbas2015: { s: { 'Россия': 8, 'ДНР и ЛНР': 7, 'Украина': 7 }, ent: .8 },
+  svo2022: { s: { 'Россия': 14, 'Белоруссия': 3, 'ДНР и ЛНР': 7, 'Украина': 7 }, ent: .4 },
+  ukr: { s: { 'Россия': 9, 'Украина': 8 }, ent: .9 },
+  karabakh2020: { s: { 'Азербайджан': 11, 'Арцах (НКР)': 6 }, ent: .8 },
+  syria2015: { ent: .6 },
+  gaza2023: { s: { 'Израиль': 15, 'ХАМАС': 5 } },
+  yugo1991: { s: { 'Югославия': 10 } },
+  chechnya1994: { s: { 'Россия': 11, 'Ичкерия': 6 } },
+  israel1967: { s: { 'Израиль': 12, 'Египет': 7, 'Иордания': 5, 'Сирия': 6 } },
+  indopak1971: { s: { 'Индия': 11, 'Пакистан': 7 } },
+  iraq2003: { s: { 'Коалиция (США и союзники)': 16, 'Ирак': 5 } },
+  libya2011: { s: { 'Джамахирия (Каддафи)': 8, 'Повстанцы (НПС)': 6 } },
+  china1946: { s: { 'Гоминьдан (Китайская Республика)': 9, 'Коммунисты (КПК)': 7 } }
+};
+function lfInit(per = 6, w) {
+  const L = w && (LF_START[w.id] || LF_START[w.series]) || {}, n = o => (L.s && countries[o - 1] && L.s[countries[o - 1].name]) || per;
+  econ.front = { s: {}, res: {}, atk: {}, org: {}, ent: {}, plan: {}, ent0: L.ent || .3 };
   drain(lfScanGen());
-  for (const [key, e] of lfBorder) { lfAdd(key, e.a, per); lfAdd(key, e.b, per); }
+  for (const [key, e] of lfBorder) { lfAdd(key, e.a, n(e.a)); lfAdd(key, e.b, n(e.b)); }
   setLiveFront(true, true); lfRenderBar();
 }
 // ---- the player's brush on the front ----
@@ -8562,13 +8699,14 @@ function drawLfOverlay(c) {
   for (const [key, e] of lfBorder) {
     const x = e.x * view.s + view.x, y = e.y * view.s + view.y;
     if (x < -20 || y < -20 || x > vw + 20 || y > vh + 20) continue;
-    const atk = st.atk[key];
+    const atk = st.atk[key] || (st.ai && st.ai[key]);
     if (atk) {
       // an arrow from the attacker's side across the line
       const sg = atk === e.a ? 1 : -1, ax = e.nx * sg, ay = e.ny * sg, L = Math.max(7, Math.min(16, bcPx * .6));
       c.beginPath(); c.moveTo(x - ax * L, y - ay * L); c.lineTo(x + ax * L * .6, y + ay * L * .6);
-      c.lineWidth = 2.2; c.strokeStyle = 'rgba(230,70,50,.95)'; c.stroke();
-      c.beginPath(); c.moveTo(x + ax * L, y + ay * L); c.lineTo(x + ax * L * .3 - ay * 5, y + ay * L * .3 + ax * 5); c.lineTo(x + ax * L * .3 + ay * 5, y + ay * L * .3 - ax * 5); c.closePath(); c.fillStyle = 'rgba(230,70,50,.95)'; c.fill();
+      const col = st.atk[key] ? 'rgba(230,70,50,.95)' : 'rgba(255,150,40,.9)';
+      c.lineWidth = 2.2; c.strokeStyle = col; c.stroke();
+      c.beginPath(); c.moveTo(x + ax * L, y + ay * L); c.lineTo(x + ax * L * .3 - ay * 5, y + ay * L * .3 + ax * 5); c.lineTo(x + ax * L * .3 + ay * 5, y + ay * L * .3 - ax * 5); c.closePath(); c.fillStyle = col; c.fill();
     }
     if (!showBars && !lfBrush.mode) continue;
     const sa = lfStr(key, e.a), sb = lfStr(key, e.b); if (!sa && !sb) continue;
@@ -8576,7 +8714,29 @@ function drawLfOverlay(c) {
     c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(x - w / 2 - 1, y - 3, w + 2, 6);
     c.fillStyle = `rgb(${ca})`; c.fillRect(x - w / 2, y - 2, w * sa / t, 4);
     c.fillStyle = `rgb(${cb})`; c.fillRect(x - w / 2 + w * sa / t, y - 2, w * sb / t, 4);
+    // the spirit of each side under the bar: half the width each, green when fresh, red when worn out
+    if (bcPx > 18) for (const [o, x0] of [[e.a, x - w / 2], [e.b, x]]) { const g = lfOrg(key, o); c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x0, y + 3, w / 2, 2); c.fillStyle = `hsl(${Math.round(g * 110)},75%,50%)`; c.fillRect(x0, y + 3, w / 2 * g, 2); }
     if (bcPx > 30) { c.font = `600 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,.85)'; const tx = Math.round(sa) + ' : ' + Math.round(sb); c.strokeText(tx, x, y - 4); c.fillStyle = '#eee'; c.fillText(tx, x, y - 4); }
+  }
+  // the AI's main blows: a broad arrow in the colour of the side, solid while it attacks, dashed while it gathers
+  if (st.plan && lfMode() !== 'free') for (const o of Object.keys(st.plan)) {
+    const p = st.plan[o]; if (!p || !countries[o - 1]) continue;
+    // where the sector is now (the stretches keep their keys, the cells of the window move with it)
+    let sx = 0, sy = 0, n = 0, ax = 0, ay = 0;
+    for (const k of p.k) { const e = lfBorder.get(k); if (!e) continue; sx += e.x; sy += e.y; n++; const sg = e.a == o ? 1 : -1; ax += e.nx * sg; ay += e.ny * sg; }
+    if (!n) continue; const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
+    // on the line: the stretch of the sector nearest its middle (a bent sector's middle may lie behind the line)
+    let c0 = null, cd = Infinity; sx /= n; sy /= n;
+    for (const k of p.k) { const e = lfBorder.get(k); if (!e) continue; const d = Math.hypot(e.x - sx, e.y - sy); if (d < cd) { cd = d; c0 = e; } }
+    const x = c0.x * view.s + view.x, y = c0.y * view.s + view.y; if (x < -80 || y < -80 || x > vw + 80 || y > vh + 80) continue;
+    const going = p.k.some(k => st.ai && st.ai[k] == o), L = Math.max(46, Math.min(90, bcPx * 4)), wd = L * .2, col = rgb[o] || [200, 120, 40];
+    const tx = x + ax * L * .7, ty = y + ay * L * .7, bx = x - ax * L * .6, by = y - ay * L * .6;
+    c.beginPath();
+    c.moveTo(bx - ay * wd * .5, by + ax * wd * .5); c.lineTo(tx - ax * wd - ay * wd * .5, ty - ay * wd + ax * wd * .5); c.lineTo(tx - ax * wd - ay * wd, ty - ay * wd + ax * wd);
+    c.lineTo(tx + ax * wd * .6, ty + ay * wd * .6);
+    c.lineTo(tx - ax * wd + ay * wd, ty - ay * wd - ax * wd); c.lineTo(tx - ax * wd + ay * wd * .5, ty - ay * wd - ax * wd * .5); c.lineTo(bx + ay * wd * .5, by - ax * wd * .5); c.closePath();
+    c.fillStyle = `rgba(${col},${going ? .8 : .4})`; c.fill();
+    c.setLineDash(going ? [] : [5, 4]); c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.85)'; c.stroke(); c.setLineDash([]);
   }
   if (lfBrush.mode && hover && tool === 'units') {
     const x = hover.x * view.s + view.x, y = hover.y * view.s + view.y;
@@ -8607,7 +8767,7 @@ function lfSetBrush(m) {
   if (lfBrush.mode && tool !== 'units') setTool('units');
   cv.style.cursor = lfBrush.mode ? 'crosshair' : toolCursor();
   lfRenderBar(); requestUi();
-  if (lfBrush.mode) toast(lfBrush.mode === 'add' ? 'Ведите кистью вдоль линии фронта: на каждый участок встанет ' + lfBrush.step + ' бат.' + (lfMode() === 'free' ? '' : ' из резерва.') : lfBrush.mode === 'atk' ? 'Ведите кистью по участкам, где наступать (с Shift — отменить). Наступает тот, кто сильнее.' : 'Ведите кистью: батальоны уходят с участков в резерв.');
+  if (lfBrush.mode) toast(lfBrush.mode === 'add' ? 'Ведите кистью вдоль линии фронта: на каждый участок встанет ' + lfBrush.step + ' бат.' + (lfMode() === 'free' ? '' : ' из резерва.') : lfBrush.mode === 'atk' ? 'Ведите кистью по участкам, где наступать (с Shift — отменить). Наступление тратит боевой дух (полоска под силами): выдохшийся участок лучше снять с наступления на пару дней. Горы, реки, города и окопы помогают обороне.' : 'Ведите кистью: батальоны уходят с участков в резерв.');
 }
 $('#lfBar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -14337,7 +14497,7 @@ async function startScenario(id, pl, mode) {
   // troops on the sectors the player chooses: the tool is ready and says what to do
   units = []; forms = []; fronts = [];
   if (!watch && wars.length) {
-    lfInit(); econ.front.mode = lfm; setTool('units');
+    lfInit(6, WARS.find(x => x.id === id)); econ.front.mode = lfm; setTool('units');
     setTimeout(() => toast(lfm === 'free' ? 'Свободный фронт: выберите страну на панели сверху, кистью ставьте её силы и отмечайте наступление. Границы можно тянуть и инструментом «Граница». Пуск — P.' : 'Война с мобилизацией: у каждой стороны силы на участках фронта. «Мобилизация» — призыв в областях, «＋ Войска на фронт» — кисть из резерва, «Наступать» — где ударить. Пуск — P.'), 900);
   } else lfRenderBar();
 }
