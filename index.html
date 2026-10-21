@@ -1102,6 +1102,35 @@ section > h2::after { content: ''; flex: 1; height: 1px; background: linear-grad
 .tuflash { outline: 3px solid var(--accent) !important; outline-offset: 3px; animation: tuflash .65s ease-in-out 4; }
 @keyframes tuflash { 50% { outline-color: transparent; } }
 @media (max-width: 640px) { .tutor { right: 16px; left: 16px; width: auto; bottom: 80px; max-height: 45vh; } }
+/* --- «Мультиплеер» --- */
+body:not(.mp) #hudNet { display: none !important; }
+body.mp #hudNet { color: #7fcf9b; }
+body.mp-guest #tools button:not([data-tool="pan"]):not([data-tool="units"]):not([data-tool="info"]):not([data-tool="arrows"]) { display: none; }
+.mpcols .setcard { gap: 10px; }
+.mpcols .setchk span { display: flex; flex-direction: column; gap: 2px; }
+.mpf { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--m-muted); }
+.mpf select, .mpf input:not([type=range]), .mpf textarea, .mpbox textarea, .mpbox select, .mpbox input { width: 100%; box-sizing: border-box; background: #10151b; color: #ece8df; border: 1px solid var(--line2, rgb(255 255 255 / .14)); border-radius: 9px; padding: 8px 10px; font: 12.5px var(--f-ui); }
+.mpf textarea, .mpbox textarea { font-family: ui-monospace, Consolas, monospace; font-size: 11px; resize: vertical; word-break: break-all; }
+.mpnote { color: var(--m-muted, var(--muted)); font-size: 12px; line-height: 1.45; margin: 0; }
+.mpbox { position: fixed; right: 16px; top: 76px; z-index: 235; width: 380px; max-width: calc(100vw - 32px); max-height: calc(100vh - 160px); display: flex; flex-direction: column; border-radius: 16px; background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid rgb(127 207 155 / .35); box-shadow: 0 14px 44px rgb(0 0 0 / .5); color: var(--ink); font-size: 12.5px; }
+.mpbox[hidden] { display: none; }
+.mpbox header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.mpbox header b { font-size: 14px; }
+.mpbox .mpst { flex: 1; font-size: 11px; color: var(--muted); }
+.mpbox .mpst.on { color: #7fcf9b; }
+.mpbox header button { width: 26px; height: 26px; padding: 0; border-radius: 8px; }
+.mpbox .mpbody { overflow: auto; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.mpbox.min .mpbody { display: none; }
+.mpbox label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 11.5px; }
+.mpbox #mpHostBox, .mpbox #mpInvOut, .mpbox #mpPickBox { display: flex; flex-direction: column; gap: 8px; }
+.mpbox [hidden] { display: none !important; }
+.mpbox ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.mpbox li { display: flex; align-items: center; gap: 8px; }
+.mpbox li i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.mpbox .mprules { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.mpchat { max-height: 150px; min-height: 40px; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 10px; background: rgb(0 0 0 / .22); }
+.mpchat p { margin: 0; line-height: 1.35; } .mpchat p.sys { color: var(--muted); font-style: italic; }
+@media (max-width: 640px) { .mpbox { top: 64px; left: 16px; right: 16px; width: auto; } }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
@@ -1572,6 +1601,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
   <header class="hud" id="hud">
     <button class="hbtn hmenu" id="hudMenu" title="Меню (Esc)" aria-label="Меню"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="hbtn" id="hudNet" title="Сеть: игроки, приглашения, чат" aria-label="Сеть"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.8-3.4 3-5 5.5-5s4.7 1.6 5.5 5M14 14.6c.9-.4 1.9-.6 3-.6 2.2 0 4 1.4 4.6 4.5"/></svg></button>
     <button class="hbtn" id="btnCmd" title="Поиск: войны, этапы, города, места и команды (Ctrl+K)" aria-label="Поиск"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
     <div class="hgroup hmode" id="hudMode" hidden role="group" aria-label="Режим"><button id="hudModeW" title="Смотреть войну по этапам, без войск">Смотреть</button><button id="hudModeP" title="Своя игра: войска, время, бои">Играть</button></div>
     <button class="hcountry" id="hudCountry" title="Страны: выбрать, за кого играть (щелчок колёсиком по стране на карте — тоже)"><span class="hflag" id="hudFlag"></span><span class="hctext"><small>Играю за</small><b id="hudCName">—</b></span></button>
@@ -1683,6 +1713,13 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 <div class="cmdk" id="cmdk" hidden role="dialog" aria-label="Поиск и команды"><div class="cbox"><label><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input placeholder="Война, этап, город, место или команда…" aria-label="Что найти" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></label><ul role="listbox"></ul><footer><span>↑↓ выбрать</span><span>Enter открыть</span><span>Ctrl+K в любой момент</span></footer></div></div>
 <div class="tour" id="tour" hidden><div class="thole"></div><div class="tcard" role="dialog" aria-label="Обучение"><small></small><b></b><p></p><div><button data-t="skip">Пропустить</button><button class="primary" data-t="next">Дальше</button></div></div></div>
 <div class="tutor" id="tutor" hidden role="complementary" aria-label="Обучение"><header><small></small><button data-tu="min" aria-label="Свернуть">–</button><button data-tu="close" aria-label="Закончить обучение">×</button></header><b></b><ol></ol><div class="tudone" hidden>Глава пройдена ✓</div><footer><button data-tu="show">Показать</button><button data-tu="skip">Пропустить шаг</button><button class="primary" data-tu="next" hidden>Следующая глава →</button></footer></div>
+<div class="mpbox" id="mpBox" hidden role="complementary" aria-label="Сеть"><header><b>Сеть</b><span class="mpst"></span><button data-mp="min" aria-label="Свернуть">–</button><button data-mp="leave" aria-label="Выйти">×</button></header>
+  <div class="mpbody"><ul id="mpPlayers"></ul><p class="mprules"></p>
+  <div id="mpHostBox"><button class="primary" data-mp="invite">Пригласить игрока</button>
+    <div id="mpInvOut" hidden><label>Код приглашения<textarea id="mpInvCode" rows="3" readonly></textarea></label><button data-mp="copy">Копировать код</button>
+    <label>Ответ гостя<textarea id="mpAnsIn" rows="3" placeholder="MEZHA-ANS-…"></textarea></label><button class="primary" data-mp="accept">Подключить</button></div></div>
+  <div id="mpPickBox" hidden><label>Ваша страна<select id="mpPick"></select></label><button class="primary" data-mp="pick">Играть за неё</button></div>
+  <div class="mpchat" id="mpChat"></div><input id="mpSay" placeholder="Сообщение… Enter — отправить" maxlength="300"></div></div>
 <div class="menu" id="menu" hidden>
   <canvas id="menuBg" aria-hidden="true"></canvas>
   <div class="menu-shade"></div>
@@ -1700,6 +1737,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       <button class="mbtn" id="mCampaign"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg></i><b>Своя игра</b><small id="mCampaignS">Войны от 1812 года до наших дней</small></button>
       <button class="mbtn" id="mSandbox"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></i><b>Песочница</b><small>Чистая Земля, весь мир или своя карта</small></button>
       <button class="mbtn" id="mTutor"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8l10-5 10 5-10 5z"/><path d="M6 10v5c3 2.5 9 2.5 12 0v-5M22 8v6"/></svg></i><b>Обучение</b><small>9 глав: карта, войска, экономика, удары, население, союзники, сеть</small></button>
+      <button class="mbtn" id="mMulti"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.8-3.4 3-5 5.5-5s4.7 1.6 5.5 5M14 14.6c.9-.4 1.9-.6 3-.6 2.2 0 4 1.4 4.6 4.5"/></svg></i><b>Мультиплеер</b><small>Игра по сети: комната и код приглашения</small></button>
       <button class="mbtn" id="mSave" hidden><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg></i><b>Сохранить проект</b><small>Файл .json со всей картой, войсками и хроникой</small></button>
       <button class="mbtn" id="mLoad"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/><path d="M12 17v-5M9.5 14.5 12 12l2.5 2.5"/></svg></i><b>Загрузить проект</b><small>Открыть сохранённый файл .json</small></button>
       <button class="mbtn" id="mSettings"><i class="mi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></i><b>Настройки</b><small>Тема, граница, бои, игровые системы</small></button>
@@ -1748,6 +1786,33 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       <div class="tuintro"><p>Каждая глава открывает свою войну и показывает рядом с картой плашку с шагами. Шаг засчитывается сам, как только вы его сделали; «Показать» подсветит, где это делается.</p><button class="bigbtn" id="tutorFirst">Начать с первой непройденной</button></div>
       <div class="sgrid" id="tutorList"></div>
     </div>
+  </div>
+
+  <div class="mscreen" id="scrMulti" hidden>
+    <header class="mhead"><button class="mback" data-back>← Назад</button><h2>Мультиплеер</h2><p>Игра по сети напрямую, без серверов</p></header>
+    <div class="mbody"><div class="helpcols mpcols">
+      <div class="setcard"><h4>Создать комнату</h4>
+        <label class="mpf"><span>Война</span><select id="mpWar"></select></label>
+        <label class="mpf"><span>Предел войск на игрока: <output id="mpCapOut">60</output></span><input type="range" id="mpCap" min="0" max="300" step="10" value="60"></label>
+        <label class="setchk"><input type="checkbox" id="mpFair" checked><span><b>Равный старт</b><small>Одинаковая казна эпохи и запас снаряжения у всех игроков, без готовых заводов — каждый развивается сам или с помощью союзников</small></span></label>
+        <label class="setchk"><input type="checkbox" id="mpNoTroops" checked><span><b>Войска игроков не расставлены</b><small>Каждый размещает свои отряды за деньги и снаряжение; страны ИИ воюют войсками сценария</small></span></label>
+        <button class="bigbtn" id="mpHostGo">Создать комнату</button>
+        <small class="mpnote">Вы станете хостом: бои, ИИ и экономика считаются у вас. Потом нажмите «Пригласить игрока» в окне «Сеть» и отправьте другу код.</small>
+      </div>
+      <div class="setcard"><h4>Войти по приглашению</h4>
+        <label class="mpf"><span>Ваше имя в игре (и для хоста тоже)</span><input id="mpName" maxlength="24" placeholder="Игрок"></label>
+        <label class="mpf"><span>Код приглашения от хоста</span><textarea id="mpInvIn" rows="4" placeholder="MEZHA-INV-…"></textarea></label>
+        <button class="bigbtn" id="mpJoinGo">Создать ответ</button>
+        <div id="mpJoinOut" hidden><label class="mpf"><span>Ваш ответ — отправьте его хосту</span><textarea id="mpAnsCode" rows="4" readonly></textarea></label><button id="mpAnsCopy">Копировать ответ</button><p class="mpnote" id="mpJoinSt"></p></div>
+      </div>
+      <div class="setcard"><h4>Как это работает</h4><ol>
+        <li>Хост создаёт комнату и жмёт <b>Пригласить игрока</b> — появляется код.</li>
+        <li>Код отправляют другу любым мессенджером. Друг вставляет его сюда и жмёт <b>Создать ответ</b>.</li>
+        <li>Ответ друга хост вставляет в окно «Сеть» → <b>Подключить</b>. Связь прямая, через интернет.</li>
+        <li>Гость выбирает страну. Временем управляет хост, войска каждый ставит и ведёт сам.</li>
+        <li>Если связь не устанавливается (строгий NAT у провайдера), играйте в одной сети или через Radmin VPN / ZeroTier.</li>
+      </ol></div>
+    </div></div>
   </div>
 
   <div class="mscreen" id="scrSettings" hidden>
@@ -2979,7 +3044,7 @@ function storeReset() { store = new Map(); levelTiles = []; storeDirty = new Set
 function tileSet(l, x, y, t) {
   const k = tk(l, x, y);
   if (!store.has(k)) (levelTiles[l] || (levelTiles[l] = new Set())).add(k);
-  store.set(k, t); storeDirty.add(k);
+  store.set(k, t); tileDirty(k);
 }
 // one cell of level l: stored, else from the scenario outlines, else from the deepest stored level above it
 function cellAt(l, gx, gy) {
@@ -3129,7 +3194,7 @@ function storeWrite(L, cx0, cy0, w, h, msk, src, val) {
       }
     }
     if (!changed) continue;
-    any = true; storeDirty.add(key);
+    any = true; tileDirty(key);
     pushDown(L, { x: wtx, y: ty, t, m }); pushUp(L, wtx, ty);
   }
   if (any) { storeAreaStamp = 0; scheduleTileSave(); }
@@ -3187,7 +3252,7 @@ function applyStoreLog(st) {
     const l = tkL(k);
     if (v === undefined) { store.delete(k); if (levelTiles[l]) levelTiles[l].delete(k); }
     else { if (!store.has(k)) (levelTiles[l] || (levelTiles[l] = new Set())).add(k); store.set(k, typeof v === 'number' ? v : v.slice()); }
-    storeDirty.add(k);
+    tileDirty(k);
   }
   storeAreaStamp = 0; scheduleTileSave();
 }
@@ -3200,7 +3265,7 @@ function pushUp(l, x, y) {
       const r0 = (2 * j) << 8, r1 = (2 * j + 1) << 8, pr = (oy + j) << 8;
       for (let i = 0; i < 128; i++) par[pr + ox + i] = mode4(child[r0 + 2 * i], child[r0 + 2 * i + 1], child[r1 + 2 * i], child[r1 + 2 * i + 1]);
     }
-    storeDirty.add(tk(k - 1, px, py));
+    tileDirty(tk(k - 1, px, py));
     x = px; y = py;
   }
 }
@@ -3221,7 +3286,7 @@ function pushDown(l, c) {
           if (c.m[j]) { t[(cy << 8) | cx] = c.t[j]; touched = true; }
         }
       }
-      if (touched) storeDirty.add(key);
+      if (touched) tileDirty(key);
     }
   }
 }
@@ -3412,7 +3477,7 @@ function scheduleTileSave() {
     try {
       const db = await idb();
       await new Promise((res, rej) => { const tx = db.transaction('tiles', 'readwrite'), os = tx.objectStore('tiles'); for (const k of keys) { const t = store.get(k); if (t !== undefined) os.put(t, k); else os.delete(k); } tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
-    } catch (e) { keys.forEach(k => storeDirty.add(k)); }
+    } catch (e) { keys.forEach(k => tileDirty(k)); }
   }, 1200);
 }
 async function clearTileDB() { try { const db = await idb(); db.transaction('tiles', 'readwrite').objectStore('tiles').clear(); } catch (e) {} }
@@ -7989,6 +8054,7 @@ const unitCost = u => roleOf(u).cost * eraPrice() * (ECH_EQ[u.ech || ''] || 1);
 // paying for the troops put down: money and equipment of the country; a refusal names what is missing
 const paidDeploy = () => game.econ && game.paid && !watchMode && W > 0;
 function payFor(k, list) {
+  if (mp && mp.live && mp.rules && mp.rules.cap && isHuman(k)) { const n = units.filter(u => u.owner === k).length + list.filter(u => !units.includes(u)).length; if (n > mp.rules.cap) { if (k === player) toast('Предел войск в сетевой игре: ' + mp.rules.cap + ' отрядов на игрока.'); return false; } }
   if (!paidDeploy() || !list.length || !countries[k - 1]) return true;
   const need = { inf: 0, art: 0, tank: 0, air: 0 }; let sum = 0;
   for (const u of list) { const R = roleOf(u); sum += unitCost(u); need[R.eq] += ECH_EQ[u.ech || ''] || 1; }
@@ -8908,6 +8974,7 @@ function battleTick() {
 }
 function setBattles(on) {
   if (on === battlesOn) return;
+  if (mpGuest() && !mpApplying) { toast('Временем управляет хост.'); return; }
   if (on && units.length) ach('ACH_FIRST_BATTLE');
   battlesOn = on;
   clearInterval(battleTimer);
@@ -9278,6 +9345,7 @@ function enemyContact(u) {
 let marchNoWar = 0, marchCommits = 0;
 function marchFrame(t) {
   marchRaf = 0;
+  if (mpGuest()) return;
   if (menuPaused) { marchLast = t; marchRaf = requestAnimationFrame(marchFrame); return; }
   // as in Hearts of Iron, nothing moves while time stands: the march goes on when it runs again
   if (!battlesOn) return;
@@ -10118,7 +10186,7 @@ function aiFronts(h) {
   if (aiClock < 12) return;
   aiClock = 0;
   for (const f of fronts) {
-    if (f.kind !== 'front' || (player && allied(f.owner, player))) continue;
+    if (f.kind !== 'front' || humanAllied(f.owner)) continue;
     const ls = frontUnits(f).filter(u => !immobile(u));
     if (!ls.length) continue;
     let org = 0, resting = 0;
@@ -10138,7 +10206,7 @@ function aiFronts(h) {
     if (!foes || ls.length >= foes * .8 || eorg < 45) { if (applyFrontMode(f, 'attack')) logEvent(ownerName(f.owner) + ' переходит в наступление', f.owner); }
   }
   // the armies that attack aim at the weak spots of the enemy, in pairs where they can close a ring
-  for (const o of new Set(fronts.filter(f => f.kind === 'front' && f.mode === 'attack' && !(player && allied(f.owner, player))).map(f => f.owner))) aiPlanBlows(o);
+  for (const o of new Set(fronts.filter(f => f.kind === 'front' && f.mode === 'attack' && !humanAllied(f.owner)).map(f => f.owner))) aiPlanBlows(o);
 }
 let aiClock = 0;
 // --- reinforcements ---
@@ -10411,7 +10479,7 @@ function vpOf(k) { let s = 0; for (const c of cities) if (cityOwner(c) === k) s 
 function money(k) {
   if (econ.money[k] === undefined) {
     const mine = player ? vpOf(player) : 0, theirs = vpOf(k);
-    econ.money[k] = (k === player || !mine ? 1 : clamp(theirs / mine, .25, 3)) * START_CAPITAL * eraScale();
+    econ.money[k] = (isHuman(k) || !mine ? 1 : clamp(theirs / mine, .25, 3)) * START_CAPITAL * eraScale();
     econ.base[k] = econ.money[k];
   }
   return econ.money[k];
@@ -10425,7 +10493,7 @@ function stock(k) {
 // a military factory's line: what it makes a day at full efficiency, in sets for a division (Hearts of Iron: a line
 // starts at 10% and gains 2% a day; switching it to another product drops it to a third)
 const LINE_OUT = { inf: .5, art: .25, tank: .15, air: .1 };
-function setLine(f, line) { if (f.line === line) return; f.line = line; if (f.owner === player) tutorNote('line'); f.eff = Math.max(.1, (f.eff || .1) * .3); renderEcon(); scheduleSave(); }
+function setLine(f, line) { if (f.line === line) return; if (mpGuest() && !mpApplying) { mpGuestCmd({ t: 'line', id: f.id, line }); f.line = line; renderEcon(); return; } f.line = line; if (f.owner === player) tutorNote('line'); f.eff = Math.max(.1, (f.eff || .1) * .3); renderEcon(); scheduleSave(); }
 const facsOf = (k, type) => econ.facs.filter(f => f.owner === k && (!type || f.type === type));
 // the price of the next factory of a kind: the price of the year, 10% more for every one built (the prebuilt ones not counted)
 const priceOf = (k, type) => Math.round(FACT[type].cost * eraPrice() * Math.pow(PRICE_GROWTH, facsOf(k, type).filter(f => !f.pre).length));
@@ -10435,6 +10503,7 @@ function nearestCityName(w) {
   return best && bd < 250 ? best.name : '';
 }
 function econBuild(k, type, g, quiet) {
+  if (mpGuest() && !mpApplying) return mpGuestCmd(Object.assign({ t: 'build', type }, toWorld(g.x, g.y)));
   const w = toWorld(g.x, g.y), cost = priceOf(k, type);
   if (ownerAtWorld(w.mx, w.my) !== k) { if (!quiet) toast('Строить можно только на своей земле.'); return false; }
   if (money(k) < cost) { if (!quiet) toast('Не хватает денег: нужно ' + fmtMoney(cost) + ', в казне ' + fmtMoney(money(k)) + '.'); return false; }
@@ -10505,8 +10574,8 @@ function econDay() {
     }
     econ.money[k] = money(k) + inc - exp;
     econ.last[k] = { inc, exp, eraInc, tax, facInc, army };
-    if (k !== player && !allied(k, player || 0) && game.ai && game.aiMode !== 'troops') econAi(k);
-    if (k !== player && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeploy(k);
+    if (!isHuman(k) && !humanAllied(k) && game.ai && game.aiMode !== 'troops') econAi(k);
+    if (!isHuman(k) && game.ai && game.aiMode !== 'econ' && paidDeploy()) aiDeploy(k);
   }
   econ.day = (econ.day || 0) + 1;
   if (game.aid && econ.day % 7 === 0) econAid();
@@ -10519,6 +10588,7 @@ const atWarAny = k => countries.some((_, j) => atWar(k, j + 1));
 // a friend of the same side, or a country set to back a side (its «aids»: the West for Ukraine from 2022)
 const aidGivesTo = (a, b) => a !== b && !atWarAny(a) && atWarAny(b) && (allied(a, b) || (!!countries[a - 1] && !!countries[b - 1] && !!countries[a - 1].aids && countries[a - 1].aids === countries[b - 1].side));
 function aidSend(from, to, pack, quiet) {
+  if (mpGuest() && !mpApplying) return mpGuestCmd({ t: 'aid', to, pack: Object.assign({}, pack, { eq: pack.eq === Infinity ? 'inf' : pack.eq }) });
   if (from === player && !quiet) tutorNote('aid');
   const st = stock(from), dt = stock(to), got = [];
   if (pack.money > 0) { const m = Math.min(pack.money, Math.max(0, money(from))); if (m > 0) { econ.money[from] -= m; econ.money[to] = money(to) + m; got.push(fmtMoney(m)); } }
@@ -10534,7 +10604,7 @@ function aidSend(from, to, pack, quiet) {
 }
 function econAid() {
   for (let a = 1; a <= countries.length; a++) {
-    if (a === player) continue;
+    if (isHuman(a)) continue;
     const to = []; for (let b = 1; b <= countries.length; b++) if (aidGivesTo(a, b)) to.push(b);
     if (!to.length) continue;
     // 2% of the treasury a week, a fifth of the equipment, a third of the strike weapons, split among those it helps
@@ -10581,6 +10651,7 @@ function econLaunch(k, kind, w) {
 }
 const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
 function econStrike(k, kind, g, quiet) {
+  if (mpGuest() && !mpApplying) { const ok = mpGuestCmd(Object.assign({ t: 'strike', kind }, toWorld(g.x, g.y))); if (ok) toast(STRIKE[kind].name + ': приказ отправлен.'); return ok; }
   const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y);
   if (st[kind] < S.need) { if (!quiet) toast({ drone: 'Нужно не меньше ' + S.need + ' дронов. Постройте завод дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: 'Ракет нет. Постройте ракетный завод.' }[kind]); return false; }
   const from = econLaunch(k, kind, w);
@@ -10968,7 +11039,7 @@ function isVisible(u) {
 function aiStep() {
   if (!game.ai) return;
   for (const u of units) {
-    if ((player && allied(u.owner, player)) || u.fl || u.order || u.rest || immobile(u) || !inWin(u) || orgOf(u) < 80) continue;
+    if (humanAllied(u.owner) || u.fl || u.order || u.rest || immobile(u) || !inWin(u) || orgOf(u) < 80) continue;
     let best = null, bd = bodyS(u) * 12;
     forNear(u, bd, v => { if (atWar(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best && game.cities) {
@@ -11072,8 +11143,8 @@ function restore(e) { liveEpoch++; if (vsrc && e.vn !== undefined && e.vn !== vs
 }
 function loadGenerals(list) { generals = list || []; genSeq = generals.reduce((m, g) => Math.max(m, g.id + 1), genSeq); if (selGen && !genById(selGen)) selGen = null; }
 function afterChange() { whereText = ''; updWhere(); setUnitSize(unitSize); if (typeof renderDiplo === 'function' && (!$('#diplo').hidden || !document.querySelector('[data-pane="war"]').hidden)) renderDiplo(); recolor(); edited(); renderUnitPanel(); renderGenerals(); renderGenEditor(); renderCityPanel(); renderArrowPanel(); }
-function undo() { if (!hist.length || drag) return; const e = hist.pop(), r = snap(); if (e.st) r.st = captureStore(e.st.keys()); redoStack.push(r); restore(e); afterChange(); }
-function redo() { if (!redoStack.length || drag) return; const e = redoStack.pop(), h = snap(); if (e.st) h.st = captureStore(e.st.keys()); hist.push(h); restore(e); afterChange(); }
+function undo() { if (!hist.length || drag || mpOn()) return; const e = hist.pop(), r = snap(); if (e.st) r.st = captureStore(e.st.keys()); redoStack.push(r); restore(e); afterChange(); }
+function redo() { if (!redoStack.length || drag || mpOn()) return; const e = redoStack.pop(), h = snap(); if (e.st) h.st = captureStore(e.st.keys()); hist.push(h); restore(e); afterChange(); }
 function updUndo() { $('#btnUndo').disabled = !hist.length; $('#btnRedo').disabled = !redoStack.length; }
 
 // ---------- countries panel ----------
@@ -11139,6 +11210,8 @@ function renderCountries() {
 // a click with the mouse wheel: that country is now yours, for drawing and for playing
 function takeControl(idx) {
   if (!countries[idx - 1]) return;
+  if (mpGuest() && !mpApplying) { mpToHost({ t: 'claim', k: idx, name: ($('#mpName').value || 'Игрок').trim() }); return; }
+  if (mpHostOn() && mp.live) { if (mp.humans[idx] && idx !== player) { toast('Эту страну ведёт другой игрок.'); return; } delete mp.humans[player]; mp.humans[idx] = mpHostName(); setTimeout(mpRenderBox); }
   player = idx; closeGen(); setActive(idx); renderGenerals(); renderScore(); scheduleSave(); requestDraw();
   toast('Вы играете за: ' + countries[idx - 1].name);
 }
@@ -11177,7 +11250,7 @@ function removeCountry(idx) {
   for (let i = 0; i < own.length; i++) { const o = own[i]; if (o === idx) own[i] = 0; else if (o > idx) own[i] = o - 1; }
   if (geoStore) {   // the same renumbering on every stored tile
     const remap = o => o === idx ? 0 : o > idx ? o - 1 : o;
-    for (const [k, t] of store) { if (typeof t === 'number') store.set(k, remap(t)); else for (let i = 0; i < t.length; i++) t[i] = remap(t[i]); storeDirty.add(k); }
+    for (const [k, t] of store) { if (typeof t === 'number') store.set(k, remap(t)); else for (let i = 0; i < t.length; i++) t[i] = remap(t[i]); tileDirty(k); }
     winOwn0 = own.slice(); backdrop = null; storeAreaStamp = 0; scheduleTileSave();
   }
   if (active >= idx) active = Math.max(countries.length ? 1 : 0, active - 1);
@@ -11398,6 +11471,7 @@ function drawSpawnGhost(c) {
 }
 function setTool(t) {
   if (watchMode && t !== 'pan' && t !== 'info') return;
+  if (mpOn() && !['pan', 'units', 'info', 'arrows'].includes(t)) { toast('В сетевой игре границы двигают только войска.'); return; }
   if (t !== 'info' && infoHover) { infoHover = null; requestUi(); }
   tool = t;
   renderLiveBar();
@@ -11528,6 +11602,7 @@ cv.addEventListener('pointerdown', e => {
       if (!active) { toast('Сначала добавьте страну'); return; }
       if (!inside) return;
       const owner = spawnOwner(g, e.ctrlKey || e.metaKey);
+      if (mpOn() && owner !== player) { toast(player ? 'В сетевой игре вы ставите только свои войска — на своей земле.' : 'Сначала выберите страну в окне «Сеть».'); return; }
       pushHist();
       // with a general picked below, the new units are his: they go to his line, if he holds one
       const pg = lineGeneral(), giveGen = us => { if (pg && pg.owner === owner) for (const v of us) v.gen = pg.id; };
@@ -12152,7 +12227,7 @@ function loadProjectFile(file) {
           geoStore = true; win = d.win;
           readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice();
           occStore = new Map((d.occTiles || []).map(([k, v]) => [k, unrle(v, TS * TS)])); loadOcc();
-          clearTileDB().then(() => { store.forEach((t, k) => storeDirty.add(k)); scheduleTileSave(); });
+          clearTileDB().then(() => { store.forEach((t, k) => tileDirty(k)); scheduleTileSave(); });
         } else if (d.occ) { occ.set(unrle(d.occ, W * H)); occScan(); }
         settled = new Set(d.settled || []); syncSettled();
         afterChange(); saveImage(); setTool('warp');
@@ -13012,6 +13087,7 @@ function deploySize() {
 }
 let campTroops = LS.get('mezha-troops', '1') === '1';
 async function startScenario(id, pl, mode) {
+  if (mp && !mp.starting) mpLeave();
   const watch = mode === 'watch' || (mode === undefined && watchMode);
   const btn = $('#campGo'); btn.disabled = true; btn.textContent = 'Готовлю карту…';
   playStop(); setBattles(false);
@@ -13189,6 +13265,434 @@ function renderTutorScreen() {
 }
 $('#mTutor').addEventListener('click', () => { showScreen('scrTutor'); renderTutorScreen(); });
 $('#tutorFirst').addEventListener('click', () => { const d = tutorDone(), i = TUTOR.findIndex(c => !d.includes(c.id)); tutorStart(i < 0 ? 0 : i); });
+// ---------- «Мультиплеер»: a game over the network, peer to peer ----------
+// One player is the host: the battles, the AI and the economy run on their machine, and twice a second it sends
+// everyone what the world looks like (troops, fronts, generals, treasuries, factories, people, the borders that
+// moved, the date). The others are guests: they see that world, command only their own country, and send the
+// host what they did (troops put down, orders, factories, strikes, aid); the host checks and carries it out. The
+// link is WebRTC, made by hand: the host gives a code of invitation, the guest gives back a code of answer — any
+// messenger will carry them, no server of ours is needed. Places on the map go over the network in world units,
+// since every player has a window of the map of their own.
+var mpTiles = null;                               // tiles of the borders changed since the last send (host)
+function tileDirty(k) { storeDirty.add(k); if (mpTiles) { mpTiles.add(k); mp.allTiles.add(k); } }
+let mp = null;
+const MP_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+const mpOn = () => !!mp && mp.live;
+const mpGuest = () => !!mp && mp.role === 'guest';
+const mpHostOn = () => !!mp && mp.role === 'host';
+function mpLive() { return !!mp && (mp.role === 'host' ? mp.peers.some(p => p.open) : !!(mp.peer && mp.peer.open)); }
+const isHuman = k => !!k && (k === player || (!!mp && !!mp.humans && !!mp.humans[k]));
+const humanAllied = k => (!!player && allied(k, player)) || (!!mp && !!mp.humans && Object.keys(mp.humans).some(h => allied(k, +h)));
+// the codes: the description of the link, packed and written in letters safe for any messenger
+async function mpZip(s) { return new Uint8Array(await new Response(new Blob([s]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); }
+async function mpUnzip(u8) { return await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text(); }
+const b64u = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/')); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+async function mpCode(pc, kind) { return 'MEZHA-' + kind + '-' + b64u(await mpZip(JSON.stringify({ t: pc.localDescription.type, s: pc.localDescription.sdp }))); }
+async function mpUncode(code, kind) {
+  const m = String(code).trim().replace(/\s+/g, '').match(/^MEZHA-([A-Z]+)-([A-Za-z0-9_-]+)$/);
+  if (!m) throw new Error('Это не код Межи.');
+  if (m[1] !== kind) throw new Error(kind === 'ANS' ? 'Это код приглашения, а нужен ответ гостя.' : 'Это ответ, а нужен код приглашения от хоста.');
+  const d = JSON.parse(await mpUnzip(unb64u(m[2]))); return { type: d.t, sdp: d.s };
+}
+const iceDone = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 5000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
+// messages: JSON, packed, cut into pieces a data channel carries; each peer's arrive in order
+let mpMsgId = 0;
+function mpWire(peer, dc) {
+  peer.dc = dc; dc.binaryType = 'arraybuffer'; peer.parts = new Map(); peer.q = Promise.resolve();
+  dc.onopen = () => { peer.open = true; mpOnOpen(peer); };
+  dc.onclose = () => { if (peer.open) { peer.open = false; mpOnClose(peer); } };
+  dc.onmessage = e => {
+    const b = new Uint8Array(e.data), dv = new DataView(b.buffer, b.byteOffset), id = dv.getUint32(0), i = dv.getUint16(4), n = dv.getUint16(6);
+    let m = peer.parts.get(id); if (!m) peer.parts.set(id, m = { n, got: 0, p: [] });
+    m.p[i] = b.subarray(8); m.got++;
+    if (m.got < m.n) return;
+    peer.parts.delete(id);
+    const all = new Uint8Array(m.p.reduce((t, x) => t + x.length, 0)); let o = 0; for (const x of m.p) { all.set(x, o); o += x.length; }
+    peer.q = peer.q.then(() => mpUnzip(all)).then(s => mpOnMsg(peer, JSON.parse(s))).catch(err => console.warn('mp', err));
+  };
+}
+function mpFrames(z) {
+  const id = ++mpMsgId, CH = 60000, n = Math.max(1, Math.ceil(z.length / CH)), out = [];
+  for (let i = 0; i < n; i++) { const part = z.subarray(i * CH, (i + 1) * CH), buf = new Uint8Array(8 + part.length), dv = new DataView(buf.buffer); dv.setUint32(0, id); dv.setUint16(4, i); dv.setUint16(6, n); buf.set(part, 8); out.push(buf); }
+  return out;
+}
+let mpSendQ = Promise.resolve();
+function mpSend(peers, obj, skipBusy) {
+  const to = peers.filter(p => p && p.open && p.dc && p.dc.readyState === 'open' && !(skipBusy && p.dc.bufferedAmount > 2e6));
+  if (!to.length) return;
+  const s = JSON.stringify(obj);
+  mpSendQ = mpSendQ.then(() => mpZip(s)).then(z => { const fr = mpFrames(z); for (const p of to) if (p.dc.readyState === 'open') for (const f of fr) p.dc.send(f); }).catch(e => console.warn('mp', e));
+}
+const mpToHost = obj => { if (mp && mp.peer) mpSend([mp.peer], obj); };
+const mpToAll = (obj, skipBusy) => { if (mp && mp.peers) mpSend(mp.peers, obj, skipBusy); };
+// places: world units over the network, cells of one's own window on the map
+const mpN = () => worldCells(win.L);
+const toM = p => { const n = mpN(); return { x: (p.x + win.cx0) / n, y: (p.y + win.cy0) / n }; };
+const fromM = p => { const n = mpN(); return { x: p.x * n - win.cx0, y: p.y * n - win.cy0 }; };
+function encU(u) {
+  const o = {};
+  for (const k in u) if (k[0] !== '_') o[k] = u[k];
+  const p = toM(u); o.x = p.x; o.y = p.y;
+  if (u.order) o.order = toM(u.order);
+  if (u.route) o.route = u.route.map(toM);
+  if (u.roff) { const n = mpN(); o.roff = { x: u.roff.x / n, y: u.roff.y / n }; }
+  if (u.r) o.r = u.r / mpN();
+  return o;
+}
+function decU(o) {
+  const u = Object.assign({}, o), p = fromM(o); u.x = p.x; u.y = p.y;
+  if (o.order) u.order = fromM(o.order);
+  if (o.route) u.route = o.route.map(fromM);
+  if (o.roff) { const n = mpN(); u.roff = { x: o.roff.x * n, y: o.roff.y * n }; }
+  if (o.r) u.r = o.r * mpN();
+  return u;
+}
+const ORD_KEYS = ['order', 'route', 'roff', 'fl', 'ft', 'fo', 'fdir', 'gen', 'atk', 'adv', 'redeploy', 'label', 'name', 'grp', 'gk'];
+function encOrd(u) { const e = encU(u), o = {}; for (const k of ORD_KEYS) o[k] = e[k] === undefined ? null : e[k]; return o; }
+function applyOrd(u, o) { const d = decU(Object.assign({ x: 0, y: 0 }, o)); for (const k of ORD_KEYS) { if (o[k] === null || o[k] === undefined) delete u[k]; else u[k] = d[k]; } }
+function encF(f) {
+  const o = Object.assign({}, f); delete o.view;
+  if (f.pts) o.pts = f.pts.map(p => Object.assign(toM(p), { nx: p.nx, ny: p.ny, gap: p.gap }));
+  if (f.guides) o.guides = f.guides.map(p => Object.assign(toM(p), { gap: p.gap }));
+  for (const k in o) if (k[0] === '_') delete o[k];
+  return o;
+}
+function decF(o) {
+  const f = Object.assign({}, o); f.view = null;
+  if (o.pts) f.pts = o.pts.map(p => Object.assign(fromM(p), { nx: p.nx, ny: p.ny, gap: p.gap }));
+  if (o.guides) f.guides = o.guides.map(p => Object.assign(fromM(p), { gap: p.gap }));
+  return f;
+}
+// ---- the host ----
+let mpUid = 1;
+const mpRules = () => mp.rules;
+const mpCapital = () => Math.round(START_CAPITAL * eraScale());
+// a fair start for a player: the same treasury and stocks as everyone, no factories or troops of the scenario
+function mpFair(k) {
+  if (!k || !mp) return;
+  const R = mp.rules;
+  if (R.fair) {
+    econ.money[k] = mpCapital(); econ.base[k] = econ.base[k] || 1;
+    const st = stock(k); st.eq = { inf: 20, art: 8, tank: 5, air: 3 }; st.drone = 0; st.bomber = 0; st.missile = 0; st.aa = 0;
+    econ.facs = econ.facs.filter(f => f.owner !== k);
+  }
+  if (R.noTroops) { units = units.filter(u => u.owner !== k); fronts = fronts.filter(f => f.owner !== k); }
+  renderEcon(); requestDraw();
+}
+async function mpHost(rules) {
+  mpLeave(true);
+  mp = { role: 'host', live: false, rules, peers: [], humans: {}, allTiles: new Set(), war: rules.war, chat: [] };
+  game.econ = true; game.paid = true;
+  const was = campTroops; campTroops = true;
+  mp.starting = true;
+  try { await startScenario(rules.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
+  setBattles(false);
+  mp.live = true; mp.humans = { [player]: mpHostName() };
+  mpTiles = new Set();
+  mpFair(player);
+  document.body.classList.add('mp');
+  mpBoxOpen(); mpLog('Комната открыта: ' + (WARS.find(w => w.id === rules.war) || {}).name + '. Пригласите игроков.');
+  clearInterval(mp.timer); mp.timer = setInterval(mpHostTick, 500);
+}
+async function mpInvite() {
+  const peer = { pc: new RTCPeerConnection({ iceServers: MP_ICE }), open: false, k: 0, name: 'Гость ' + (mp.peers.length + 1), n: mp.peers.length + 1 };
+  mp.peers.push(peer);
+  mpWire(peer, peer.pc.createDataChannel('mezha', { ordered: true }));
+  peer.pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(peer.pc.connectionState) && !peer.open) mpLog(peer.name + ': связь не установилась.'); };
+  await peer.pc.setLocalDescription(await peer.pc.createOffer());
+  await iceDone(peer.pc);
+  mp.pending = peer;
+  return mpCode(peer.pc, 'INV');
+}
+async function mpAccept(code) {
+  const peer = mp.pending; if (!peer) throw new Error('Сначала создайте приглашение.');
+  await peer.pc.setRemoteDescription(await mpUncode(code, 'ANS'));
+  mp.pending = null;
+}
+function mpState(full) {
+  for (const u of units) if (!u.id) u.id = mpUid++;
+  if (geoStore) commitWindow();
+  const tiles = [];
+  for (const k of full ? mp.allTiles : mpTiles) { const t = store.get(k); tiles.push([k, t === undefined ? null : typeof t === 'number' ? t : b64u(rleBytes(t))]); }
+  if (!full) mpTiles.clear();
+  const e = econ;
+  return { t: full ? 'full' : 'st', units: units.map(encU), forms, generals, fronts: fronts.map(encF), tiles,
+    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, scars: e.scars, aidLog: (e.aidLog || []).slice(0, 12), last: e.last },
+    wars, game, gameDate, on: battlesOn, hpt: hoursPerTick, log: gameLog.slice(0, 40), countries, humans: mp.humans, rules: mp.rules };
+}
+// a tile of borders in bytes: runs of (value, count up to 255)
+function rleBytes(t) { const out = []; for (let i = 0; i < t.length;) { const v = t[i]; let n = 1; while (i + n < t.length && t[i + n] === v && n < 255) n++; out.push(v, n); i += n; } return new Uint8Array(out); }
+function unrleBytes(b) { const t = new Uint8Array(TS * TS); let o = 0; for (let i = 0; i < b.length; i += 2) { t.fill(b[i], o, o + b[i + 1]); o += b[i + 1]; } return t; }
+function mpHostTick() {
+  if (!mpHostOn() || !mp.peers.some(p => p.open)) { if (mpTiles) mpTiles.clear(); return; }
+  mpToAll(mpState(false), true);
+}
+function mpOnOpen(peer) {
+  if (mp.role === 'host') {
+    mpLog(peer.name + ' на связи.');
+    mpSend([peer], Object.assign(mpState(true), { war: mp.war, you: peer.n }));
+    mpRenderBox();
+  } else { mpLog('Связь с хостом есть. Загружаю войну…'); mpRenderBox(); }
+}
+function mpOnClose(peer) {
+  if (!mp) return;
+  if (mp.role === 'host') { mpLog(peer.name + (peer.k ? ' (' + ownerName(peer.k) + ')' : '') + ' отключился. Страной снова правит ИИ.'); if (peer.k) delete mp.humans[peer.k]; mp.peers = mp.peers.filter(p => p !== peer); mpRenderBox(); }
+  else { mpLog('Связь с хостом потеряна.'); toast('Связь с хостом потеряна.'); mp.live = false; mpRenderBox(); }
+}
+const mpTellPeer = (peer, text) => mpSend([peer], { t: 'toast', text });
+function mpOnMsg(peer, m) {
+  if (!mp) return;
+  if (mp.role === 'guest') return mpGuestMsg(m);
+  const k = peer.k;
+  switch (m.t) {
+    case 'claim': {
+      const c = +m.k;
+      if (!countries[c - 1]) return;
+      if (mp.humans[c] && c !== k) { mpTellPeer(peer, 'Эту страну уже взял другой игрок.'); return; }
+      if (k) delete mp.humans[k];
+      peer.k = c; mp.humans[c] = peer.name = (m.name || peer.name).slice(0, 24);
+      mpFair(c);
+      mpSend([peer], { t: 'you', k: c });
+      mpLog(peer.name + ' играет за страну «' + ownerName(c) + '».'); mpRenderBox();
+      return;
+    }
+    case 'chat': { const line = { who: peer.name, text: String(m.text).slice(0, 300) }; mpChat(line); mpToAll({ t: 'chat', line }); return; }
+  }
+  if (!k) return;
+  switch (m.t) {
+    case 'add': {
+      const fmap = new Map();
+      for (const f of m.forms || []) if (f.owner === k) { const nf = Object.assign({}, f, { id: genSeqForm() }); fmap.set(f.id, nf.id); forms.push(nf); }
+      for (const f of forms) if (fmap.has(f.parent)) f.parent = fmap.get(f.parent);
+      const list = (m.units || []).filter(o => o.owner === k).map(o => { const u = decU(o); delete u.id; if (fmap.has(u.f)) u.f = fmap.get(u.f); u.id = mpUid++; return u; })
+        .filter(u => u.x >= 0 && u.y >= 0 && u.x < W && u.y < H && fineOwner(u.x, u.y) === k);
+      if (!list.length) return;
+      units.push(...list);
+      mpApplying = true; let paid = false; try { paid = payFor(k, list); } finally { mpApplying = false; }
+      if (!paid) { units = units.filter(u => !list.includes(u)); mpTellPeer(peer, mpCapOk(k) ? 'Не хватает денег или снаряжения на эти отряды.' : 'Предел войск: не больше ' + mp.rules.cap + ' отрядов на игрока.'); }
+      requestDraw(); return;
+    }
+    case 'ord': for (const o of m.list || []) { const u = units.find(x => x.id === o.id); if (u && u.owner === k) { applyOrd(u, o.f); if (u.order) startMarch(); } } requestDraw(); return;
+    case 'del': units = units.filter(u => !(u.owner === k && (m.ids || []).includes(u.id))); requestDraw(); return;
+    case 'gens': generals = generals.filter(g => g.owner !== k).concat((m.list || []).filter(g => g.owner === k)); renderGenerals(); return;
+    case 'fronts': fronts = fronts.filter(f => f.owner !== k).concat((m.list || []).filter(f => f.owner === k).map(decF)); requestDraw(); return;
+    case 'build': { const ok = econBuild(k, m.type, fromWorld({ mx: m.mx, my: m.my }), true); mpTellPeer(peer, ok ? factName(m.type) + ': стройка начата.' : 'Строить можно только на своей земле и при деньгах в казне.'); return; }
+    case 'strike': { const ok = econStrike(k, m.kind, fromWorld({ mx: m.mx, my: m.my }), true); if (!ok) mpTellPeer(peer, 'Удар не состоялся: не хватает оружия или цель слишком далеко.'); return; }
+    case 'line': { const f = econ.facs.find(x => x.id === m.id); if (f && f.owner === k) setLine(f, m.line); return; }
+    case 'aid': { const to = +m.to, pk = Object.assign({}, m.pack); if (pk.eq === 'inf') pk.eq = Infinity; if (countries[to - 1] && to !== k && !atWar(k, to)) aidSend(k, to, pk, true); return; }
+  }
+}
+const mpHostName = () => ($('#mpName').value || '').trim() || 'Хост';
+const mpCapOk = k => !mp || !mp.rules.cap || !isHuman(k) || units.filter(u => u.owner === k).length <= mp.rules.cap;
+// ---- the guest ----
+async function mpJoin(code) {
+  mpLeave(true);
+  mp = { role: 'guest', live: false, peer: null, humans: {}, k: 0, base: new Map(), recent: new Map(), chat: [] };
+  const peer = mp.peer = { pc: new RTCPeerConnection({ iceServers: MP_ICE }), open: false };
+  peer.pc.ondatachannel = e => mpWire(peer, e.channel);
+  await peer.pc.setRemoteDescription(await mpUncode(code, 'INV'));
+  await peer.pc.setLocalDescription(await peer.pc.createAnswer());
+  await iceDone(peer.pc);
+  return mpCode(peer.pc, 'ANS');
+}
+async function mpGuestMsg(m) {
+  switch (m.t) {
+    case 'full': {
+      mp.rules = m.rules; mp.war = m.war;
+      const was = campTroops; campTroops = false; mp.starting = true;
+      try { if (curWarId !== m.war || !mp.loaded) await startScenario(m.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
+      mp.loaded = true; mp.live = true;
+      document.body.classList.add('mp', 'mp-guest');
+      if (!['pan', 'units', 'info'].includes(tool)) setTool('pan');
+      player = 0; renderGenerals();
+      mpGuestApply(m);
+      mpBoxOpen(); mpLog('Вы в игре. Выберите страну.');
+      clearInterval(mp.timer); mp.timer = setInterval(mpGuestFlush, 200);
+      return;
+    }
+    case 'st': if (mp.loaded) mpGuestApply(m); return;
+    case 'you': mp.k = m.k; $('#mpBox').classList.add('min'); mpApplying = true; try { takeControl(m.k); } finally { mpApplying = false; } genSeq = Math.max(genSeq, m.k * 1e6); frontSeq = Math.max(frontSeq, m.k * 1e6); formSeq = Math.max(formSeq, m.k * 1e6); mpRenderBox(); renderEcon(); return;
+    case 'toast': toast(m.text); return;
+    case 'chat': mpChat(m.line); return;
+  }
+}
+let mpApplying = false;
+function mpGuestApply(m) {
+  mpGuestFlush();
+  mpApplying = true;
+  try {
+    const now = performance.now();
+    if (m.tiles && m.tiles.length && geoStore) {
+      applyStoreLog(m.tiles.map(([k, v]) => [k, v === null ? undefined : typeof v === 'number' ? v : unrleBytes(unb64u(v))]));
+      readGrid(win.L, win.cx0, win.cy0, W, H, own); winOwn0 = own.slice(); backdrop = null;
+      recolor(); computePocketsSoon(renderPockets); checkCities(true);
+    }
+    const cs = JSON.stringify(m.countries); if (cs !== mp.cs) { mp.cs = cs; countries = m.countries; renderCountries(); recolor(); }
+    const ws = JSON.stringify(m.wars); if (ws !== mp.ws) { mp.ws = ws; wars = m.wars; recalcWars(); if (typeof renderDiplo === 'function') renderDiplo(); }
+    const gs = JSON.stringify(m.game); if (gs !== mp.gs) { mp.gs = gs; game = Object.assign({}, game, m.game); applySystems(); }
+    const hs = JSON.stringify(m.humans || {}); mp.rules = m.rules || mp.rules; if (hs !== mp.hs) { mp.hs = hs; mp.humans = m.humans || {}; mpRenderBox(); }
+    gameDate = m.gameDate; hoursPerTick = m.hpt || hoursPerTick;
+    if (battlesOn !== !!m.on) { battlesOn = !!m.on; syncToggles(); }
+    if (m.log && JSON.stringify(m.log[0]) !== mp.log0) { mp.log0 = JSON.stringify(m.log[0]); gameLog = m.log; renderLog(); }
+    Object.assign(econ, m.econ);
+    // the troops: the host's, with the moves of the last half second drawn smoothly, and the orders just given here
+    // kept until the host has them
+    const old = new Map(); for (const u of units) if (u.id) old.set(u.id, u);
+    const tids = new Set(m.units.map(o => o.tid).filter(Boolean));
+    const pend = units.filter(u => !u.id && u.tid && !tids.has(u.tid) && now - (u._t || 0) < 4000);
+    const next = m.units.map(o => {
+      const u = decU(o), p = old.get(u.id);
+      if (p) { u._fx = p._tx !== undefined && p._lt ? p.x : p.x; u._fy = p.y; }
+      const r = mp.recent.get(u.id); if (r && now - r.t < 1500) applyOrd(u, r.f);
+      return u;
+    });
+    units = next.concat(pend);
+    const byId = new Map(next.map(u => [u.id, u]));
+    selUnits = selUnits.map(u => u.id ? byId.get(u.id) : u).filter(u => u && units.includes(u));
+    if (selUnit) selUnit = selUnit.id ? byId.get(selUnit.id) || null : selUnit;
+    forms = m.forms || []; generals = m.generals || [];
+    const mine = mp.k ? fronts.filter(f => f.owner === mp.k && now - (mp.frontT || 0) < 1500) : [];
+    fronts = m.fronts.map(decF).filter(f => !mine.some(x => x.id === f.id)).concat(mine);
+    if (selFront) selFront = fronts.find(f => f.id === selFront.id) || null;
+    // what the host says is ours now, to compare our own changes with
+    mp.base = new Map(); for (const u of next) if (u.owner === mp.k) mp.base.set(u.id, JSON.stringify(encOrd(u)));
+    mp.gsig = JSON.stringify(generals.filter(g => g.owner === mp.k)); mp.fsig = JSON.stringify(fronts.filter(f => f.owner === mp.k).map(encF));
+    mpLerpStart(); renderHud(); renderEcon(true); renderScore();
+    if (infoSel) renderInfoCard();
+    requestDraw();
+  } finally { mpApplying = false; }
+}
+// our own changes, sent to the host five times a second: new troops, orders, troops removed, generals, fronts
+function mpGuestFlush() {
+  if (!mpGuest() || !mp.k || !mp.peer || !mp.peer.open) return;
+  const k = mp.k, now = performance.now();
+  const fresh = units.filter(u => u.owner === k && !u.id && !u.tid);
+  if (fresh.length) {
+    for (const u of fresh) { u.tid = Math.random().toString(36).slice(2); u._t = now; }
+    const fids = new Set(fresh.map(u => u.f).filter(f => f !== undefined)), fl = [];
+    const addF = id => { const f = forms.find(x => x.id === id); if (f && !fl.includes(f)) { fl.push(f); if (f.parent) addF(f.parent); } };
+    fids.forEach(addF);
+    mpToHost({ t: 'add', units: fresh.map(encU), forms: fl });
+  }
+  const ord = [];
+  for (const u of units) {
+    if (u.owner !== k || !u.id || !mp.base.has(u.id)) continue;
+    const s = JSON.stringify(encOrd(u));
+    if (s !== mp.base.get(u.id)) { const f = encOrd(u); ord.push({ id: u.id, f }); mp.base.set(u.id, s); mp.recent.set(u.id, { f, t: now }); }
+  }
+  if (ord.length) mpToHost({ t: 'ord', list: ord });
+  const have = new Set(units.map(u => u.id)), gone = [...mp.base.keys()].filter(id => !have.has(id));
+  if (gone.length) { gone.forEach(id => mp.base.delete(id)); mpToHost({ t: 'del', ids: gone }); }
+  const gs = JSON.stringify(generals.filter(g => g.owner === k)); if (gs !== mp.gsig) { mp.gsig = gs; mpToHost({ t: 'gens', list: JSON.parse(gs) }); }
+  const fl = fronts.filter(f => f.owner === k).map(encF), fs = JSON.stringify(fl); if (fs !== mp.fsig) { mp.fsig = fs; mp.frontT = now; mpToHost({ t: 'fronts', list: fl }); }
+}
+// moves of the troops between two messages of the host, drawn over half a second
+let mpLerpRaf = 0, mpLerpT0 = 0;
+function mpLerpStart() {
+  for (const u of units) if (u._fx !== undefined) { u._tx = u.x; u._ty = u.y; u.x = u._fx; u.y = u._fy; delete u._fx; delete u._fy; }
+  mpLerpT0 = performance.now();
+  if (!mpLerpRaf) mpLerpRaf = requestAnimationFrame(mpLerpFrame);
+}
+function mpLerpFrame(t) {
+  mpLerpRaf = 0;
+  const k = Math.min(1, (t - mpLerpT0) / 480); let any = false;
+  for (const u of units) if (u._tx !== undefined) {
+    if (!u._sx) { u._sx = u.x; u._sy = u.y; }
+    u.x = u._sx + (u._tx - u._sx) * k; u.y = u._sy + (u._ty - u._sy) * k;
+    if (k >= 1) { delete u._tx; delete u._ty; delete u._sx; delete u._sy; } else any = true;
+  }
+  requestDrawFast();
+  if (any) mpLerpRaf = requestAnimationFrame(mpLerpFrame);
+}
+// what a guest does with the economy goes to the host
+function mpGuestCmd(obj) { if (!mp.k) { toast('Сначала выберите страну в окне «Сеть».'); return false; } mpToHost(obj); return true; }
+function mpLeave(quiet) {
+  if (!mp) return;
+  clearInterval(mp.timer);
+  try { if (mp.peer) mp.peer.pc.close(); for (const p of mp.peers || []) p.pc.close(); } catch (e) { }
+  const was = mp.role; mp = null; mpTiles = null;
+  document.body.classList.remove('mp', 'mp-guest');
+  $('#mpBox').hidden = true;
+  if (!quiet) toast(was === 'host' ? 'Комната закрыта.' : 'Вы вышли из сетевой игры.');
+}
+// ---- the window «Сеть» ----
+function mpLog(text) { mpChat({ who: '', text }); }
+function mpChat(line) {
+  if (!mp) return;
+  mp.chat.push(line); if (mp.chat.length > 60) mp.chat.shift();
+  const box = $('#mpChat'); if (!box) return;
+  const p = document.createElement('p'); if (line.who) { const b = document.createElement('b'); b.textContent = line.who + ': '; p.append(b); } else p.className = 'sys';
+  p.append(document.createTextNode(line.text)); box.append(p); while (box.children.length > 60) box.firstChild.remove(); box.scrollTop = box.scrollHeight;
+  if (line.who && $('#mpBox').classList.contains('min')) toast(line.who + ': ' + line.text);
+}
+function mpBoxOpen() { $('#mpBox').hidden = false; $('#mpBox').classList.remove('min'); const c = $('#mpChat'); c.textContent = ''; const ch = mp.chat.slice(); mp.chat = []; ch.forEach(mpChat); mpRenderBox(); }
+function mpRenderBox() {
+  if (!mp) return;
+  const box = $('#mpBox'), host = mp.role === 'host';
+  box.querySelector('.mpst').textContent = host ? 'Хост · ' + (mp.peers.filter(p => p.open).length + 1) + ' ' + plural(mp.peers.filter(p => p.open).length + 1, 'игрок', 'игрока', 'игроков') : mpLive() ? 'В сети · гость' : 'Нет связи';
+  box.querySelector('.mpst').classList.toggle('on', mpLive() || host);
+  const ul = $('#mpPlayers'); ul.textContent = '';
+  for (const [k, name] of Object.entries(mp.humans || {})) { const li = document.createElement('li'); const i = document.createElement('i'); const c = rgb[+k] || [120, 120, 120]; i.style.background = `rgb(${c})`; li.append(i, document.createTextNode(name + ' — ' + ownerName(+k) + (+k === player ? ' (вы)' : ''))); ul.append(li); }
+  $('#mpHostBox').hidden = !host;
+  $('#mpPickBox').hidden = host || !mp.loaded || !!mp.k;
+  if (!host && mp.loaded) {
+    const sel = $('#mpPick'), cur = sel.value; sel.textContent = '';
+    countries.forEach((c, i) => { const k = i + 1; if (!atWarAny(k)) return; const o = document.createElement('option'); o.value = k; o.textContent = c.name + (mp.humans[k] && k !== mp.k ? ' — занята' : k === mp.k ? ' — вы' : ''); o.disabled = !!mp.humans[k] && k !== mp.k; sel.append(o); });
+    if (cur) sel.value = cur; else if (mp.k) sel.value = mp.k;
+  }
+  const R = mp.rules;
+  box.querySelector('.mprules').textContent = R ? 'Правила: ' + [R.fair ? 'равная казна ' + fmtMoney(mpCapital()) : '', R.cap ? 'до ' + R.cap + ' отрядов на игрока' : 'без предела войск', R.noTroops ? 'войска игроков не расставлены' : ''].filter(Boolean).join(' · ') : '';
+}
+$('#mpBox').addEventListener('click', async e => {
+  const b = e.target.closest('[data-mp]'); if (!b || !mp) return;
+  const a = b.dataset.mp;
+  try {
+    if (a === 'min') $('#mpBox').classList.toggle('min');
+    else if (a === 'leave') { if (confirm(mp.role === 'host' ? 'Закрыть комнату? Гости отключатся.' : 'Выйти из сетевой игры?')) mpLeave(); }
+    else if (a === 'invite') { b.disabled = true; b.textContent = 'Готовлю код…'; const code = await mpInvite(); $('#mpInvCode').value = code; $('#mpInvOut').hidden = false; b.textContent = 'Пригласить ещё'; b.disabled = false; }
+    else if (a === 'copy') { const t = $('#mpInvCode'); t.select(); try { await navigator.clipboard.writeText(t.value); } catch (er) { document.execCommand('copy'); } toast('Код приглашения скопирован. Отправьте его другу.'); }
+    else if (a === 'accept') { await mpAccept($('#mpAnsIn').value); $('#mpAnsIn').value = ''; $('#mpInvOut').hidden = true; mpLog('Ответ принят, соединяюсь…'); }
+    else if (a === 'pick') { const k = +$('#mpPick').value; if (k) mpToHost({ t: 'claim', k, name: ($('#mpName').value || 'Игрок').trim() }); }
+  } catch (er) { toast(er.message || 'Не получилось.'); const iv = $('#mpBox [data-mp="invite"]'); iv.disabled = false; iv.textContent = 'Пригласить игрока'; }
+});
+$('#mpSay').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !mp) return;
+  const text = e.target.value.trim(); e.target.value = ''; if (!text) return;
+  if (mp.role === 'host') { const line = { who: mpHostName(), text }; mpChat(line); mpToAll({ t: 'chat', line }); } else mpToHost({ t: 'chat', text });
+});
+$('#hudNet').addEventListener('click', () => { if (!mp) return; const b = $('#mpBox'); if (b.hidden) mpBoxOpen(); else b.classList.toggle('min'); });
+// ---- the screen in the menu ----
+function renderMultiScreen() {
+  const sel = $('#mpWar');
+  if (!sel.options.length) {
+    const ws = WARS.filter(w => !w.peace).slice().sort((a, b) => b.date.localeCompare(a.date));
+    for (const w of ws) { const o = document.createElement('option'); o.value = w.id; o.textContent = w.name; sel.append(o); }
+    sel.value = LS.get('mezha-mp-war', 'svo2025');
+  }
+  $('#mpCapOut').textContent = $('#mpCap').value === '0' ? 'без предела' : $('#mpCap').value;
+}
+$('#mMulti').addEventListener('click', () => { showScreen('scrMulti'); renderMultiScreen(); });
+$('#mpCap').addEventListener('input', renderMultiScreen);
+$('#mpHostGo').addEventListener('click', async () => {
+  if (!window.RTCPeerConnection || !window.CompressionStream) { toast('Этот браузер не умеет игру по сети. Нужен Chrome, Edge или Firefox поновее.'); return; }
+  LS.set('mezha-mp-war', $('#mpWar').value);
+  tutorNote('mp');
+  await mpHost({ war: $('#mpWar').value, cap: +$('#mpCap').value, fair: $('#mpFair').checked, noTroops: $('#mpNoTroops').checked });
+});
+$('#mpJoinGo').addEventListener('click', async () => {
+  if (!window.RTCPeerConnection || !window.CompressionStream) { toast('Этот браузер не умеет игру по сети. Нужен Chrome, Edge или Firefox поновее.'); return; }
+  const b = $('#mpJoinGo');
+  try {
+    b.disabled = true; b.textContent = 'Готовлю ответ…';
+    const ans = await mpJoin($('#mpInvIn').value);
+    tutorNote('mp');
+    $('#mpAnsCode').value = ans; $('#mpJoinOut').hidden = false;
+    $('#mpJoinSt').textContent = 'Отправьте этот ответ хосту. Как только он его вставит, игра откроется сама.';
+  } catch (e) { toast(e.message || 'Код не подошёл.'); }
+  finally { b.disabled = false; b.textContent = 'Создать ответ'; }
+});
+$('#mpAnsCopy').addEventListener('click', async () => { const t = $('#mpAnsCode'); t.select(); try { await navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand('copy'); } toast('Ответ скопирован. Отправьте его хосту.'); });
 // ---------- two ways in: watching a war stage by stage, or playing it ----------
 // Watching: the map without troops, the chronicle's bar, a card with the stage's story; nothing on the map can be
 // changed, and the play button runs the stages instead of the battles. Playing: troops, time, battles and goals;
