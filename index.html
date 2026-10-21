@@ -1796,6 +1796,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <div class="csides" id="campSides"></div>
         <div class="ctroops" id="campTroopsBox" role="radiogroup" aria-label="Войска">
           <button data-tr="1" role="radio"><b>Войска расставлены</b><small>Дивизии обеих сторон уже стоят вдоль линии фронта — сразу в бой</small></button>
+          <button data-tr="s" role="radio"><b>На участке фронта</b><small>Вы сами обводите рамкой участки фронта — войска встанут только там, остальной фронт пуст</small></button>
           <button data-tr="0" role="radio"><b>Без войск</b><small>Только карта, страны и города — войска расставляете сами</small></button>
         </div>
         <div class="cgo"><button class="bigbtn" id="campGo">В бой</button><span id="campAs"></span></div>
@@ -5897,6 +5898,13 @@ function drawUi() {
   drawSpawnGhost(ctx);
   drawRouteDraft(ctx);
   drawFrontDraft(ctx);
+  if (drag && drag.mode === 'sector') {
+    const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
+    ctx.fillStyle = 'rgba(210,67,45,.12)'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
+    ctx.setLineDash([6, 4]); ctx.lineWidth = 1.8; ctx.strokeStyle = 'rgba(230,90,60,.95)'; ctx.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); ctx.setLineDash([]);
+    ctx.font = `600 12px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)';
+    const t = drag.only ? 'Участок фронта: только ваши войска' : 'Участок фронта: войска обеих сторон'; ctx.strokeText(t, Math.min(ax, bx) + 2, Math.min(ay, by) - 4); ctx.fillStyle = '#ffd2c4'; ctx.fillText(t, Math.min(ax, bx) + 2, Math.min(ay, by) - 4);
+  }
   if (drag && drag.mode === 'box') {
     const ax = drag.a.x * view.s + view.x, ay = drag.a.y * view.s + view.y, bx = drag.b.x * view.s + view.x, by = drag.b.y * view.s + view.y;
     ctx.fillStyle = 'rgba(226,184,74,.15)'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
@@ -9051,14 +9059,43 @@ const frontById = id => fronts.find(f => f.id === id);
 // is a unit set on attacking, and able to
 const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <= 0;
 // the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
-function calendarTick() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { econDay(); popDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
-function battleTick() {
-  fuCache = {};
-  try { battleTickRun(); } finally { fuCache = null; }
+function calendarTick() { drain(calendarTickGen()); }
+function* calendarTickGen() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { yield* econDayGen(); yield* yieldPoint(); popDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
+// ---------- the frame budget: the heavy work of a battle in slices, a few milliseconds a frame ----------
+// A tick of battle, a pass over the fronts, a day of the economy: each is a generator that gives way whenever its
+// slice of the frame is used up, and goes on in the next frame. The picture keeps its 60 frames a second however
+// many troops there are; with too much to do, the battle's time runs a little slower instead of the screen stalling.
+const JOB_MS = 5;
+const jobs = [];
+let jobDL = Infinity, jobRaf = 0;
+const jobYield = () => performance.now() > jobDL;
+const jobBusy = name => jobs.some(j => j.name === name);
+function runJob(name, gen, done) { if (jobBusy(name)) return false; jobs.push({ name, gen, done }); jobKick(); return true; }
+function jobKick() { if (!jobRaf) jobRaf = document.hidden ? setTimeout(jobPump, 16) : requestAnimationFrame(jobPump); }
+function jobPump() {
+  jobRaf = 0; jobDL = performance.now() + JOB_MS;
+  try {
+    while (jobs.length && performance.now() < jobDL) {
+      const j = jobs[0]; let r;
+      try { r = j.gen.next(); } catch (e) { console.error(e); r = { done: true }; }
+      if (r.done) { jobs.shift(); if (j.done) j.done(); } else jobs.push(jobs.shift());   // the jobs take turns
+    }
+  } finally { jobDL = Infinity; }
+  if (jobs.length) jobKick();
 }
-function battleTickRun() {
+const drain = g => { for (const _ of g); };
+// a place where a job may give way (the front cache of a tick lives only within one slice)
+function* yieldPoint() { if (!jobYield()) return; const c = fuCache; fuCache = null; yield; fuCache = c ? {} : null; }
+// time running: a tick as a job; one that has not finished by the next is not doubled
+function battleTickJob() { if (!jobBusy('tick')) runJob('tick', battleTickGen()); }
+function battleTick() { drain(battleTickGen()); }
+function* battleTickGen() {
+  fuCache = {};
+  try { yield* battleTickRun(); } finally { fuCache = null; }
+}
+function* battleTickRun() {
   if (!own) return;
-  if (!units.length) { calendarTick(); return; }
+  if (!units.length) { yield* calendarTickGen(); return; }
   engaged = []; inBattle.clear();
   const h = hoursPerTick;
   if (!gridOk() || units.length < 20000 || performance.now() - bgrid.t > 300) buildBattleGrid();
@@ -9066,6 +9103,7 @@ function battleTickRun() {
   // hundreds of thousands of units: a share of them each tick, all of them over a few ticks
   const slices = Math.max(1, Math.ceil(units.length / 12000)), part = battleTicks % slices, list = units.slice();
   for (let ui = part; ui < list.length; ui += slices) {
+    if ((ui & 63) === 0) yield* yieldPoint();
     const u = list[ui];
     if (!inWin(u) || !(attacking(u) || autoAdvance)) continue;
     // the nearest enemy within reach
@@ -9082,8 +9120,11 @@ function battleTickRun() {
   lineFill();
   // out of battle: organisation comes back, faster at rest; strength slowly, if supplied; the still dig in
   const sup = game.supply;
+  yield* yieldPoint();
   for (let i = 0; i < units.length; i++) {
+    if ((i & 255) === 0) yield* yieldPoint();
     const u = units[i];
+    if (!u) continue;
     if (u.retreat > 0) u.retreat -= h;
     if (inBattle.has(u)) continue;
     if (u.fighting) delete u.fighting;
@@ -9104,11 +9145,14 @@ function battleTickRun() {
     if (f.kind !== 'front') continue;
     f.plan = clamp((f.plan || 0) + (f.mode === 'attack' ? -.004 : .005) * h, 0, 1);
   }
-  if (game.ai && game.aiMode !== 'econ') aiFronts(h);
+  yield* yieldPoint();
+  if (game.ai && game.aiMode !== 'econ') yield* aiFrontsGen(h);
   if (goalCheck()) startMarch();
-  calendarTick();
+  yield* calendarTickGen();
+  yield* yieldPoint();
   if (aiDeployQ.size) aiDeployNext(2);
-  if (game.reinforce) reinforceTick(h);
+  yield* yieldPoint();
+  if (game.reinforce) yield* reinforceTickGen(h);
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) {
     noteLosses(dead);
@@ -9135,7 +9179,7 @@ function setBattles(on) {
   clearInterval(battleTimer);
   if (on) {
     pushHist();
-    battleTimer = setInterval(battleTick, 1000 / battleSpeed);
+    battleTimer = setInterval(battleTickJob, 1000 / battleSpeed);
     armIdleCursor(); startMarch();
     toast('Время пошло. Пауза — P, скорость — + и −. Ctrl+Z вернёт карту к этому моменту.');
   } else {
@@ -9785,7 +9829,7 @@ function fineOwner(x, y) {
 }
 // the border between a (in o's land) and b (not)
 function borderCross(ax, ay, bx, by, o) {
-  for (let k = 0; k < 16; k++) { const mx = (ax + bx) / 2, my = (ay + by) / 2; if (fineOwner(mx, my) === o) { ax = mx; ay = my; } else { bx = mx; by = my; } }
+  for (let k = 0; k < 12; k++) { const mx = (ax + bx) / 2, my = (ay + by) / 2; if (fineOwner(mx, my) === o) { ax = mx; ay = my; } else { bx = mx; by = my; } }
   return { x: (ax + bx) / 2, y: (ay + by) / 2 };
 }
 // the real border near the edge of two cells at (ex, ey); (nx, ny) goes from o's cell to the other
@@ -10131,7 +10175,8 @@ function attachToGenerals() {
   }
   return n;
 }
-function frontTick() {
+function frontTick() { drain(frontTickGen()); }
+function* frontTickGen() {
   if (!fronts.length || !W || menuPaused || drag) return;
   const attached = attachToGenerals();
   if (attached) startMarch();
@@ -10140,7 +10185,8 @@ function frontTick() {
   let n = 0;
   orderBudget = 3000; pathBudget = 60; holdBudget = 2000;
   if (!gridOk()) buildBattleGrid();
-  for (const f of fronts) {
+  for (const f of fronts.slice()) {
+    if (jobYield()) { const sv = [orderBudget, pathBudget, holdBudget]; pathBudget = Infinity; yield; [orderBudget, pathBudget, holdBudget] = sv; if (!W) return; if (!gridOk()) buildBattleGrid(); }
     const list = by.get(f.id) || [];
     if (f.pending) n += frontOrders(f, true, list);
     else if (f.mode === 'attack' && f.kind === 'front') n += frontOrders(f, false, list);
@@ -10169,7 +10215,7 @@ function frontTick() {
   if (n) startMarch();
   requestDrawFast();
 }
-setInterval(() => { if (fronts.length) frontTick(); }, 500);
+setInterval(() => { if (fronts.length) runJob('front', frontTickGen()); }, 500);
 // the general whose army a line is drawn for: the one open in the strip below the map
 const lineGeneral = () => selGen && genById(selGen) ? genById(selGen) : null;
 // a stroke: a front line along the border, or a line of defence where it is drawn; held by the general's army,
@@ -10348,11 +10394,13 @@ function goalFromStroke(raw) {
   toast('Линия наступления задана. «Выполнить план» — армия пойдёт к ней' + (f.plan ? ' (план готов на ' + Math.round(f.plan * 100) + '%)' : '') + '.');
 }
 // --- the enemy's armies: they hold their fronts while they plan, and attack where they are ready and strong ---
-function aiFronts(h) {
+function aiFronts(h) { drain(aiFrontsGen(h)); }
+function* aiFrontsGen(h) {
   aiClock += h;
   if (aiClock < 12) return;
   aiClock = 0;
-  for (const f of fronts) {
+  for (const f of fronts.slice()) {
+    yield* yieldPoint();
     if (f.kind !== 'front' || humanAllied(f.owner)) continue;
     const ls = frontUnits(f).filter(u => !immobile(u));
     if (!ls.length) continue;
@@ -10390,8 +10438,10 @@ function noteLosses(list, by) {
     stAdd(k, 'kills');
   }
 }
-function reinforceTick(h) {
-  for (const f of fronts) {
+function reinforceTick(h) { drain(reinforceTickGen(h)); }
+function* reinforceTickGen(h) {
+  for (const f of fronts.slice()) {
+    yield* yieldPoint();
     if (!(f.lost > 0) || !countries[f.owner - 1]) continue;
     f.rclock = (f.rclock || 0) + h;
     if (f.rclock < 24) continue;
@@ -10777,7 +10827,8 @@ function aiDeploy(k, reps = 1) {
   }
 }
 // one day of the economy, for every country with a treasury or a factory
-function econDay() {
+function econDay() { drain(econDayGen()); }
+function* econDayGen() {
   if (!game.econ || !W) return;
   const ks = new Set([...Object.keys(econ.money).map(Number), ...econ.facs.map(f => f.owner)]);
   if (player) ks.add(player);
@@ -10790,6 +10841,7 @@ function econDay() {
   }
   const nUnits = {}; for (const u of units) nUnits[u.owner] = (nUnits[u.owner] || 0) + 1;
   for (const k of ks) {
+    yield* yieldPoint();
     if (!countries[k - 1]) continue;
     // the era's own income (the country's economy, a share of what it started with), the taxes of its cities, the
     // civil factories; against them the army and the military factories, all at the prices of the year
@@ -11624,7 +11676,7 @@ let spawnSide = 0, ctrlDown = false;
 let unitMode = 'place';
 const lineMode = () => unitMode === 'front' || unitMode === 'defense' || unitMode === 'area' || unitMode === 'goal';
 function setUnitMode(m, quiet) {
-  unitMode = m === 'move' || m === 'front' || m === 'defense' || m === 'area' || m === 'goal' ? m : 'place';
+  unitMode = m === 'move' || m === 'front' || m === 'defense' || m === 'area' || m === 'goal' || m === 'sector' ? m : 'place';
   renderArmyBar();
   renderSidePick(); requestUi();
   if (tool === 'units') { cv.style.cursor = toolCursor(); $('#hint').textContent = HINTS.units; renderToolHead('units'); }
@@ -11657,9 +11709,9 @@ function renderSidePick() {
   box.textContent = '';
   // the two modes of the tool come first
   const seg = document.createElement('div'); seg.className = 'umode'; seg.setAttribute('role', 'radiogroup');
-  for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['move', 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>'], ['front', 'Фронт', 'G', '<path d="M3 15c3-5 5 1 9-4s6 2 9-3"/><path d="M6 19l1.5-3M12 16l1.5-3M18 13l1.5-3"/>'], ['defense', 'Оборона', 'V', '<path d="M3 14c3-3 6-3 9 0s6 3 9 0" stroke-dasharray="3 3"/><path d="M12 4l6 3v4c0 4-3 6-6 7-3-1-6-3-6-7V7z"/>'], ['area', 'Область', 'N', '<path d="M5 7l6-3 8 4-1 9-8 3-6-5z" stroke-dasharray="3 2.5"/><circle cx="11" cy="12" r="1.6"/>'], ['goal', 'Наступление', 'T', '<path d="M3 18c4-1 7-4 9-9"/><path d="M8 8l5 0 0 5"/><path d="M14 4c2 1 5 1 7 0" stroke-dasharray="2 2"/>']]) {
+  for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['sector', 'Участок', 'U', '<rect x="3" y="6" width="18" height="12" rx="1" stroke-dasharray="3 2"/><path d="M5 14c3-4 5 1 8-3s4 1 6-2"/>'], ['move', 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>'], ['front', 'Фронт', 'G', '<path d="M3 15c3-5 5 1 9-4s6 2 9-3"/><path d="M6 19l1.5-3M12 16l1.5-3M18 13l1.5-3"/>'], ['defense', 'Оборона', 'V', '<path d="M3 14c3-3 6-3 9 0s6 3 9 0" stroke-dasharray="3 3"/><path d="M12 4l6 3v4c0 4-3 6-6 7-3-1-6-3-6-7V7z"/>'], ['area', 'Область', 'N', '<path d="M5 7l6-3 8 4-1 9-8 3-6-5z" stroke-dasharray="3 2.5"/><circle cx="11" cy="12" r="1.6"/>'], ['goal', 'Наступление', 'T', '<path d="M3 18c4-1 7-4 9-9"/><path d="M8 8l5 0 0 5"/><path d="M14 4c2 1 5 1 7 0" stroke-dasharray="2 2"/>']]) {
     const b = document.createElement('button'); b.className = unitMode === m ? 'on' : ''; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitMode === m); b.dataset.um = m;
-    b.title = (m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : m === 'defense' ? 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её' : m === 'area' ? 'Область обороны: выберите генерала внизу и обведите область — его армия равномерно расположится по ней' : 'Линия наступления, как в Hearts of Iron: выберите армию с линией фронта и проведите по земле противника, куда ей выйти. «Выполнить план» — в атаку') + ' (' + key + ')';
+    b.title = (m === 'sector' ? 'Войска на участок фронта: протяните рамку по линии фронта — дивизии обеих сторон встанут только там (с Shift — только ваши)' : m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : m === 'defense' ? 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её' : m === 'area' ? 'Область обороны: выберите генерала внизу и обведите область — его армия равномерно расположится по ней' : 'Линия наступления, как в Hearts of Iron: выберите армию с линией фронта и проведите по земле противника, куда ей выйти. «Выполнить план» — в атаку') + ' (' + key + ')';
     b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>';
     b.append(name); const kb = document.createElement('kbd'); kb.textContent = key; b.append(kb);
     b.addEventListener('click', () => setUnitMode(m));
@@ -11922,6 +11974,8 @@ cv.addEventListener('pointerdown', e => {
       if (f) { selFront = f; setSel(frontUnits(f)); renderSidePick(); return; }
       drag = { mode: 'fline', pts: [g], len: 0, kind: unitMode }; return;
     }
+    // a sector of the front for new troops: a frame anywhere (over units too)
+    if (unitMode === 'sector') { drag = { mode: 'sector', a: g, b: g, only: e.shiftKey }; return; }
     if (e.shiftKey) {
       if (u) {
         const cur = targets();
@@ -12033,7 +12087,7 @@ cv.addEventListener('pointermove', e => {
     const g = toGrid(p);
     for (const m of drag.group) moveUnit(m.v, g.x - m.ox, g.y - m.oy);
     drag.moved = true; requestDrawFast();
-  } else if (drag.mode === 'box') {
+  } else if (drag.mode === 'box' || drag.mode === 'sector') {
     drag.b = toGrid(p); requestUi();
   } else if (drag.mode === 'region') {
     const g = toGrid(p); drag.b = { x: clamp(g.x, 0, W), y: clamp(g.y, 0, H) }; requestUi();
@@ -12067,6 +12121,12 @@ function endPointer(e) {
     if (drag.tp) drag.p = drag.tp;
     warpStep(); fxEnd(); resistSettle(); if (drag.wm !== 'smooth') { cleanBox(drag.ub); fxSummary(); } $('#hint').textContent = HINTS.warp;
     if (drag.blk && !drag.moved) toast(noWarMsg(drag.blk));
+  }
+  if (drag.mode === 'sector') {
+    const { a, b, only } = drag; drag = null; requestUi();
+    if (Math.abs(b.x - a.x) * view.s < 12 || Math.abs(b.y - a.y) * view.s < 12) { toast('Зажмите кнопку мыши и протяните рамку по линии фронта.'); return; }
+    deploySector([Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)], only ? (player || active) : 0);
+    return;
   }
   if (drag.mode === 'box') {
     const x0 = Math.min(drag.a.x, drag.b.x), x1 = Math.max(drag.a.x, drag.b.x), y0 = Math.min(drag.a.y, drag.b.y), y1 = Math.max(drag.a.y, drag.b.y);
@@ -12223,7 +12283,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyC' && tool === 'units') { setPlaceCount(PLACE_COUNTS[(PLACE_COUNTS.indexOf(placeCount) + 1) % PLACE_COUNTS.length]); if (unitMode !== 'place') setUnitMode('place', true); return; }
-  if (e.code === 'KeyQ' || e.code === 'KeyE' || e.code === 'KeyG' || e.code === 'KeyV' || e.code === 'KeyN' || e.code === 'KeyT') { if (tool !== 'units') setTool('units'); setUnitMode({ KeyE: 'move', KeyG: 'front', KeyV: 'defense', KeyN: 'area', KeyT: 'goal' }[e.code] || 'place'); return; }
+  if (e.code === 'KeyQ' || e.code === 'KeyE' || e.code === 'KeyG' || e.code === 'KeyV' || e.code === 'KeyN' || e.code === 'KeyT' || e.code === 'KeyU') { if (tool !== 'units') setTool('units'); setUnitMode({ KeyU: 'sector', KeyE: 'move', KeyG: 'front', KeyV: 'defense', KeyN: 'area', KeyT: 'goal' }[e.code] || 'place'); return; }
   if (e.code === 'KeyW') { const m = ['rubber', 'push', 'smooth']; if (tool !== 'warp') setTool('warp'); setWarpMode(m[(m.indexOf(warpMode) + 1) % 3]); return; }
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'Minus' || e.code === 'NumpadSubtract') { setSpeed(speedIdx() + (e.code === 'Equal' || e.code === 'NumpadAdd' ? 1 : -1)); toast('Скорость боёв: ' + (speedIdx() + 1) + ' из 5'); return; }
   if (e.code === 'KeyB') { setPushBorder(!unitsPushBorder); return; }
@@ -12959,7 +13019,7 @@ function closeMenu() {
   m.hidden = true; menuPaused = false; firstRun = false;
   // the tour waits under the menu and comes back with the map
   setTimeout(() => { if (!W || menuOpen()) return; if (tourK >= 0) { $('#tour').hidden = false; tourShow(); } else tourStart(); }, 700);
-  if (menuWasBattles && battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
+  if (menuWasBattles && battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTickJob, 1000 / battleSpeed); }
   menuWasBattles = false;
   renderHud(); requestDraw();
 }
@@ -13178,7 +13238,7 @@ function renderCampDetail() {
   $('#scrCampaign .mhead h2').textContent = campMode === 'watch' ? 'Смотреть войну' : 'Своя игра';
   $('#scrCampaign .mhead p').textContent = campMode === 'watch' ? 'Выберите войну и этап, с которого начать' : 'Выберите войну, этап и сторону';
   const fb = $('#campStages .cfilm'); if (fb) fb.hidden = campMode !== 'watch';
-  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  document.querySelectorAll('#campTroopsBox button').forEach(b => { const on = (b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1') === campTroops; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   const pc = w.countries[campPlayer - 1];
   $('#campAs').innerHTML = ''; $('#campAs').append(campMode === 'watch' ? 'Взгляд со стороны: ' : 'Вы играете за: ', Object.assign(document.createElement('b'), { textContent: pc ? pc.name : '—' }));
   drawCampPreview(w);
@@ -13280,34 +13340,56 @@ const ARM_ADJ = { x: 'пехотная', muskets: 'пехотная', sword: 'п
   helmet: 'рыцарская', airborne: 'воздушно-десантная', mg: 'пулемётная', partisan: 'партизанская' };
 const unitName = u => u.label || unitDef(u).def[1];
 function nameDivision(u, n) { u.label = n + '-я ' + (ARM_ADJ[unitDef(u).def[2]] || 'стрелковая') + ' дивизия'; }
-function deployFronts() {
+// opts.rect: only the border inside this box of cells (a sector chosen by the player); opts.only: only this
+// country's troops (else both sides of every front in it)
+// troops on a sector of the front the player has framed: put down a part each frame, so the game does not stop
+function deploySector(rect, only) {
+  if (jobBusy('deploy')) { toast('Войска ещё расставляются…'); return; }
+  pushHist();
+  const before = units.length, fr0 = fronts.length;
+  toast('Расставляю войска на участке…');
+  runJob('deploy', deployFrontsGen({ rect, only }), () => {
+    const n = units.length - before;
+    if (!n) { hist.pop(); updUndo(); toast('На этом участке нет линии фронта между воюющими странами.'); return; }
+    stAdd(only || player, 'deployed', only ? n : 0);
+    unitsChanged(); renderGenerals(); requestDraw(); scheduleSave();
+    toast('На участке встало ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + ' · ' + (fronts.length - fr0) + ' ' + plural(fronts.length - fr0, 'армия', 'армии', 'армий') + '. Ctrl+Z — убрать.');
+  });
+}
+function deployFronts(opts = {}) { const g = deployFrontsGen(opts); let r; do r = g.next(); while (!r.done); return r.value; }
+function* deployFrontsGen(opts = {}) {
   if (!own || !W) return 0;
+  const R0 = opts.rect ? [Math.max(0, Math.floor(opts.rect[0])), Math.max(0, Math.floor(opts.rect[1])), Math.min(W, Math.ceil(opts.rect[2])), Math.min(H, Math.ceil(opts.rect[3]))] : [0, 0, W, H];
   const dense = denseDeploy(), sized = dense && deploySize();
   if (geoStore) commitWindow();
   const types = ERAS[era] ? ERAS[era].units.map(u => u[0]) : ['inf'];
   const pick = (...keys) => keys.find(k => types.includes(k)) || types[0];
   const INF = types[0], ARM = pick('tank', 'mech', 'knights', 'cuir', 'dragoon', 'cav', 'chariot'), ART = pick('art', 'hart', 'rocket', 'siege', 'archers');
   // 1. every edge between two cells of countries at war, moved onto the real border; (nx, ny) from o to q
+  // (the edges as they are on the grid: the real border is found later only where a unit is put, not at each of tens
+  // of thousands of edges)
   const groups = new Map();
-  for (let y = 0; y < H; y++) for (let x = 0, i = y * W; x < W; x++, i++) {
+  const edge = (o, q, ex, ey, nx, ny) => { const key = o * 256 + q; let g = groups.get(key); if (!g) groups.set(key, g = []); g.push({ x: ex, y: ey, nx, ny, o, q }); };
+  for (let y = R0[1]; y < R0[3]; y++) for (let x = R0[0], i = y * W + R0[0]; x < R0[2]; x++, i++) {
+    if (x === R0[0] && (y & 31) === 0) yield* yieldPoint();
     const o = own[i]; if (!o) continue;
-    for (const [q, ex, ey, nx, ny] of [[x + 1 < W ? own[i + 1] : 0, x + 1, y + .5, 1, 0], [y + 1 < H ? own[i + W] : 0, x + .5, y + 1, 0, 1]]) {
-      if (!q || q === o || !atWar(o, q)) continue;
-      const p = refineEdge(ex, ey, nx, ny, o), key = o * 256 + q;
-      (groups.get(key) || groups.set(key, []).get(key)).push({ x: p.x, y: p.y, nx, ny, o, q });
-    }
+    const r = x + 1 < W ? own[i + 1] : 0, d = y + 1 < H ? own[i + W] : 0;
+    if (r && r !== o && warM[(o << 8) | r] === 1) edge(o, r, x + 1, y + .5, 1, 0);
+    if (d && d !== o && warM[(o << 8) | d] === 1) edge(o, d, x + .5, y + 1, 0, 1);
   }
   if (!groups.size) return 0;
   // 2. the edges of each pair of countries in order along their border: chains, each a walk from an end of it to
   //    the nearest next edge, broken where the border breaks off
   const chains = [];
   for (const list of groups.values()) {
+    yield* yieldPoint();
     const grid = new Map(), key = (x, y) => Math.floor(x / 2) * 1e6 + Math.floor(y / 2);
     for (const e of list) { const k = key(e.x, e.y); (grid.get(k) || grid.set(k, []).get(k)).push(e); }
     const near = (e, R, left) => { const out = []; const gx = Math.floor(e.x / 2), gy = Math.floor(e.y / 2); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const f of grid.get((gx + a) * 1e6 + gy + b) || []) if (f !== e && (!left || left.has(f)) && Math.hypot(f.x - e.x, f.y - e.y) <= R) out.push(f); return out; };
     for (const e of list) e.deg = near(e, 1.6).length;
     const left = new Set(list);
     while (left.size) {
+      yield* yieldPoint();
       // start at an end of a stretch: the edge with fewest neighbours
       let cur = null; for (const e of left) if (!cur || e.deg < cur.deg) { cur = e; if (e.deg <= 1) break; }
       const ch = [];
@@ -13323,8 +13405,9 @@ function deployFronts() {
   let total = 0, totalKm = 0;
   const kmAt = y => geoStore ? unitSize / unitCellsAt(y) : 1;          // kilometres in a cell on row y (cells on a picture)
   for (const ch of chains) { ch.L = arcs(ch); const len = ch.L[ch.L.length - 1]; total += len; totalKm += len * kmAt(ch[ch.length >> 1].y); }
-  if (!dense) {
-    // divisions: the stretch each holds, and the size of a division on the map from it
+  if (!dense && !(opts.rect && units.length)) {
+    // divisions: the stretch each holds, and the size of a division on the map from it (a sector added to troops
+    // already on the map keeps their size)
     const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / deployCap);
     if (geoStore) setUnitSize(spKm * .75, true); else { unitSize = clamp(spKm * .75, usMin(), usMax()); setUnitSize(unitSize, true); }
   }
@@ -13338,14 +13421,17 @@ function deployFronts() {
     const o = ch[0].o, q = ch[0].q, so = { units: [], pts: ch, len }, sq = { units: [], pts: ch, len };
     let seg = 1;
     for (let j = 0; j < n; j++) {
+      if ((j & 15) === 0) yield* yieldPoint();
       const t = (j + .5) * len / n;
       while (seg < ch.length - 1 && L[seg] < t) seg++;
       const a = ch[seg - 1], b = ch[seg], l = L[seg] - L[seg - 1] || 1e-9, w = clamp((t - L[seg - 1]) / l, 0, 1);
-      const x = a.x + (b.x - a.x) * w, y = a.y + (b.y - a.y) * w;
+      let x = a.x + (b.x - a.x) * w, y = a.y + (b.y - a.y) * w;
+      { const r = refineEdge(x, y, a.nx, a.ny, a.o); x = r.x; y = r.y; }
       // across the border toward o: perpendicular to the chain, on the side the edge's o lies
       let px = -(b.y - a.y) / l, py = (b.x - a.x) / l;
       if (px * -a.nx + py * -a.ny < 0) { px = -px; py = -py; }
       for (const [side, sx, sy, st] of [[o, px, py, so], [q, -px, -py, sq]]) {
+        if (opts.only && side !== opts.only) continue;
         const bk = dense ? back : unitCellsAt(y) * .55;
         let ux = x + sx * bk, uy = y + sy * bk;
         // where the border bends between two of its points, the place may fall on the other side: set it back
@@ -13365,6 +13451,7 @@ function deployFronts() {
   // 4. every side's border shared out between its generals: its stretches put in order (each to the nearest end of
   //    the next), the units along them split into equal armies, every army a front line of its general
   for (const [o, stretches] of sides) {
+    yield* yieldPoint();
     const order = [], left = new Set(stretches.filter(st => st.units.length));
     const ends = st => [st.units[0], st.units[st.units.length - 1]];
     let cur = null;
@@ -13431,7 +13518,7 @@ function deploySize() {
   setUnitSize(want, true);
   return true;
 }
-let campTroops = LS.get('mezha-troops', '1') === '1';
+let campTroops = (v => v === 's' ? 'sector' : v === '1')(LS.get('mezha-troops', '1'));
 async function startScenario(id, pl, mode) {
   if (mp && !mp.starting) mpLeave();
   const watch = mode === 'watch' || (mode === undefined && watchMode);
@@ -13444,7 +13531,7 @@ async function startScenario(id, pl, mode) {
     $('#warSel').value = id; renderWarPanel();
     await applyWar(id);
     if (pl && countries[pl - 1]) takeControl(pl);
-    if (!watch && campTroops && wars.length) {
+    if (!watch && campTroops === true && wars.length) {
       // the theatre at its own detail first, so the troops stand on the borders as they are drawn
       btn.textContent = 'Расставляю войска…';
       clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
@@ -13459,6 +13546,8 @@ async function startScenario(id, pl, mode) {
   } finally { btn.disabled = false; btn.textContent = campMode === 'watch' ? 'Смотреть' : 'В бой'; }
   setMode(watch);
   closeMenu(); renderHud(); scheduleSave();
+  // troops on the sectors the player chooses: the tool is ready and says what to do
+  if (!watch && campTroops === 'sector' && wars.length) { setTool('units'); setUnitMode('sector', true); setTimeout(() => toast('Обведите рамкой участок фронта — там встанут войска обеих сторон (с Shift — только ваши). Участков может быть сколько угодно.'), 900); }
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
 // ---------- «Статистика»: the war in numbers ----------
@@ -14121,7 +14210,7 @@ $('#wcPlay').addEventListener('click', () => { const keep = campTroops; campTroo
 $('#wcFold').addEventListener('click', () => $('#watchCard').classList.toggle('fold'));
 $('#hudModeW').addEventListener('click', () => { if (watchMode || !curWarId) return; if (units.length && !confirm('Перейти в просмотр? Текущая партия закончится — её можно сохранить в файл в меню.')) return; startScenario(curWarId, player || 1, 'watch'); });
 $('#hudModeP').addEventListener('click', () => { if (watchMode) $('#wcPlay').click(); });
-document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === '1'; LS.set('mezha-troops', campTroops ? '1' : '0'); renderCampDetail(); }));
+document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 's' ? 'sector' : b.dataset.tr === '1'; LS.set('mezha-troops', b.dataset.tr); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
 let menuBgDone = false;
@@ -14493,7 +14582,7 @@ $('#tglPush').addEventListener('click', () => setPushBorder(!unitsPushBorder));
 $('#tglBattle').addEventListener('click', () => setBattles(!battlesOn));
 $('#bspeed').addEventListener('input', e => {
   battleSpeed = +e.target.value; $('#bspeedOut').textContent = battleSpeed + ' ходов/с';
-  if (battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTick, 1000 / battleSpeed); }
+  if (battlesOn) { clearInterval(battleTimer); battleTimer = setInterval(battleTickJob, 1000 / battleSpeed); }
   scheduleSave();
 });
 $('#pushk').addEventListener('input', e => { pushK = e.target.value / 100; $('#pushkOut').textContent = e.target.value + '%'; scheduleSave(); });
