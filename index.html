@@ -534,6 +534,10 @@ body:not(.nopanel) .status > #hint { display: none; }
 .bigbtn:hover { background: #f0bb57; border: 0; }
 .bigbtn:disabled { opacity: .6; }
 
+.mymaps { max-width: 1100px; margin-top: 26px; } .mymaps h3 { margin: 0 0 6px; }
+.mysave { display: flex; gap: 8px; margin: 10px 0; } .mysave input { flex: 1; max-width: 360px; }
+.mymap { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 11px; background: rgb(255 255 255 / .04); border: 1px solid var(--m-line); margin-bottom: 6px; }
+.mymap > div { flex: 1; } .mymap b { display: block; } .mymap small { color: var(--m-muted); font-size: 12px; }
 .sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; max-width: 1100px; }
 .scard { flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px; border-radius: 14px; text-align: left; background: rgb(255 255 255 / .04); border: 1px solid var(--m-line); color: #ece8df; min-height: 150px; }
 .scard:hover { background: rgb(255 255 255 / .08); border-color: rgb(227 171 69 / .5); }
@@ -1173,6 +1177,11 @@ body.lf #sidePick, body.lf #liveBar { display: none !important; }
 .lfbar.free .lffree { display: inline-block; } .lfbar.free .lfmob { display: none; }
 .mobbox { position: fixed; right: 16px; top: 140px; z-index: 236; width: 400px; max-width: calc(100vw - 32px); max-height: calc(100vh - 240px); display: flex; flex-direction: column; border-radius: 16px; background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid var(--line2); box-shadow: 0 14px 44px rgb(0 0 0 / .5); color: var(--ink); }
 .mobbox[hidden] { display: none; }
+.genbox { top: 140px; }
+.genrow { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-top: 1px solid var(--line); }
+.genrow > div { flex: 1; min-width: 0; } .genrow b { display: block; font-size: 13px; } .genrow small { color: var(--muted); font-size: 11.5px; }
+.genrow .gst { color: var(--accent); letter-spacing: 1px; font-size: 12px; }
+.genrow button { padding: 5px 9px; font-size: 12px; } .genrow button.on { background: var(--accent); color: var(--accent-ink); }
 .mobbox header { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 6px; }
 .mobbox header b { font-size: 15px; } .mobbox header small { flex: 1; color: var(--muted); font-size: 11.5px; }
 .mobbox header button { width: 26px; height: 26px; padding: 0; border-radius: 8px; }
@@ -1593,6 +1602,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <h2>Файл</h2>
         <div class="row">
           <button id="btnPng" class="dl">Сохранить картинку</button>
+          <button id="btnMyMap" class="dl" title="В этом браузере, со всем прогрессом: открыть в «Песочнице», выбрать для игры по сети">Сохранить в «Мои карты»</button>
           <button id="btnProj" class="dl">Сохранить проект</button>
           <label class="btn"><input type="file" id="fileProj" accept=".json,application/json">Открыть проект…</label>
         </div>
@@ -1677,7 +1687,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
   <canvas id="ui"></canvas>
   <div class="sidepick" id="sidePick" hidden role="toolbar" aria-label="За какую страну ставить войска"></div>
   <div class="sidepick livebar" id="liveBar" hidden role="toolbar" aria-label="Живой фронт"></div>
-  <div class="lfbar" id="lfBar" hidden role="toolbar" aria-label="Силы на фронте"><select id="lfSide" class="lffree" aria-label="За какую страну"></select><span class="lft"></span><button data-lfa="mob" class="lfmob" title="Призыв в областях: люди становятся батальонами резерва">Мобилизация</button><button data-lfa="spread" class="lfmob" title="Весь резерв — на самые угрожаемые участки фронта">Резерв на фронт</button>
+  <div class="lfbar" id="lfBar" hidden role="toolbar" aria-label="Силы на фронте"><select id="lfSide" class="lffree" aria-label="За какую страну"></select><span class="lft"></span><button data-lfa="mob" class="lfmob" title="Призыв в областях: люди становятся батальонами резерва">Мобилизация</button><button data-lfa="spread" class="lfmob" title="Весь резерв — на самые угрожаемые участки фронта">Резерв на фронт</button><button data-lfa="gen" class="lfmob" title="Генералы: назначить на участки фронта">Генералы</button>
     <button data-lf="add" title="Кисть: батальоны на свои участки фронта (сначала из резерва, потом за деньги)">＋ Войска на фронт</button><button data-lf="atk" title="Кисть: участки, где наступать (с Shift — отменить)">Наступать</button><button data-lf="del" title="Кисть: батальоны с участков в резерв">В резерв</button>
     <span class="lbl">по</span><button data-lfs="2">2</button><button data-lfs="5">5</button><button data-lfs="10">10</button><span class="lbl">бат.</span>
     <button data-lfa="all" title="Отметить наступление на всех участках, где вы сильнее">Везде, где сильнее</button><button data-lfa="stop" title="Снять все отметки наступления">Стоп</button></div>
@@ -1811,6 +1821,9 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 <div class="mobbox" id="mobBox" hidden role="dialog" aria-label="Мобилизация"><header><b>Мобилизация</b><small>призыв в областях вашей страны</small><button data-mb="close" aria-label="Закрыть">×</button></header>
   <p class="mobnote">Частичная — 0,4% жителей, 12 дней подготовки, область снова доступна через месяц. Всеобщая — 1,5% жителей, 20 дней, через два месяца. Призванные уходят из населения области; на каждый батальон нужно 0,2 комплекта стрелкового оружия.</p>
   <h5 id="mobQueueH" hidden>Готовятся</h5><ul id="mobQueue"></ul><div id="mobList"></div><p id="mobNone" class="mobnote" hidden>Областей не найдено: приблизьте карту к своей стране.</p></div>
+<div class="mobbox genbox" id="genBox" hidden role="dialog" aria-label="Генералы"><header><b>Генералы</b><small>каждый командует участком фронта вокруг своего штаба</small><button data-gb="close" aria-label="Закрыть">×</button></header>
+  <p class="mobnote">Нажмите «Назначить», потом щёлкните по своему участку фронта: генерал приедет за 1–3 дня. На его участке (около 60 км в каждую сторону) войска бьют и держатся лучше — на 5–7% за каждую звезду, быстрее продвигаются и восстанавливают дух.</p>
+  <div id="genList"></div></div>
 <div class="statbox" id="statBox" hidden role="dialog" aria-label="Статистика войны"><header><div><b>Статистика войны</b><small id="stPeriod"></small></div><select id="stWho" aria-label="Страна"></select><button data-st="close" aria-label="Закрыть">×</button></header>
   <div class="stbody"><div class="stgrid" id="stGrid"></div><h4>Сравнение стран</h4><div class="sttable"><table id="stTable"></table></div><p class="stnote">Считается с начала партии. Щелчок по строке таблицы открывает страну.</p></div></div>
 <div class="menu" id="menu" hidden>
@@ -1874,7 +1887,11 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       <button class="scard" id="sbBlocs"><span class="sic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/></svg></span><b>Мир по блокам</b><small>Те же страны, но НАТО и ОДКБ — союзы: не воюют внутри блока, делят снабжение.</small></button>
       <button class="scard" id="sbSample"><span class="sic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18c4-2 5-9 9-10s5 4 7 3"/><circle cx="7" cy="8" r="2"/></svg></span><b>Учебная карта</b><small>Два выдуманных государства на материке. Быстро освоить границу, котлы и войска.</small></button>
       <label class="scard btn" id="sbImage"><input type="file" id="sbFile" accept="image/*,.json"><span class="sic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.6"/></svg></span><b>Своя карта из картинки</b><small>Любое изображение: PNG, JPG, WebP, SVG. Его цвета и линии станут границами для заливки.</small></label>
-    </div></div>
+    </div>
+    <div class="mymaps"><h3>Мои карты</h3><p class="mpnote">Сохраняется всё: границы, страны, войны, армии, экономика, генералы, дата. Сохранённую карту можно выбрать и для игры по сети.</p>
+      <div class="mysave"><input id="myMapName" maxlength="40" placeholder="Название карты"><button id="myMapSave">Сохранить текущую карту</button></div>
+      <div id="myMaps"></div><p id="myMapsNone" class="mpnote">Пока пусто.</p></div>
+    </div>
   </div>
 
   <div class="mscreen" id="scrTutor" hidden>
@@ -8621,12 +8638,13 @@ function fgTheatre() {
   const px = Math.max(6, (x1 - x0) * .33), py = Math.max(6, (y1 - y0) * .33);
   return [Math.max(0, x0 - px) / n, Math.max(0, y0 - py) / n, Math.min(n, x1 + 1 + px) / n, Math.min(n, y1 + 1 + py) / n];
 }
-let fgSig = '';
+let fgSig = '', lfSeed = false;
 // the front grid for the wars of the moment: built at the start of a war, again when a war begins or ends
 function fgEnsure(force) {
   if (!geoStore || !win) return false;
   let sig = countries.length + ':'; for (let a = 1; a <= countries.length; a++) for (let b = a + 1; b <= countries.length; b++) if (warM[(a << 8) | b] === 1) sig += a + '-' + b + ',';
   if (!force && fg && fgOwn && sig === fgSig) return true;
+  if (fg && !force) lfSeed = true;          // a war begun since: its new stretches get their first battalions
   fgSig = sig;
   if (win) commitWindow();
   const box = fgTheatre();
@@ -8723,6 +8741,7 @@ function* lfScanGen() {
     }
     lfFinish(m, s);
     lfBorder = m; lfMine = lfMineOf(m); lfScanT = performance.now();
+    if (lfSeed && econ.front) { lfSeed = false; for (const [key, e] of m) if (!lfStr(key, e.a) && !lfStr(key, e.b)) { lfAdd(key, e.a, 6); lfAdd(key, e.b, 6); } lfGenEnsure(); }
     return;
   }
   if (!lfDirtyBlocks.size) { lfScanT = performance.now(); return; }
@@ -8786,8 +8805,14 @@ const lfEra = () => LF_ERA[era] || (era === 'ancient' || era === 'medieval' ? LF
 // that date, and sends its main blows there. When the date passes, the stage after it is the target.
 const lfHistStages = () => { const w = WARS.find(q => q.id === curWarId); return w && w.series ? WARS.filter(q => q.series === w.series && !q.peace && q.date > w.date) : []; };
 let lfHist = null;
+let lfHistNow = { d: -1, v: null };
 function lfHistTarget() {
   if (!econ.front || !econ.front.hist || !fg || !game.ai) return null;
+  if (lfHistNow.d === gameDate && (!lfHistNow.v || lfHistNow.v.fg === fg)) return lfHistNow.v;     // once a tick
+  lfHistNow = { d: gameDate, v: lfHistTarget1() };
+  return lfHistNow.v;
+}
+function lfHistTarget1() {
   const now = new Date(gameDate).toISOString().slice(0, 10);
   const next = lfHistStages().filter(q => q.date > now).sort((a, b) => a.date.localeCompare(b.date))[0];
   if (!next) return null;
@@ -8976,6 +9001,7 @@ function* lfTickGen(h) {
   yield* lfScanGen();
   if (!fg) return;
   lfMigrate();
+  lfGenAnchor(); lfGenCache = lfGenField();
   const F = econ.front, acc = F.acc || (F.acc = {}), prog = F.prog || (F.prog = {}), ai = {}, km = fgKm(), E = lfEra();
   const fought = new Set();
   let moved = 0, i = 0;
@@ -8991,21 +9017,22 @@ function* lfTickGen(h) {
     if (!isHuman(A) && lfMode() !== 'free') ai[key] = A;
     const oA = lfOrg(key, A), oB = lfOrg(key, B), D = lfDefMul(key, B);
     // a shaken defender still holds its trenches: his strength falls to half, an attacker's to a quarter
-    const eA = sA * (.25 + .75 * oA), eB = sB * (.5 + .5 * oB) * D;
+    const gA = lfGenSkill(key, A), gB = lfGenSkill(key, B);         // the generals: 7% a star in attack, 5% in defence
+    const eA = sA * (.25 + .75 * oA) * (1 + .07 * gA), eB = sB * (.5 + .5 * oB) * D * (1 + .05 * gB);
     const r1 = .8 + Math.random() * .4, r2 = .8 + Math.random() * .4;
     const lossA = Math.min(sA, .006 * h * eB * r1), lossB = Math.min(sB, .0045 * h * eA * r2 / Math.sqrt(D));
     lfAdd(key, A, -lossA); lfAdd(key, B, -lossB);
     stAdd(A, 'lfLost', lossA); stAdd(B, 'lfLost', lossB); stAdd(A, 'lfKilled', lossB); stAdd(B, 'lfKilled', lossA);
-    lfSetKO('org', key, A, oA - .007 * h * (1 + Math.min(2, eB / (eA + .5))));
+    lfSetKO('org', key, A, oA - .007 * h * (1 + Math.min(2, eB / (eA + .5))) * (1 - .06 * gA));
     lfSetKO('org', key, B, oB - .004 * h * Math.min(2, eA / (eB + .5)));
     // the guns wreck the trenches in front of an attack: a line pressed long enough opens
     lfSetKO('ent', key, B, lfEnt(key, B) - E.wear * h * Math.min(2, eA / (eB + .5)));
-    const nA = (sA - lossA) * (.25 + .75 * oA), nB = (sB - lossB) * (.5 + .5 * oB) * D;
+    const nA = (sA - lossA) * (.25 + .75 * oA) * (1 + .07 * gA), nB = (sB - lossB) * (.5 + .5 * oB) * D * (1 + .05 * gB);
     if (nA > nB * 1.15 && sA - lossA >= 1) {
       // the advance: a breakthrough makes up to some 9 km a day, a close fight one or two
       // a stretch already ahead of the stretches beside it is under fire from the flanks: it slows and stops,
       // so the front moves as a line and not in fingers
-      const kmh = E.kmh * Math.min(E.cap, nA / (nB + .5) - 1) * lfFlank(e, A, km);
+      const kmh = E.kmh * Math.min(E.cap, nA / (nB + .5) - 1) * lfFlank(e, A, km) * (1 + .05 * gA);
       const a2 = (acc[key] || 0) + kmh * h / km, layers = Math.floor(a2); acc[key] = a2 - layers;
       if (layers > 0) { const f = lfAdvance(e, A, B, layers); if (f) { moved += f; prog[A] = (prog[A] || 0) + f; lfSetKO('ent', key, B, lfEnt(key, B) * .5); lfSetKO('ent', key, A, 0); } }
     }
@@ -9016,7 +9043,7 @@ function* lfTickGen(h) {
     if ((++i & 127) === 0) yield* yieldPoint();
     for (const o of [e.a, e.b]) {
       if (!lfStr(key, o)) continue;
-      const g = lfOrg(key, o); if (g < 1) lfSetKO('org', key, o, g + .006 * h);
+      const g = lfOrg(key, o); if (g < 1) lfSetKO('org', key, o, g + .006 * h * (1 + .1 * lfGenSkill(key, o)));
       const t = lfEnt(key, o); if (t < E.entMax) lfSetKO('ent', key, o, Math.min(E.entMax, t + E.entRate * h));
     }
   }
@@ -9054,9 +9081,132 @@ function lfDay() {
     if (!p || stalled || day - p.day >= 10 || !p.k.some(k => lfBorder.has(k))) lfAiPlan(o, keys);
     lfAiRedeploy(o, keys);
   }
+  lfGenDay(); renderGenBox();
   // the stretches no longer on the front forget their spirit and trenches
   for (const T of [st.org, st.ent]) if (T) for (const k of Object.keys(T)) if (!lfBorder.has(+k)) delete T[k];
   renderMobBox();
+}
+// ---- generals on the live front ----
+// A general has his headquarters on a stretch of his country's front and commands the stretches around it
+// (GEN_R blocks either way): there the troops hit and hold harder, advance faster and get their spirit back
+// sooner, by his skill (1–5 stars). Sent to another place he travels a day to three. The AI puts its best on
+// its main blows and the others where the line is in danger. (econ.front.gen: general's id → { key, move })
+const GEN_R = 6;
+let lfGenPick = 0, lfGenCache = null;
+const lfGens = o => generals.filter(g => g.owner === o);
+function lfGenEnsure() {
+  // countries at war without generals of their own (a sandbox, a scenario without them) get two
+  const F = econ.front; if (!F) return;
+  F.gen = F.gen || {};
+  const NAMES = ['Орлов', 'Громов', 'Суворин', 'Беляев', 'Ветров', 'Дорохов', 'Карпов', 'Львов', 'Морозов', 'Невский', 'Рогов', 'Соколов', 'Тарасов', 'Шубин', 'Яровой'];
+  for (const [o] of lfMine) {
+    if (!countries[o - 1] || lfGens(o).length) continue;
+    for (let n = 0; n < 2; n++) generals.push({ id: genSeq++, name: NAMES[(o * 3 + n * 7) % NAMES.length], owner: o, photo: '', rank: 'Генерал', skill: 2 + ((o + n) % 3) });
+  }
+}
+// the skill commanding each stretch, for each side: { key: { owner: skill } }, made once a tick
+function lfGenField() {
+  const F = econ.front, out = new Map();
+  if (!F || !F.gen) return out;
+  for (const g of generals) {
+    const a = F.gen[g.id]; if (!a || a.move > 0) continue;
+    const hq = lfBorder.get(a.key); if (!hq) continue;
+    const bx = Math.floor(a.key / LF_NW), by = a.key % LF_NW;
+    for (const k of lfMine.get(g.owner) || []) {
+      if (Math.max(Math.abs(Math.floor(k / LF_NW) - bx), Math.abs(k % LF_NW - by)) > GEN_R) continue;
+      let m = out.get(k); if (!m) out.set(k, m = {});
+      m[g.owner] = Math.max(m[g.owner] || 0, g.skill || 1);
+    }
+  }
+  return out;
+}
+const lfGenSkill = (key, o) => { const m = lfGenCache && lfGenCache.get(key); return m ? m[o] || 0 : 0; };
+// a headquarters whose stretch the front has left moves to the nearest stretch of its side
+function lfGenAnchor() {
+  const F = econ.front; if (!F || !F.gen) return;
+  for (const g of generals) {
+    const a = F.gen[g.id]; if (!a) continue;
+    const e = lfBorder.get(a.key); if (e && (e.a === g.owner || e.b === g.owner)) continue;
+    const bx = Math.floor(a.key / LF_NW), by = a.key % LF_NW; let best = null, bd = 9e9;
+    for (const k of lfMine.get(g.owner) || []) { const d = Math.max(Math.abs(Math.floor(k / LF_NW) - bx), Math.abs(k % LF_NW - by)); if (d < bd) { bd = d; best = k; } }
+    if (best === null) delete F.gen[g.id]; else a.key = best;
+  }
+}
+function lfGenAssign(id, key, quiet) {
+  const g = generals.find(x => x.id === id), e = lfBorder.get(key), F = econ.front;
+  if (!g || !e || !F || (e.a !== g.owner && e.b !== g.owner)) return false;
+  if (mpGuest() && !mpApplying) { mpGuestCmd({ t: 'lfgen', id, key }); return true; }
+  F.gen = F.gen || {};
+  const old = F.gen[id], d = old ? Math.max(Math.abs(Math.floor(old.key / LF_NW) - Math.floor(key / LF_NW)), Math.abs(old.key % LF_NW - key % LF_NW)) : 30;
+  F.gen[id] = { key, move: old && d <= 2 ? 0 : clamp(Math.ceil(d / 30), 1, 3) };
+  if (!quiet) toast(g.rank + ' ' + g.name + (F.gen[id].move ? ' выехал к новому участку: ' + F.gen[id].move + ' ' + plural(F.gen[id].move, 'день', 'дня', 'дней') + ' в пути.' : ' принял участок.'));
+  lfGenCache = lfGenField(); renderGenBox(); requestUi(); scheduleSave();
+  return true;
+}
+// a day: the generals on the road arrive; the AI places its own every few days
+function lfGenDay() {
+  const F = econ.front; if (!F || !F.gen) return;
+  for (const a of Object.values(F.gen)) if (a.move > 0) a.move--;
+  if (!game.ai) return;
+  for (const [o, keys] of lfMine) {
+    if (!countries[o - 1] || isHuman(o) || ((econ.day || 0) + o) % 4) continue;
+    const gs = lfGens(o).sort((a, b) => (b.skill || 1) - (a.skill || 1)); if (!gs.length || !keys.length) continue;
+    const p = F.plan && F.plan[o], spots = [];
+    for (const s of (p && (p.secs || [p])) || []) { const k = s.k[Math.floor(s.k.length / 2)]; if (lfBorder.has(k)) spots.push(k); }
+    // then the stretches where the enemy is strongest against it, far enough apart
+    const danger = keys.map(k => { const e = lfBorder.get(k), en = e.a === o ? e.b : e.a; return [k, lfStr(k, en) - lfStr(k, o)]; }).sort((a, b) => b[1] - a[1]);
+    for (const [k] of danger) { if (spots.length >= gs.length) break; if (spots.every(s => Math.max(Math.abs(Math.floor(s / LF_NW) - Math.floor(k / LF_NW)), Math.abs(s % LF_NW - k % LF_NW)) > GEN_R * 2)) spots.push(k); }
+    // a general already near his place stays: one always on the road commands nothing
+    const dist = (a, b) => Math.max(Math.abs(Math.floor(a / LF_NW) - Math.floor(b / LF_NW)), Math.abs(a % LF_NW - b % LF_NW));
+    gs.forEach((g, i) => { const s = spots[i], a = F.gen[g.id]; if (s === undefined || (a && (a.move > 0 || dist(a.key, s) <= GEN_R * 1.5))) return; lfGenAssign(g.id, s, true); });
+  }
+}
+function renderGenBox() {
+  const box = $('#genBox'); if (!box || box.hidden) return;
+  const list = $('#genList'); list.textContent = '';
+  const o = lfWho(), F = econ.front || {};
+  const gs = lfGens(o);
+  if (!gs.length) { const p = document.createElement('p'); p.className = 'mobnote'; p.textContent = 'У вашей страны нет генералов.'; list.append(p); return; }
+  for (const g of gs) {
+    const a = F.gen && F.gen[g.id], row = document.createElement('div'); row.className = 'genrow';
+    const e = a && lfBorder.get(a.key), w = e && toWorld(e.x, e.y), near = w ? nearestCityName(w) : '';
+    row.innerHTML = '<div><b></b><small></small></div><span class="gst"></span>';
+    row.querySelector('b').textContent = g.rank + ' ' + g.name;
+    row.querySelector('small').textContent = !a ? 'в резерве ставки' : a.move > 0 ? 'в пути: ' + a.move + ' ' + plural(a.move, 'день', 'дня', 'дней') : 'командует участком' + (near ? ' у города ' + near : '');
+    row.querySelector('.gst').textContent = '★'.repeat(clamp(g.skill || 1, 1, 5));
+    const b = document.createElement('button'); b.textContent = lfGenPick === g.id ? 'Щёлкните по фронту…' : a ? 'Перевести' : 'Назначить'; b.classList.toggle('on', lfGenPick === g.id);
+    b.addEventListener('click', () => { lfGenPick = lfGenPick === g.id ? 0 : g.id; if (lfGenPick) { lfBrush.mode = null; if (tool !== 'units') setTool('units'); toast('Щёлкните по своему участку фронта — туда поедет ' + g.rank.toLowerCase() + ' ' + g.name + '.'); } renderGenBox(); lfRenderBar(); });
+    row.append(b);
+    if (a) { const x = document.createElement('button'); x.textContent = 'Снять'; x.addEventListener('click', () => { if (mpGuest()) return mpGuestCmd({ t: 'lfgen', id: g.id, key: null }); delete F.gen[g.id]; lfGenCache = lfGenField(); renderGenBox(); requestUi(); }); row.append(x); }
+    list.append(row);
+  }
+}
+// a click on the front with a general picked: the stretch of one's own side nearest the click
+function lfGenClick(g) {
+  const gen = generals.find(x => x.id === lfGenPick); if (!gen) { lfGenPick = 0; return false; }
+  let best = null, bd = 40 / view.s;
+  for (const k of lfMine.get(gen.owner) || []) { const e = lfBorder.get(k), d = Math.hypot(e.x - g.x, e.y - g.y); if (d < bd) { bd = d; best = k; } }
+  if (best === null) { toast('Щёлкните ближе к своему участку фронта.'); return true; }
+  lfGenAssign(gen.id, best); lfGenPick = 0; renderGenBox();
+  return true;
+}
+// the generals on the map: a badge at each headquarters, the circle of his command while the window is open
+function drawLfGenerals(c) {
+  const F = econ.front; if (!F || !F.gen) return;
+  const vw = uiCv.width / dpr, vh = uiCv.height / dpr, open = !$('#genBox').hidden, blk = lfBC() * view.s;
+  for (const g of generals) {
+    const a = F.gen[g.id]; if (!a) continue;
+    const e = lfBorder.get(a.key); if (!e) continue;
+    const sg = e.a === g.owner ? -1 : 1, x = (e.x + e.nx * sg * lfBC() * 1.2) * view.s + view.x, y = (e.y + e.ny * sg * lfBC() * 1.2) * view.s + view.y;
+    if (x < -60 || y < -60 || x > vw + 60 || y > vh + 60) continue;
+    if (open && g.owner === lfWho()) { c.beginPath(); c.arc(e.x * view.s + view.x, e.y * view.s + view.y, GEN_R * blk, 0, Math.PI * 2); c.setLineDash([6, 5]); c.lineWidth = 1.3; c.strokeStyle = 'rgba(229,173,72,.7)'; c.stroke(); c.setLineDash([]); }
+    const col = rgb[g.owner] || [150, 150, 150];
+    c.globalAlpha = a.move > 0 ? .5 : 1;
+    c.beginPath(); c.arc(x, y, 8, 0, Math.PI * 2); c.fillStyle = `rgb(${col})`; c.fill(); c.lineWidth = 2; c.strokeStyle = '#e5ad48'; c.stroke();
+    c.fillStyle = '#fff'; c.font = `700 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('★' + (g.skill || 1), x, y + .5);
+    if (blk > 3) { c.font = `600 10px ${FONT_UI}`; c.textBaseline = 'top'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(g.name, x, y + 10); c.fillStyle = '#f2e6c8'; c.fillText(g.name, x, y + 10); }
+    c.globalAlpha = 1;
+  }
 }
 // the reserve to the front: the most threatened stretches first (enemy strength there over own)
 function lfSpread(o, n) {
@@ -9101,17 +9251,22 @@ function lfMobilize(o, f, lv, quiet) {
 let lfRegCache = new Map();
 function lfRegionsOf(o) {
   if (!geoStore || !W) return [];
-  const rc = lfRegCache.get(o); if (rc && rc.day === econ.day) return rc.list;
-  if (!popModel) popModelBuild();
-  const out = [];
-  for (const f of decodeRegions().a1) {
-    let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } }
-    if (!best || ownerAtWorld((best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2) !== o) continue;
-    out.push(f);
+  // every country's regions in one pass over the map, kept three days (the owner of each region's middle is a
+  // look through the store: one country at a time it cost a war of many countries a lot every day)
+  const day = econ.day || 0;
+  if (!lfRegCache.all || day - lfRegCache.day >= 3 || day < lfRegCache.day) {
+    if (!popModel) popModelBuild();
+    const all = new Map();
+    for (const f of decodeRegions().a1) {
+      let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } }
+      if (!best) continue;
+      const k = ownerAtWorld((best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2); if (!k) continue;
+      (all.get(k) || all.set(k, []).get(k)).push(f);
+    }
+    for (const l of all.values()) l.sort((a, b) => regionPop(b).now - regionPop(a).now);
+    lfRegCache.all = all; lfRegCache.day = day;
   }
-  out.sort((a, b) => regionPop(b).now - regionPop(a).now);
-  lfRegCache.set(o, { day: econ.day, list: out });
-  return out;
+  return lfRegCache.all.get(o) || [];
 }
 function lfAiMobilize(o, keys, push) {
   const st = lfState(); let mine = st.res[o] || 0, foe = 0;
@@ -9205,13 +9360,13 @@ const LF_START = {
 function lfInit(per = 6, w) {
   const L = w && (LF_START[w.id] || LF_START[w.series]) || {}, n = o => (L.s && countries[o - 1] && L.s[countries[o - 1].name]) || per;
   econ.front = { s: {}, res: {}, atk: {}, org: {}, ent: {}, plan: {}, ent0: L.ent || .3 };
-  lfRegCache.clear();
+  lfRegCache = new Map(); lfGenPick = 0;
   fgEnsure(true);
   drain(lfScanGen());
   for (const [key, e] of lfBorder) { lfAdd(key, e.a, n(e.a)); lfAdd(key, e.b, n(e.b)); }
   // the stores of the army before the war: rifles enough to call up half again as many battalions as stand on the front
   if (game.econ) for (const [o] of lfMine) { const st = stock(o); st.eq.inf = (st.eq.inf || 0) + lfFrontOf(o) * .2 * 1.5; }
-  setLiveFront(true, true); lfRenderBar();
+  setLiveFront(true, true); lfGenEnsure(); lfRenderBar();
 }
 // ---- the player's brush on the front ----
 let lfBrush = { mode: null, step: 5 }, lfStroke = null;
@@ -9294,6 +9449,7 @@ function drawLfOverlay(c) {
     c.setLineDash(going ? [] : [5, 4]); c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.85)'; c.stroke(); c.setLineDash([]);
     }
   }
+  drawLfGenerals(c);
   if (lfBrush.mode && hover && tool === 'units') {
     const x = hover.x * view.s + view.x, y = hover.y * view.s + view.y;
     c.beginPath(); c.arc(x, y, LF_R, 0, Math.PI * 2); c.lineWidth = 1.6; c.setLineDash([4, 3]);
@@ -9306,7 +9462,7 @@ const lfRanks = v => v <= .05 ? 0 : v < 4 ? 1 : v < 10 ? 2 : 3;
 function lfRenderBar() {
   const box = $('#lfBar'); if (!box) return;
   const show = lfOn() && !!W && !watchMode;
-  box.hidden = !show; document.body.classList.toggle('lf', show); if (!show) { $('#mobBox').hidden = true; return; }
+  box.hidden = !show; document.body.classList.toggle('lf', show); if (!show) { $('#mobBox').hidden = true; $('#genBox').hidden = true; return; }
   const free = lfMode() === 'free', o = lfWho(), st = econ.front;
   box.classList.toggle('free', free); if (free) $('#mobBox').hidden = true;
   let mine = 0, foe = 0; for (const [key, e] of lfBorder) { if (e.a === o || e.b === o) { mine += lfStr(key, o); foe += lfStr(key, e.a === o ? e.b : e.a); } }
@@ -9317,6 +9473,7 @@ function lfRenderBar() {
   box.querySelectorAll('[data-lf]').forEach(b => b.classList.toggle('on', b.dataset.lf === lfBrush.mode));
   box.querySelectorAll('[data-lfs]').forEach(b => b.classList.toggle('on', +b.dataset.lfs === lfBrush.step));
   box.querySelector('[data-lfa="mob"]').classList.toggle('on', !$('#mobBox').hidden);
+  box.querySelector('[data-lfa="gen"]').classList.toggle('on', !$('#genBox').hidden);
 }
 function lfSetBrush(m) {
   lfBrush.mode = lfBrush.mode === m ? null : m;
@@ -9329,13 +9486,15 @@ $('#lfBar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.lf) lfSetBrush(b.dataset.lf);
   else if (b.dataset.lfs) { lfBrush.step = +b.dataset.lfs; lfRenderBar(); }
-  else if (b.dataset.lfa === 'mob') { const mb = $('#mobBox'); mb.hidden = !mb.hidden; renderMobBox(); lfRenderBar(); }
+  else if (b.dataset.lfa === 'mob') { const mb = $('#mobBox'); mb.hidden = !mb.hidden; if (!mb.hidden) { $('#genBox').hidden = true; lfGenPick = 0; } renderMobBox(); lfRenderBar(); requestUi(); }
+  else if (b.dataset.lfa === 'gen') { const gb = $('#genBox'); gb.hidden = !gb.hidden; if (!gb.hidden) $('#mobBox').hidden = true; else lfGenPick = 0; lfGenEnsure(); renderGenBox(); lfRenderBar(); requestUi(); }
   else if (b.dataset.lfa === 'spread') { const n = lfSpread(player, Math.floor(lfState().res[player] || 0)); toast(n ? 'Из резерва на фронт: ' + n + ' бат. — на самые угрожаемые участки.' : 'Резерв пуст.'); lfRenderBar(); requestUi(); }
   else if (b.dataset.lfa === 'all') { const st = lfState(), me = lfWho(); for (const k of lfMine.get(me) || []) { const e = lfBorder.get(k), en = e.a === me ? e.b : e.a; if (lfStr(k, me) > lfStr(k, en) * 1.15) st.atk[k] = me; } toast('Наступать везде, где вы сильнее.'); requestUi(); }
   else if (b.dataset.lfa === 'stop') { const st = lfState(), me = lfWho(); for (const k of Object.keys(st.atk)) if (st.atk[k] === me) delete st.atk[k]; toast('Наступление остановлено: войска держат линию.'); requestUi(); }
 });
 $('#lfSide').addEventListener('change', e => { lfSide = +e.target.value; lfRenderBar(); requestUi(); });
 $('#mobBox [data-mb="close"]').addEventListener('click', () => { $('#mobBox').hidden = true; lfRenderBar(); });
+$('#genBox [data-gb="close"]').addEventListener('click', () => { $('#genBox').hidden = true; lfGenPick = 0; lfRenderBar(); requestUi(); });
 // the scan when time stands (the brush needs the stretches) and on a guest, who runs no battle
 setInterval(() => { if (lfOn() && W && geoStore && (!battlesOn || mpGuest()) && performance.now() - lfScanT > 600) runJob('lfscan', (function* () { if (fg && !mpGuest()) fgPull(); yield* lfScanGen(); lfRenderBar(); requestUi(); })()); }, 700);
 // the bar over the map with the border tool: the switch and the arms that follow
@@ -13271,6 +13430,7 @@ cv.addEventListener('pointerdown', e => {
   }
   if (e.button !== 0) return;
   if (tool === 'info') { pointers.delete(e.pointerId); infoClick(toGrid(p)); return; }
+  if (tool === 'units' && lfGenPick && lfOn() && lfGenClick(toGrid(p))) return;
   if (tool === 'units' && lfBrush.mode && lfOn()) { lfStroke = { seen: new Set(), n: 0, alt: e.shiftKey }; drag = { mode: 'lfbrush', alt: e.shiftKey }; lfBrushAt(toGrid(p), e.shiftKey); return; }
   const g = toGrid(p);
   const gx = Math.floor(g.x), gy = Math.floor(g.y);
@@ -14100,22 +14260,31 @@ $('#btnPng').addEventListener('click', async () => {
     toast('Снимки не разрешают сохранение, картинка сохранена без подложки.');
   }
 });
-$('#btnProj').addEventListener('click', () => {
-  if (!W) return;
-  const data = { format: 'mezha', version: 1, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoBorders, geoStore, win,
+function projectData() {
+  if (geoStore) commitWindow();
+  return { format: 'mezha', version: 1, title: mapTitle, w: W, h: H, image: base.toDataURL('image/png'), countries, active, own: rle(own), units, unitSize, generals, player, geo, geoLayer, geoLabels, geoBorders, geoStore, win,
     forms, vsrc: vsrcDef(), tiles: geoStore ? [...store].map(([k, t]) => [k, typeof t === 'number' ? t : rle(t)]) : undefined, geoStack: geoStack.map(g => Object.assign({}, g, { own: rle(g.own) })), game, gameDate, hoursPerTick, arrows, cities, gameLog, arrowWidth, fronts, econ,
     wars, settled: [...settled], occ: geoStore ? undefined : rle(occ), occTiles: geoStore ? (commitOcc(), [...occStore].map(([k, t]) => [k, rle(t)])) : undefined };
-  download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'proekt-mezha.json');
+}
+$('#btnProj').addEventListener('click', () => {
+  if (!W) return;
+  download(new Blob([JSON.stringify(projectData())], { type: 'application/json' }), 'proekt-mezha.json');
 });
 function loadProjectFile(file) {
   if (!file) return;
   const fr = new FileReader();
-  fr.onload = () => {
+  fr.onload = () => { try { loadProjectData(JSON.parse(fr.result)); } catch (e) { toast('Этот файл не похож на проект Межи.'); } };
+  fr.readAsText(file);
+}
+// a project (a file, a saved map, the host's map in a game over the network) in place of the present map
+function loadProjectData(d, quiet) {
+  return new Promise((resolve, reject) => {
     try {
-      const d = JSON.parse(fr.result);
-      if (d.format !== 'mezha') throw new Error('format');
+      if (!d || d.format !== 'mezha') throw new Error('format');
       const img = new Image();
+      img.onerror = () => reject(new Error('image'));
       img.onload = () => {
+        econ.front = null; fg = null; fgOwn = null; lfBorder = new Map(); lfMine = new Map(); curWarId = null;
         setMap(img, d.w, d.h, d.geo || null);
         geoLayer = GEO_LAYERS[d.geoLayer] ? d.geoLayer : STEAM ? 'vec' : 'sat'; geoLabels = d.geoLabels !== false && !!GEO_LABELS; geoBorders = d.geoBorders !== false;
         geoStack = (d.geoStack || []).map(g => Object.assign({}, g, { own: unrle(g.own, g.W * g.H) }));
@@ -14134,13 +14303,49 @@ function loadProjectFile(file) {
           clearTileDB().then(() => { store.forEach((t, k) => tileDirty(k)); scheduleTileSave(); });
         } else if (d.occ) { occ.set(unrle(d.occ, W * H)); occScan(); }
         settled = new Set(d.settled || []); syncSettled();
-        afterChange(); saveImage(); setTool('warp');
-        toast('Проект открыт.');
+        if (d.title) mapTitle = d.title;
+        afterChange(); saveImage(); lfRenderBar(); setTool(lfOn() ? 'units' : 'warp');
+        if (!quiet) toast('Карта открыта' + (d.title ? ': ' + d.title : '') + '.');
+        resolve(true);
       };
       img.src = d.image;
-    } catch (e) { toast('Этот файл не похож на проект Межи.'); }
-  };
-  fr.readAsText(file);
+    } catch (e) { reject(e); }
+  });
+}
+// ---- my maps: sandboxes (and any game) kept in this browser with all their progress ----
+async function myMaps() { try { return (await dbGet('maps')) || []; } catch (e) { return []; } }
+async function saveMyMap(name) {
+  if (!W) return toast('Сначала откройте или нарисуйте карту.');
+  const list = await myMaps(), id = Date.now().toString(36), d = projectData();
+  d.title = name || mapTitle || 'Моя карта';
+  await dbPut('map:' + id, JSON.stringify(d));
+  list.unshift({ id, name: d.title, t: Date.now(), n: countries.length, date: gameDate });
+  await dbPut('maps', list);
+  toast('Карта «' + d.title + '» сохранена со всем прогрессом. Её можно открыть в «Песочнице» и выбрать для игры по сети.');
+  renderMyMaps();
+}
+async function openMyMap(id) {
+  const s = await dbGet('map:' + id); if (!s) return toast('Карта не найдена.');
+  await loadProjectData(JSON.parse(s));
+}
+async function deleteMyMap(id) {
+  const list = (await myMaps()).filter(m => m.id !== id);
+  await dbPut('maps', list); await dbPut('map:' + id, undefined);
+  renderMyMaps();
+}
+async function renderMyMaps() {
+  const box = $('#myMaps'); if (!box) return;
+  const list = await myMaps(); box.textContent = '';
+  $('#myMapsNone').hidden = list.length > 0;
+  for (const m of list) {
+    const row = document.createElement('div'); row.className = 'mymap';
+    row.innerHTML = '<div><b></b><small></small></div>';
+    row.querySelector('b').textContent = m.name;
+    row.querySelector('small').textContent = m.n + ' ' + plural(m.n, 'страна', 'страны', 'стран') + (m.date ? ' · ' + fmtDate(m.date) : '') + ' · сохранена ' + new Date(m.t).toLocaleDateString('ru-RU');
+    const o = document.createElement('button'); o.textContent = 'Открыть'; o.addEventListener('click', async () => { closeMenu(); await openMyMap(m.id); });
+    const x = document.createElement('button'); x.textContent = 'Удалить'; x.addEventListener('click', () => { if (confirm('Удалить карту «' + m.name + '»?')) deleteMyMap(m.id); });
+    row.append(o, x); box.append(row);
+  }
 }
 
 // ---------- autosave (IndexedDB, this browser only) ----------
@@ -14572,7 +14777,8 @@ function renderChronicles() {
     const sp = document.createElement('span'); const b = document.createElement('b'); b.textContent = v; sp.append(b, t ? ' ' + t : ''); $('#mTag').append(sp);
   }
 }
-$('#mSandbox').addEventListener('click', () => showScreen('scrSandbox'));
+$('#mSandbox').addEventListener('click', () => { showScreen('scrSandbox'); $('#myMapName').value = mapTitle || ''; renderMyMaps(); });
+$('#btnMyMap').addEventListener('click', () => { const n = prompt('Название карты:', mapTitle || 'Моя карта'); if (n !== null) saveMyMap(n.trim()); });
 $('#mSettings').addEventListener('click', () => { showScreen('scrSettings'); renderSettings(); });
 $('#mHelp').addEventListener('click', () => { $('#helpKeys').innerHTML = document.querySelector('#panel .help').innerHTML; showScreen('scrHelp'); });
 $('#mSave').addEventListener('click', () => $('#btnProj').click());
@@ -14592,6 +14798,7 @@ document.querySelectorAll('#scrSandbox .scard').forEach(b => b.addEventListener(
 $('#sbEarth').addEventListener('click', () => { freshWorld(); openEarth(); mapTitle = 'Чистая Земля'; renderLog(); renderGenerals(); closeMenu(); });
 $('#sbModern').addEventListener('click', () => startScenario('modern'));
 $('#sbBlocs').addEventListener('click', () => startScenario('modern-blocs'));
+$('#myMapSave').addEventListener('click', () => saveMyMap(($('#myMapName').value || '').trim()));
 $('#sbSample').addEventListener('click', () => { loadSample(); mapTitle = 'Учебная карта'; closeMenu(); fit(); });
 $('#sbFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (/\.json$/i.test(f.name)) loadProjectFile(f); else { freshWorld(); loadImageFile(f); } mapTitle = f.name.replace(/\.[^.]+$/, ''); closeMenu(); });
 
@@ -15390,17 +15597,22 @@ function mpFair(k) {
 }
 async function mpHost(rules) {
   mpLeave(true);
+  // one's own map: a saved one is opened first; the open map is played as it stands, with all its progress
+  if (rules.war.startsWith('map:')) { const s = await dbGet(rules.war); if (!s) { toast('Карта не найдена.'); return; } await loadProjectData(JSON.parse(s), true); rules.war = 'custom'; }
+  if (rules.war === 'custom' && !W) { toast('Сначала откройте карту.'); return; }
   mp = { role: 'host', live: false, rules, peers: [], humans: {}, allTiles: new Set(), war: rules.war, chat: [] };
   game.econ = true; game.paid = true;
-  const was = campTroops; campTroops = 'live';
-  mp.starting = true;
-  try { await startScenario(rules.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
+  if (rules.war !== 'custom') {
+    const was = campTroops; campTroops = 'live';
+    mp.starting = true;
+    try { await startScenario(rules.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
+  } else { game.ai = true; applySystems(); if (!lfOn() && wars.length && geoStore) { lfInit(); econ.front.mode = 'mob'; econFrontPosts(); } }
   setBattles(false);
   mp.live = true; mp.humans = { [player]: mpHostName() };
   mpTiles = new Set();
   mpFair(player);
   document.body.classList.add('mp');
-  mpBoxOpen(); mpLog('Комната открыта: ' + (WARS.find(w => w.id === rules.war) || {}).name + '. Пригласите игроков.');
+  mpBoxOpen(); mpLog('Комната открыта: ' + (rules.war === 'custom' ? 'своя карта' + (mapTitle ? ' «' + mapTitle + '»' : '') : (WARS.find(w => w.id === rules.war) || {}).name) + '. Пригласите игроков.');
   clearInterval(mp.timer); mp.timer = setInterval(mpHostTick, 500);
 }
 async function mpInvite() {
@@ -15439,7 +15651,7 @@ function mpHostTick() {
 function mpOnOpen(peer) {
   if (mp.role === 'host') {
     mpLog(peer.name + ' на связи.');
-    mpSend([peer], Object.assign(mpState(true), { war: mp.war, you: peer.n }));
+    mpSend([peer], Object.assign(mpState(true), { war: mp.war, you: peer.n }, mp.war === 'custom' ? { proj: projectData() } : {}));
     mpRenderBox();
   } else { mpLog('Связь с хостом есть. Загружаю войну…'); mpRenderBox(); }
 }
@@ -15487,6 +15699,7 @@ function mpOnMsg(peer, m) {
     case 'fronts': fronts = fronts.filter(f => f.owner !== k).concat((m.list || []).filter(f => f.owner === k).map(decF)); requestDraw(); return;
     case 'build': { const ok = econBuild(k, m.type, fromWorld({ mx: m.mx, my: m.my }), true); mpTellPeer(peer, ok ? factName(m.type) + ': стройка начата.' : 'Строить можно только на своей земле и при деньгах в казне.'); return; }
     case 'strike': { const ok = econStrike(k, m.kind, fromWorld({ mx: m.mx, my: m.my }), true); if (!ok) mpTellPeer(peer, 'Удар не состоялся: не хватает оружия или цель слишком далеко.'); return; }
+    case 'lfgen': { const g = generals.find(x => x.id === m.id); if (!g || g.owner !== k || !lfOn()) return; mpApplying = true; try { if (m.key === null) { delete econ.front.gen[m.id]; } else lfGenAssign(m.id, m.key, true); } finally { mpApplying = false; } return; }
     case 'lfmob': { const f = decodeRegions().a1.find(x => regionKey(x) === m.reg); if (f && lfOn()) { mpApplying = true; try { lfMobilize(k, f, m.lv === 'full' ? 'full' : 'part', false); } finally { mpApplying = false; } } return; }
     case 'lf': { if (!lfOn()) return; lfStroke = { seen: new Set(), n: 0 }; for (const key of m.keys || []) { const e = lfBorder.get(key); if (e && (e.a === k || e.b === k)) lfApply(k, m.mode, key, Math.min(10, +m.step || 5), !!m.alt); } lfStroke = null; return; }
     case 'line': { const f = econ.facs.find(x => x.id === m.id); if (f && f.owner === k) setLine(f, m.line); return; }
@@ -15511,7 +15724,7 @@ async function mpGuestMsg(m) {
     case 'full': {
       mp.rules = m.rules; mp.war = m.war;
       const was = campTroops; campTroops = false; mp.starting = true;
-      try { if (curWarId !== m.war || !mp.loaded) await startScenario(m.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
+      try { if (m.war === 'custom') { if (!mp.loaded) await loadProjectData(m.proj, true); } else if (curWarId !== m.war || !mp.loaded) await startScenario(m.war, undefined, 'play'); } finally { campTroops = was; mp.starting = false; }
       mp.loaded = true; mp.live = true;
       document.body.classList.add('mp', 'mp-guest');
       if (!['pan', 'units', 'info'].includes(tool)) setTool('pan');
@@ -15673,12 +15886,20 @@ $('#mpSay').addEventListener('keydown', e => {
 });
 $('#hudNet').addEventListener('click', () => { if (!mp) return; const b = $('#mpBox'); if (b.hidden) mpBoxOpen(); else b.classList.toggle('min'); });
 // ---- the screen in the menu ----
-function renderMultiScreen() {
+async function renderMultiScreen() {
   const sel = $('#mpWar');
-  if (!sel.options.length) {
+  if (!sel.options.length || sel.dataset.maps !== String(Date.now() >> 12)) {
+    sel.dataset.maps = String(Date.now() >> 12); const was = sel.value; sel.textContent = '';
+    // one's own maps first: the map open now and those kept in «Мои карты»
+    const g = document.createElement('optgroup'); g.label = 'Свои карты';
+    const cur = document.createElement('option'); cur.value = 'custom'; cur.textContent = 'Открытая сейчас карта' + (mapTitle ? ': ' + mapTitle : ''); g.append(cur);
+    for (const m of await myMaps()) { const o = document.createElement('option'); o.value = 'map:' + m.id; o.textContent = m.name; g.append(o); }
+    sel.append(g);
+    const gw = document.createElement('optgroup'); gw.label = 'Войны';
     const ws = WARS.filter(w => !w.peace).slice().sort((a, b) => b.date.localeCompare(a.date));
-    for (const w of ws) { const o = document.createElement('option'); o.value = w.id; o.textContent = w.name; sel.append(o); }
-    sel.value = LS.get('mezha-mp-war', 'svo2025');
+    for (const w of ws) { const o = document.createElement('option'); o.value = w.id; o.textContent = w.name; gw.append(o); }
+    sel.append(gw);
+    sel.value = was || LS.get('mezha-mp-war', 'svo2025'); if (!sel.value) sel.value = 'svo2025';
   }
   $('#mpCapOut').textContent = $('#mpCap').value === '0' ? 'без предела' : $('#mpCap').value;
 }
