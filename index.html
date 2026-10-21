@@ -1191,6 +1191,20 @@ body.lf #sidePick, body.lf #liveBar { display: none !important; }
 .dcid { background: #10151b; color: #ece8df; border: 1px solid rgb(255 255 255 / .14); border-radius: 9px; padding: 7px 9px; font: 13px ui-monospace, Consolas, monospace; }
 .dcstate { margin: 0; font-size: 12px; color: var(--m-muted, #9aa3ad); } .dcstate.good { color: #8fd6a8; } .dcstate.bad { color: #e6b45a; }
 .dcbtns { display: flex; flex-wrap: wrap; gap: 6px; } .dcbtns button { padding: 6px 10px; font-size: 12px; }
+/* --- access by key --- */
+.lock { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, #1a1612, #07080a 70%); color: #ece8df; font-family: var(--f-ui); }
+.lock[hidden] { display: none; }
+.lockbox { width: 440px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; gap: 12px; padding: 26px 26px 20px; border-radius: 20px; background: rgb(20 22 26 / .9); border: 1px solid rgb(229 173 72 / .35); box-shadow: 0 24px 70px rgb(0 0 0 / .6); }
+.lockmark { color: #e3ab45; } .lockbox h2 { margin: 0; font: 600 21px var(--f-brand, var(--f-ui)); } .lockbox p { margin: 0; color: #a9a39a; font-size: 13px; line-height: 1.5; }
+.lockbox label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #a9a39a; }
+.lockdev { display: flex; gap: 8px; align-items: center; } .lockdev code { flex: 1; font: 600 17px ui-monospace, Consolas, monospace; letter-spacing: .08em; color: #f2e3c2; padding: 8px 10px; border-radius: 9px; background: rgb(0 0 0 / .35); }
+.lockbox textarea { font: 12px ui-monospace, Consolas, monospace; background: #0f1216; color: #ece8df; border: 1px solid rgb(255 255 255 / .14); border-radius: 9px; padding: 8px; resize: vertical; word-break: break-all; }
+.lockerr { color: #e0705c !important; min-height: 1em; }
+.keygen { display: flex; flex-direction: column; gap: 8px; }
+.keygen label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--m-muted, #9aa3ad); }
+.keygen textarea, .keygen input, .keygen select { width: 100%; box-sizing: border-box; background: #10151b; color: #ece8df; border: 1px solid rgb(255 255 255 / .14); border-radius: 9px; padding: 7px 9px; font: 12px var(--f-ui); }
+.keygen textarea { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.keygen .row2 { display: flex; gap: 8px; }
 /* --- watching and playing --- */
 .hud .hmode { gap: 2px; padding: 4px; }
 .hud .hmode button { height: 34px; padding: 0 12px; font-weight: 650; font-size: 12.5px; color: var(--muted); border-radius: 11px; box-shadow: none; }
@@ -1789,6 +1803,11 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <label>Ответ гостя<textarea id="mpAnsIn" rows="3" placeholder="MEZHA-ANS-…"></textarea></label><button class="primary" data-mp="accept">Подключить</button></div></div>
   <div id="mpPickBox" hidden><label>Ваша страна<select id="mpPick"></select></label><button class="primary" data-mp="pick">Играть за неё</button></div>
   <div class="mpchat" id="mpChat"></div><input id="mpSay" placeholder="Сообщение… Enter — отправить" maxlength="300"></div></div>
+<div class="lock" id="lock" hidden><div class="lockbox"><div class="lockmark"><svg width="40" height="40" viewBox="0 0 32 32" fill="none"><path d="M16 2.5l11.5 6.6v13.8L16 29.5 4.5 22.9V9.1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 20.5c3-1 4.2-5.5 7-6.2 2.6-.7 4 1.6 7 .7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+  <h2>Межа — доступ по ключу</h2><p>Игра открывается только с ключом, который выдаёт владелец. Отправьте ему код этого устройства и вставьте полученный ключ.</p>
+  <label>Код устройства<div class="lockdev"><code id="lockDev">…</code><button id="lockCopy">Копировать</button></div></label>
+  <label>Ключ доступа<textarea id="lockKey" rows="3" placeholder="MZK1.…"></textarea></label>
+  <button class="primary" id="lockGo">Войти</button><p class="lockerr" id="lockErr"></p></div></div>
 <div class="mobbox" id="mobBox" hidden role="dialog" aria-label="Мобилизация"><header><b>Мобилизация</b><small>призыв в областях вашей страны</small><button data-mb="close" aria-label="Закрыть">×</button></header>
   <p class="mobnote">Частичная — 0,4% жителей, 12 дней подготовки, область снова доступна через месяц. Всеобщая — 1,5% жителей, 20 дней, через два месяца. Призванные уходят из населения области; на каждый батальон нужно 0,2 комплекта стрелкового оружия.</p>
   <h5 id="mobQueueH" hidden>Готовятся</h5><ul id="mobQueue"></ul><div id="mobList"></div><p id="mobNone" class="mobnote" hidden>Областей не найдено: приблизьте карту к своей стране.</p></div>
@@ -13095,6 +13114,94 @@ const APP_PORT = 47391;
 const inApp = !inFrame && location.port === String(APP_PORT) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
 const APP_CONFIG = {"applicationId": "app.mezha.editor", "applicationName": "Межа", "author": "Межа", "description": "Межа — редактор границ и карта войн", "version": "1.0.0", "defaultMode": "window", "port": 47391, "documentRoot": "/resources/", "url": "/", "enableServer": true, "enableNativeAPI": false, "tokenSecurity": "one-time", "logging": {"enabled": false, "writeToLogFile": false}, "modes": {"window": {"title": "Межа", "width": 1400, "height": 900, "minWidth": 900, "minHeight": 600, "center": true, "maximize": true, "fullScreen": false, "alwaysOnTop": false, "icon": "/resources/icon.png", "enableInspector": false, "borderless": false, "resizable": true, "exitProcessOnClose": true}}};
 
+
+// ---------- access by key: the game opens only with a key the owner has signed ----------
+// A key is a line of text: whom it is for, the code of the device it works on (or «*», any), the role (owner or
+// trusted) and, if set, the last day, signed with the owner's private key (ECDSA P-256). The game holds only the
+// public half and checks the signature, so it can tell a real key but cannot make one. The device code is drawn
+// from a number kept in this browser or this copy of the app: a key sent on to someone else does not open the game
+// on their computer. The owner makes keys in Settings → «Доступ», with the private key file only they have.
+const LOCK_ON = true;
+const ACCESS_PUB = {"kty":"EC","x":"Yfdl12WZq6IzbQRLk-BvL2lk6LiOYFbxRAG14bE5BSw","y":"NRNDAOTYY55mGTextwhAZezXJJ72r60fesnXR_DIdJU","crv":"P-256"};
+let access = { role: '', name: '' };
+const b64uDec = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+const b64uEnc = u8 => { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+async function deviceCode() {
+  let id = LS.get('mezha-devid', '');
+  if (!id) { id = 'dev:' + b64uEnc(crypto.getRandomValues(new Uint8Array(12))); LS.set('mezha-devid', id); }
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id + '|mezha-device')));
+  const hex = [...h.slice(0, 6)].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  return hex.slice(0, 4) + '-' + hex.slice(4, 8) + '-' + hex.slice(8, 12);
+}
+async function keyCheck(key, dev) {
+  const m = /^MZK1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(key || '').replace(/\s+/g, ''));
+  if (!m) return null;
+  try {
+    const pub = await crypto.subtle.importKey('jwk', ACCESS_PUB, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    if (!await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pub, b64uDec(m[2]), new TextEncoder().encode('MZK1.' + m[1]))) return null;
+    const p = JSON.parse(new TextDecoder().decode(b64uDec(m[1])));
+    if (p.d !== '*' && p.d !== dev) return { bad: 'device', p };
+    if (p.e && new Date(p.e + 'T23:59:59') < new Date()) return { bad: 'expired', p };
+    return { p };
+  } catch (e) { return null; }
+}
+async function accessGate() {
+  if (!LOCK_ON) { access = { role: 'owner', name: '' }; return; }
+  let dev = '----';
+  try { dev = await deviceCode(); } catch (e) { }
+  const saved = LS.get('mezha-license', ''), r = saved && await keyCheck(saved, dev);
+  if (r && r.p && !r.bad) { access = { role: r.p.r, name: r.p.n }; return; }
+  const box = $('#lock'); box.hidden = false; $('#lockDev').textContent = dev;
+  if (r && r.bad) $('#lockErr').textContent = r.bad === 'device' ? 'Сохранённый ключ выдан для другого устройства.' : 'Срок сохранённого ключа истёк.';
+  await new Promise(done => {
+    $('#lockCopy').onclick = async () => { try { await navigator.clipboard.writeText(dev); $('#lockErr').textContent = 'Код скопирован.'; } catch (e) { } };
+    $('#lockGo').onclick = async () => {
+      const k = $('#lockKey').value.trim(), c = await keyCheck(k, dev);
+      if (!c) { $('#lockErr').textContent = 'Ключ не подходит: подпись не сходится.'; return; }
+      if (c.bad) { $('#lockErr').textContent = c.bad === 'device' ? 'Этот ключ выдан для другого устройства (' + c.p.d + ').' : 'Срок этого ключа истёк.'; return; }
+      LS.set('mezha-license', k.replace(/\s+/g, '')); access = { role: c.p.r, name: c.p.n }; box.hidden = true; done();
+    };
+  });
+}
+// the owner's tool: a key for someone's device, signed with the private key file
+async function keyMake(prv, name, dev, role, days) {
+  const k = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: prv.x, y: prv.y, d: prv.d }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const p = { n: name, d: dev || '*', r: role, i: new Date().toISOString().slice(0, 10) };
+  if (days > 0) p.e = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
+  const body = b64uEnc(new TextEncoder().encode(JSON.stringify(p)));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, k, new TextEncoder().encode('MZK1.' + body)));
+  return 'MZK1.' + body + '.' + b64uEnc(sig);
+}
+function accessSettings(card) {
+  if (!LOCK_ON) return;
+  const ac = card('Доступ');
+  const info = document.createElement('p'); info.className = 'hint'; info.style.margin = '0';
+  info.textContent = access.role === 'owner' ? 'Вы — владелец' + (access.name ? ' (' + access.name + ')' : '') + '. Здесь вы выдаёте ключи: человеку нужен код его устройства — он показан на его экране входа.' : 'Ваш доступ: доверенное лицо' + (access.name ? ' (' + access.name + ')' : '') + '. Ключи выдаёт владелец.';
+  ac.append(info);
+  if (access.role === 'owner') {
+    const kg = document.createElement('div'); kg.className = 'keygen';
+    kg.innerHTML = '<label>Кому<input data-k="name" placeholder="Имя или ник"></label><label>Код устройства<input data-k="dev" placeholder="XXXX-XXXX-XXXX, или * — любое устройство"></label>' +
+      '<div class="row2"><select data-k="role"><option value="trusted">Доверенное лицо</option><option value="owner">Владелец (может выдавать ключи)</option></select><select data-k="days"><option value="0">Бессрочно</option><option value="30">30 дней</option><option value="90">90 дней</option><option value="365">1 год</option></select></div>' +
+      '<label>Файл закрытого ключа (mezha-owner-private-key.json)<input type="file" data-k="file" accept=".json,application/json"></label><button class="primary" data-k="go">Выдать ключ</button><textarea data-k="out" rows="3" readonly placeholder="Здесь появится ключ — отправьте его человеку"></textarea>';
+    ac.append(kg);
+    const q = k => kg.querySelector('[data-k="' + k + '"]');
+    q('go').addEventListener('click', async () => {
+      try {
+        const f = q('file').files[0]; if (!f) { toast('Выберите файл закрытого ключа.'); return; }
+        const prv = JSON.parse(await f.text()); if (!prv.d) throw new Error('В этом файле нет закрытого ключа.');
+        const dev = q('dev').value.trim().toUpperCase() || '*';
+        if (dev !== '*' && !/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/.test(dev)) { toast('Код устройства выглядит так: XXXX-XXXX-XXXX.'); return; }
+        const key = await keyMake(prv, q('name').value.trim() || 'Игрок', dev, q('role').value, +q('days').value);
+        const chk = await keyCheck(key, dev === '*' ? 'ANY' : dev);
+        if (!chk || chk.bad) throw new Error('Ключ не прошёл проверку: это не закрытый ключ этой игры.');
+        q('out').value = key; q('out').select(); toast('Ключ выдан. Скопируйте его и отправьте человеку.');
+      } catch (e) { toast(e.message || 'Не получилось выдать ключ.'); }
+    });
+  }
+  const out = document.createElement('button'); out.textContent = 'Убрать ключ с этого устройства';
+  out.addEventListener('click', () => { if (confirm('Убрать ключ с этого устройства? Для входа понадобится ключ снова.')) { LS.set('mezha-license', ''); location.reload(); } });
+  ac.append(out);
+}
 // ---------- Discord: «Играет в Межа» with the war, the country and the date ----------
 // Discord takes a status only from a program on the same computer. The helper that comes with the game (a plain
 // PowerShell script the player starts, «Discord-статус Межи.bat») listens on localhost:47392 and passes on what the
@@ -15013,7 +15120,7 @@ function renderSettings() {
   const gs = card('Игровые системы');
   seg(gs, 'ИИ противника воюет', [['both', 'Войсками и заводами'], ['troops', 'Только войсками'], ['econ', 'Только заводами и ракетами']], game.aiMode || 'both', { key: 'aim', fn: v => { game.aiMode = v; scheduleSave(); } });
   for (const [key, name, hint] of GAME_SYSTEMS) check(gs, name, hint, () => !!game[key], v => { setSystem(key, v); const cb = $('#gs-' + key); if (cb) cb.checked = v; renderHud(); });
-  discordSettings(card);
+  discordSettings(card); accessSettings(card);
 }
 
 hudReady = true;
@@ -15296,7 +15403,7 @@ renderWarPanel();
 const skipMenu = /[?&]nomenu/.test(location.search);
 // the menu must never stand between the player and the game: if it fails to open, the game still loads
 if (!skipMenu) { try { openMenu(false); } catch (e) { console.error(e); $('#menu').hidden = true; menuPaused = false; } }
-restoreSaved().then(ok => { firstRun = !ok; if (units.length) { units = []; forms = []; fronts = []; selUnit = null; selUnits = []; } if (ok && vsrc && vsrc.def.war && WARS.find(w => w.id === vsrc.def.war)) { curWarId = vsrc.def.war; $('#hudMode').hidden = false; if (LS.get('mezha-mode', 'play') === 'watch') setMode(true); } if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
+accessGate().then(() => restoreSaved()).then(ok => { firstRun = !ok; if (units.length) { units = []; forms = []; fronts = []; selUnit = null; selUnits = []; } if (ok && vsrc && vsrc.def.war && WARS.find(w => w.id === vsrc.def.war)) { curWarId = vsrc.def.war; $('#hudMode').hidden = false; if (LS.get('mezha-mode', 'play') === 'watch') setMode(true); } if (!ok) loadSample(); renderGeoPanel(); fit(); renderHud(); if (menuOpen()) renderMenuState(); });
 })();
 </script>
 </body>
