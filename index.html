@@ -1412,7 +1412,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <p class="hint">Выберите завод, потом щёлкните место на своей земле. Завод строится несколько дней; каждый следующий того же типа дороже на 10%. Пустая казна останавливает заводы.</p>
       </section>
       <section><h2>Удары</h2>
-        <div class="row ecstrikes" id="ecStrikes"><button data-strike="drone">Удар дронами · 10 шт.</button><button data-strike="missile">Ракетный удар</button></div>
+        <div class="row ecstrikes" id="ecStrikes"><button data-strike="drone">Удар дронами · 10 шт.</button><button data-strike="bomber">Бомбардировка · 3 самолёта</button><button data-strike="missile">Ракетный удар</button></div>
         <p class="hint">Дроны летят до 400 км от ваших войск или заводов дронов, ракеты — до 2500 км от ракетных заводов. ПВО противника сбивает часть ракет и дронов. Ракета может уничтожить завод.</p>
       </section>
       <section><h2>Ваши заводы</h2>
@@ -8708,7 +8708,7 @@ function battleTick() {
     if (f.kind !== 'front') continue;
     f.plan = clamp((f.plan || 0) + (f.mode === 'attack' ? -.004 : .005) * h, 0, 1);
   }
-  if (game.ai) aiFronts(h);
+  if (game.ai && game.aiMode !== 'econ') aiFronts(h);
   if (goalCheck()) startMarch();
   calendarTick();
   if (game.reinforce) reinforceTick(h);
@@ -8798,7 +8798,7 @@ const GAME_SYSTEMS = [
   ['econ', 'Экономика', 'Казна, заводы, дроны и ракеты: вкладка «Экономика» на панели и сумма денег вверху. Стартовый капитал — 1,829 трлн $.'],
   ['collapse', 'Ликвидация котлов', 'Пока идут бои, окружённый котёл держится три дня и ещё по полтора дня на каждый отряд внутри, потом сдаётся: земля отходит окружившим, отряды попадают в плен.'],
 ];
-let game = { econ: true, calendar: true, orders: true, arrows: true, cities: true, supply: true, weather: true, terrain: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
+let game = { aiMode: 'both', econ: true, calendar: true, orders: true, arrows: true, cities: true, supply: true, weather: true, terrain: true, fog: false, ai: true, reinforce: true, log: true, hier: true, collapse: true, pocketNote: true };
 let gameDate = Date.UTC(1941, 5, 22, 4), hoursPerTick = 4;
 let arrows = [], cities = [], gameLog = [];
 // front lines (see «front lines» below): { id, owner, mode: 'hold' | 'attack', pts: [{ x, y, nx, ny }] on the border, n toward own land }
@@ -10164,20 +10164,46 @@ function updateSupply() {
 // the cities held (taxes) and goes on the army and on the military factories' upkeep; with an empty treasury the
 // factories stop. A factory on land the enemy takes passes to the enemy; a missile can destroy one. The other sides
 // build and strike by the same rules.
-const START_CAPITAL = 1.829e12, CITY_TAX = 3e6, UNIT_UPKEEP = .2e6, PRICE_GROWTH = 1.1;
+// The prices and the money are those of today (2025) at START_CAPITAL; a war of another year has the economy of its
+// time: every price is scaled by the dollar of that year (ERA_PRICE, the consumer prices of the USA) and every
+// treasury and tax also by the size of the world's economy then (ERA_REAL, real world output). In 1950 a treasury
+// is a two-hundredth of today's and a factory costs a thirteenth as much.
+const START_CAPITAL = 1.829e12, CITY_TAX = 3e6, UNIT_UPKEEP = .2e6, PRICE_GROWTH = 1.1, ERA_YIELD = 3e-4;
+const ERA_PRICE = [[1800, .032], [1850, .03], [1900, .03], [1913, .033], [1920, .065], [1933, .045], [1940, .046], [1945, .056], [1950, .078], [1960, .096], [1970, .126], [1980, .267], [1990, .425], [2000, .56], [2010, .71], [2020, .84], [2025, 1]];
+const ERA_REAL = [[1800, .008], [1850, .015], [1900, .03], [1913, .04], [1920, .04], [1940, .06], [1950, .07], [1960, .11], [1970, .17], [1980, .24], [1990, .32], [2000, .43], [2010, .6], [2020, .82], [2025, 1]];
+const eraLerp = (T, y) => { if (y <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (y <= T[i][0]) { const [a, va] = T[i - 1], [b, vb] = T[i]; return va + (vb - va) * (y - a) / (b - a); } return T[T.length - 1][1]; };
+const econYear = () => new Date(gameDate).getUTCFullYear();
+const eraPrice = () => eraLerp(ERA_PRICE, econYear()), eraScale = () => eraPrice() * eraLerp(ERA_REAL, econYear());
 const FACT = {
-  civil: { name: 'Гражданский завод', cost: 2e9, days: 30, income: 15e6, info: '+15 млн $ в день' },
-  drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, info: '4 дрона в день' },
-  missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 2, info: 'ракета раз в 2 дня' },
-  armor: { name: 'Военный завод', cost: 8e8, days: 30, upkeep: 3e6, make: 'division', n: 1, every: 15, info: 'дивизия раз в 15 дней' },
-  aa: { name: 'Завод ПВО', cost: 6e8, days: 20, upkeep: 1e6, make: 'aa', n: 1, every: 1, info: 'ракета ПВО в день' }
+  civil: { name: 'Гражданский завод', cost: 2e9, days: 30, income: 15e6, from: 0 },
+  drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, from: 2000, info: '4 дрона в день' },
+  bomber: { name: 'Авиазавод', cost: 1.2e9, days: 40, upkeep: 2e6, make: 'bomber', n: 1, every: 3, from: 1915, to: 1999, info: 'бомбардировщик раз в 3 дня' },
+  missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 2, from: 1950, info: 'ракета раз в 2 дня' },
+  armor: { name: 'Военный завод', cost: 8e8, days: 30, upkeep: 3e6, make: 'division', n: 1, every: 15, from: 0, info: 'дивизия раз в 15 дней' },
+  aa: { name: 'Завод ПВО', cost: 6e8, days: 20, upkeep: 1e6, make: 'aa', n: 1, every: 1, from: 1915, info: 'ракета ПВО в день' }
 };
+// what the factories are called, cost and bring in the year of the war
+const factTypes = () => { const y = econYear(); return Object.keys(FACT).filter(t => y >= FACT[t].from && (!FACT[t].to || y <= FACT[t].to)); };
+function factName(t) {
+  const y = econYear();
+  if (t === 'civil' && y < 1900) return 'Мануфактура';
+  if (t === 'armor' && y < 1900) return 'Оружейный завод';
+  if (t === 'aa' && y < 1955) return 'Зенитный завод';
+  return FACT[t].name;
+}
+function factInfo(t) {
+  const F = FACT[t], y = econYear();
+  if (t === 'civil') return '+' + fmtMoney(F.income * eraPrice()) + ' в день';
+  if (t === 'aa' && y < 1955) return 'зенитная батарея в день';
+  return F.info;
+}
 // strikes: what one costs from the stock, how far it reaches from its launch site, how wide it hits
 const STRIKE = {
   drone: { name: 'Удар дронами', need: 10, range: 400, radius: 6, from: 'drone' },
+  bomber: { name: 'Бомбардировка', need: 3, range: 800, radius: 10, from: 'bomber' },
   missile: { name: 'Ракетный удар', need: 1, range: 2500, radius: 14, from: 'missile' }
 };
-const econBlank = () => ({ money: {}, stock: {}, facs: [], seq: 1, last: {} });
+const econBlank = () => ({ money: {}, base: {}, stock: {}, facs: [], seq: 1, last: {} });
 let econ = econBlank(), econMode = null, econFx = [];
 const econOn = () => game.econ && !watchMode && W > 0;
 function fmtMoney(v) {
@@ -10207,13 +10233,15 @@ function vpOf(k) { let s = 0; for (const c of cities) if (cityOwner(c) === k) s 
 function money(k) {
   if (econ.money[k] === undefined) {
     const mine = player ? vpOf(player) : 0, theirs = vpOf(k);
-    econ.money[k] = k === player || !mine ? START_CAPITAL : START_CAPITAL * clamp(theirs / mine, .25, 3);
+    econ.money[k] = (k === player || !mine ? 1 : clamp(theirs / mine, .25, 3)) * START_CAPITAL * eraScale();
+    econ.base[k] = econ.money[k];
   }
   return econ.money[k];
 }
-const stock = k => econ.stock[k] || (econ.stock[k] = { drone: 0, missile: 0, aa: 0 });
+const stock = k => econ.stock[k] || (econ.stock[k] = { drone: 0, bomber: 0, missile: 0, aa: 0 });
 const facsOf = (k, type) => econ.facs.filter(f => f.owner === k && (!type || f.type === type));
-const priceOf = (k, type) => Math.round(FACT[type].cost * Math.pow(PRICE_GROWTH, facsOf(k, type).length));
+// the price of the next factory of a kind: the price of the year, 10% more for every one built (the prebuilt ones not counted)
+const priceOf = (k, type) => Math.round(FACT[type].cost * eraPrice() * Math.pow(PRICE_GROWTH, facsOf(k, type).filter(f => !f.pre).length));
 function nearestCityName(w) {
   let best = null, bd = Infinity;
   for (const c of cities) { const d = econKm(w, toWorld(c.x, c.y)); if (d < bd) { bd = d; best = c; } }
@@ -10226,8 +10254,8 @@ function econBuild(k, type, g, quiet) {
   econ.money[k] -= cost;
   const f = { id: econ.seq++, type, owner: k, mx: w.mx, my: w.my, left: FACT[type].days, hp: 100, t: 0, city: nearestCityName(w) };
   econ.facs.push(f);
-  if (!quiet) toast(FACT[type].name + ' заложен' + (f.city ? ' у города ' + f.city : '') + ': ' + fmtMoney(cost) + ', строится ' + FACT[type].days + ' ' + plural(FACT[type].days, 'день', 'дня', 'дней') + '.');
-  logEvent(ownerName(k) + ': заложен ' + FACT[type].name.toLowerCase() + (f.city ? ' у города ' + f.city : ''), k);
+  if (!quiet) toast(factName(type) + ' заложен' + (f.city ? ' у города ' + f.city : '') + ': ' + fmtMoney(cost) + ', строится ' + FACT[type].days + ' ' + plural(FACT[type].days, 'день', 'дня', 'дней') + '.');
+  logEvent(ownerName(k) + ': заложен ' + factName(type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k);
   renderEcon(); requestUi(); scheduleSave();
   return true;
 }
@@ -10253,27 +10281,31 @@ function econDay() {
   // factories on land the enemy took pass to it
   for (const f of econ.facs) {
     const o = ownerAtWorld(f.mx, f.my);
-    if (o && o !== f.owner && o !== 255 && atWar(o, f.owner)) { logEvent(ownerName(o) + ' захватывает ' + FACT[f.type].name.toLowerCase() + (f.city ? ' у города ' + f.city : '') + ' (' + ownerName(f.owner) + ')', o); f.owner = o; ks.add(o); }
+    if (o && o !== f.owner && o !== 255 && atWar(o, f.owner)) { logEvent(ownerName(o) + ' захватывает ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : '') + ' (' + ownerName(f.owner) + ')', o); f.owner = o; ks.add(o); }
   }
   const nUnits = {}; for (const u of units) nUnits[u.owner] = (nUnits[u.owner] || 0) + 1;
   for (const k of ks) {
     if (!countries[k - 1]) continue;
-    let inc = vpOf(k) * CITY_TAX, exp = (nUnits[k] || 0) * UNIT_UPKEEP;
+    // the era's own income (the country's economy, a share of what it started with), the taxes of its cities, the
+    // civil factories; against them the army and the military factories, all at the prices of the year
+    const P = eraPrice(); money(k);
+    const eraInc = (econ.base[k] || 0) * ERA_YIELD, tax = vpOf(k) * CITY_TAX * eraScale() / eraLerp(ERA_REAL, 2025), army = (nUnits[k] || 0) * UNIT_UPKEEP * P;
+    let inc = eraInc + tax, exp = army, facInc = 0;
     const st = stock(k), broke = money(k) <= 0;
     for (const f of econ.facs) {
       if (f.owner !== k) continue;
       const F = FACT[f.type];
-      if (f.left > 0) { if (--f.left === 0) { logEvent(ownerName(k) + ': построен ' + F.name.toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(F.name + ' построен' + (f.city ? ' у города ' + f.city : '') + '.'); } continue; }
-      if (F.income) inc += F.income * f.hp / 100;
-      if (F.upkeep) exp += F.upkeep;
+      if (f.left > 0) { if (--f.left === 0) { logEvent(ownerName(k) + ': построен ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(factName(f.type) + ' построен' + (f.city ? ' у города ' + f.city : '') + '.'); } continue; }
+      if (F.income) { inc += F.income * P * f.hp / 100; facInc += F.income * P * f.hp / 100; }
+      if (F.upkeep) exp += F.upkeep * P;
       if (!F.make || broke) continue;
       if (++f.t < F.every) continue;
       f.t = 0;
       if (F.make === 'division') econDivision(f); else st[F.make] += F.n;
     }
     econ.money[k] = money(k) + inc - exp;
-    econ.last[k] = { inc, exp };
-    if (k !== player && !allied(k, player || 0)) econAi(k);
+    econ.last[k] = { inc, exp, eraInc, tax, facInc, army };
+    if (k !== player && !allied(k, player || 0) && game.ai && game.aiMode !== 'troops') econAi(k);
   }
   renderEcon(); renderHud(); requestUi();
 }
@@ -10281,7 +10313,7 @@ function econDay() {
 function econAi(k) {
   const st = stock(k), mine = facsOf(k);
   if (Math.random() < .25) {
-    const order = mine.length < 2 ? ['civil', 'drone'] : ['civil', 'drone', 'drone', 'missile', 'armor', 'aa', 'civil'];
+    const ft = factTypes(), order = (mine.length < 2 ? ['civil', 'drone', 'bomber'] : ['civil', 'drone', 'drone', 'bomber', 'missile', 'armor', 'aa', 'civil']).filter(t => ft.includes(t));
     const type = order[Math.floor(Math.random() * order.length)];
     if (money(k) > priceOf(k, type) * 4) {
       // near one of its biggest cities, a little way from it
@@ -10297,11 +10329,11 @@ function econAi(k) {
     for (let i = 0; i < 40 && foes.length; i++) { const u = foes[Math.floor(Math.random() * foes.length)]; if (econCanReach(k, kind, toWorld(u.x, u.y))) out.push(u); }
     return out;
   };
-  if (st.missile >= 1 && Math.random() < .5) {
+  for (const kind of ['missile', 'bomber']) if (st[kind] >= STRIKE[kind].need && Math.random() < .5) {
     // a factory of the enemy within reach first, else the thickest knot of its troops
-    const fs = econ.facs.filter(f => atWar(k, f.owner) && econCanReach(k, 'missile', f));
-    if (fs.length && Math.random() < .5) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, 'missile', fromWorld(f), true); }
-    else { const ts = targetsNear('missile'); if (ts.length) econStrike(k, 'missile', ts[Math.floor(Math.random() * ts.length)], true); }
+    const fs = econ.facs.filter(f => atWar(k, f.owner) && econCanReach(k, kind, f));
+    if (fs.length && Math.random() < .5) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, kind, fromWorld(f), true); }
+    else { const ts = targetsNear(kind); if (ts.length) econStrike(k, kind, ts[Math.floor(Math.random() * ts.length)], true); }
   }
   // a big stock of drones goes up in several swarms a day
   for (let n = Math.min(3, Math.floor(st.drone / STRIKE.drone.need / 3) + 1); n > 0 && st.drone >= STRIKE.drone.need; n--) { if (Math.random() > .6) continue; const ts = targetsNear('drone'); if (ts.length) econStrike(k, 'drone', ts[Math.floor(Math.random() * ts.length)], true); }
@@ -10317,9 +10349,9 @@ function econLaunch(k, kind, w) {
 const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
 function econStrike(k, kind, g, quiet) {
   const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y);
-  if (st[kind] < S.need) { if (!quiet) toast(kind === 'drone' ? 'Нужно не меньше ' + S.need + ' дронов. Постройте завод дронов.' : 'Ракет нет. Постройте ракетный завод.'); return false; }
+  if (st[kind] < S.need) { if (!quiet) toast({ drone: 'Нужно не меньше ' + S.need + ' дронов. Постройте завод дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: 'Ракет нет. Постройте ракетный завод.' }[kind]); return false; }
   const from = econLaunch(k, kind, w);
-  if (!from) { if (!quiet) toast(kind === 'drone' ? 'Цель дальше ' + S.range + ' км от ваших войск и заводов дронов.' : 'Цель дальше ' + S.range + ' км от ваших ракетных заводов.'); return false; }
+  if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших войск и заводов дронов.', bomber: 'ваших авиазаводов.', missile: 'ваших ракетных заводов.' }[kind]); return false; }
   st[kind] -= S.need;
   const def = fineOwner(g.x, g.y), dst = def ? stock(def) : null;
   // interceptors of the side under attack: a missile is shot down more often than a swarm of drones is turned back
@@ -10338,7 +10370,7 @@ function econImpact(k, kind, g, k2, quiet) {
   const R = geo ? Math.max(S.radius * 1000 / metersPerCell(), unitCellsAt(g.y) * 1.2) : unitCellsAt(g.y) * 2;
   const hit = units.filter(u => atWar(k, u.owner) && Math.hypot(u.x - g.x, u.y - g.y) <= R);
   let lost = 0;
-  if (kind === 'missile') for (const u of hit) { u.hp = hpOf(u) - 40 * k2; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 50); }
+  if (kind === 'missile' || kind === 'bomber') { const d = kind === 'missile' ? 40 : 25; for (const u of hit) { u.hp = hpOf(u) - d * k2; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - d * 1.2); } }
   else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)]; u.hp = hpOf(u) - 9; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 12); }
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) { noteLosses(dead); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
@@ -10347,21 +10379,43 @@ function econImpact(k, kind, g, k2, quiet) {
   for (const f of econ.facs) {
     if (!atWar(k, f.owner)) continue;
     const p = fromWorld(f); if (Math.hypot(p.x - g.x, p.y - g.y) > R) continue;
-    f.hp -= kind === 'missile' ? 60 * k2 : 15 * k2;
+    f.hp -= (kind === 'missile' ? 60 : kind === 'bomber' ? 35 : 15) * k2;
     if (f.hp <= 0) fac = f;
   }
-  if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + FACT[fac.type].name.toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
+  if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
   const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + (hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : 'без потерь у противника') + (fac ? ', уничтожен завод' : '');
   logEvent(txt, k);
   if (!quiet || (player && fineOwner(g.x, g.y) === player && (kind === 'missile' || fac))) toast(txt);
   renderEcon(); requestDraw();
+}
+// a scenario begins with the industry of its time: civil factories by the cities (more for the big ones), military
+// factories by the biggest, and for a country at war a factory of its strike weapon and of air defence by the capital
+function econPrebuild() {
+  const ft = factTypes(), strikeType = ['drone', 'missile', 'bomber'].find(t => ft.includes(t));
+  for (let k = 1; k <= countries.length; k++) {
+    const cs = cities.filter(c => cityOwner(c) === k).sort((a, b) => (b.capital ? 100 : 0) + b.vp - (a.capital ? 100 : 0) - a.vp).slice(0, 6);
+    if (!cs.length) continue;
+    const war = countries.some((_, j) => atWar(k, j + 1));
+    const plan = [];
+    cs.forEach((c, i) => { const n = c.vp >= 20 ? 3 : c.vp >= 10 ? 2 : 1; for (let j = 0; j < n; j++) plan.push([c, 'civil']); if (i < 2 && (war || c.vp >= 10)) plan.push([c, 'armor']); });
+    if (war && strikeType) plan.push([cs[0], strikeType]);
+    if (war && ft.includes('aa')) plan.push([cs[0], 'aa']);
+    plan.forEach(([c, type], i) => {
+      // a place on its own land around the city, a little farther out for every factory
+      const r0 = unitCellsAt(c.y) * (.5 + .12 * i);
+      let g = null;
+      for (let t = 0; t < 8 && !g; t++) { const a = i * 2.4 + t * .8, x = c.x + Math.cos(a) * r0, y = c.y + Math.sin(a) * r0, w = toWorld(x, y); if (ownerAtWorld(w.mx, w.my) === k) g = w; }
+      if (!g) return;
+      econ.facs.push({ id: econ.seq++, type, owner: k, mx: g.mx, my: g.my, left: 0, hp: 100, t: 0, city: c.name, pre: true });
+    });
+  }
 }
 // placing a factory, aiming a strike: the next click on the map
 function econSetMode(m) {
   econMode = m;
   cv.style.cursor = m ? 'crosshair' : '';
   document.querySelectorAll('#ecBuild button, #ecStrikes button').forEach(b => b.classList.toggle('on', !!m && (b.dataset.fac === m.type || b.dataset.strike === m.type)));
-  if (m) toast(m.kind === 'build' ? FACT[m.type].name + ': щёлкните место на своей земле. Esc — отмена.' : STRIKE[m.type].name + ': щёлкните цель. Esc — отмена.');
+  if (m) toast(m.kind === 'build' ? factName(m.type) + ': щёлкните место на своей земле. Esc — отмена.' : STRIKE[m.type].name + ': щёлкните цель. Esc — отмена.');
   requestUi();
 }
 function econClick(g) {
@@ -10373,6 +10427,7 @@ function econClick(g) {
 const FAC_GLYPH = {
   civil: c => { c.moveTo(-.6, .5); c.lineTo(-.6, -.1); c.lineTo(-.25, -.35); c.lineTo(-.25, -.1); c.lineTo(.1, -.35); c.lineTo(.1, -.1); c.lineTo(.45, -.35); c.lineTo(.45, -.6); c.lineTo(.6, -.6); c.lineTo(.6, .5); c.closePath(); },
   drone: c => { c.moveTo(-.5, -.5); c.lineTo(.5, .5); c.moveTo(.5, -.5); c.lineTo(-.5, .5); for (const [x, y] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) { c.moveTo(x + .18, y); c.arc(x, y, .18, 0, Math.PI * 2); } },
+  bomber: c => { c.moveTo(0, -.65); c.lineTo(.12, -.2); c.lineTo(.7, .05); c.lineTo(.7, .2); c.lineTo(.12, .05); c.lineTo(.1, .4); c.lineTo(.3, .55); c.lineTo(-.3, .55); c.lineTo(-.1, .4); c.lineTo(-.12, .05); c.lineTo(-.7, .2); c.lineTo(-.7, .05); c.lineTo(-.12, -.2); c.closePath(); },
   missile: c => { c.moveTo(0, -.65); c.lineTo(.2, -.3); c.lineTo(.2, .35); c.lineTo(.4, .6); c.lineTo(-.4, .6); c.lineTo(-.2, .35); c.lineTo(-.2, -.3); c.closePath(); },
   armor: c => { c.rect(-.6, -.05, 1.2, .45); c.rect(-.3, -.3, .55, .25); c.moveTo(.25, -.2); c.lineTo(.7, -.28); },
   aa: c => { c.moveTo(-.55, .5); c.lineTo(0, -.1); c.lineTo(.55, .5); c.moveTo(0, -.1); c.lineTo(.45, -.6); c.moveTo(-.2, -.45); c.arc(0, -.35, .25, Math.PI, Math.PI * 1.9); }
@@ -10383,7 +10438,7 @@ function drawFacIcon(c, type, x, y, r, col, building, alpha) {
   c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fill();
   c.lineWidth = Math.max(1, r * .14); c.strokeStyle = building ? 'rgba(230,200,120,.95)' : 'rgba(10,10,10,.85)'; if (building) c.setLineDash([r * .3, r * .22]); c.stroke(); c.setLineDash([]);
   c.translate(x, y); c.scale(r * .78, r * .78); c.beginPath(); FAC_GLYPH[type](c);
-  c.lineWidth = .14; c.lineJoin = 'round'; c.strokeStyle = 'rgba(240,232,214,.95)'; if (type === 'civil' || type === 'missile') { c.fillStyle = 'rgba(240,232,214,.9)'; c.fill(); } else c.stroke();
+  c.lineWidth = .14; c.lineJoin = 'round'; c.strokeStyle = 'rgba(240,232,214,.95)'; if (type === 'civil' || type === 'missile' || type === 'bomber') { c.fillStyle = 'rgba(240,232,214,.9)'; c.fill(); } else c.stroke();
   c.restore();
 }
 function drawEcon(c) {
@@ -10444,18 +10499,21 @@ function renderEcon(hudOnly) {
   $('#ecMoney').textContent = fmtMoney(m);
   $('#ecDelta').textContent = l ? 'доход ' + fmtMoney(l.inc) + ' · расход ' + fmtMoney(l.exp) + ' в день' : 'доход и расход появятся через сутки игры';
   $('#ecStock').innerHTML = '';
-  for (const [k, n] of [['drone', 'Дроны'], ['missile', 'Ракеты'], ['aa', 'ПВО']]) { const s = document.createElement('span'); s.innerHTML = n + ' <b></b>'; s.querySelector('b').textContent = st[k]; $('#ecStock').append(s); }
+  const ft = factTypes();
+  for (const [k, n] of [['drone', 'Дроны'], ['bomber', 'Бомбардировщики'], ['missile', 'Ракеты'], ['aa', 'ПВО']]) {
+    if (!ft.includes(k) && !st[k]) continue; const s = document.createElement('span'); s.innerHTML = n + ' <b></b>'; s.querySelector('b').textContent = st[k]; $('#ecStock').append(s); }
   const box = $('#ecBuild'); box.textContent = '';
-  for (const [type, F] of Object.entries(FACT)) {
+  for (const type of factTypes()) {
+    const F = FACT[type];
     const b = document.createElement('button'); b.dataset.fac = type; b.className = 'efac' + (econMode && econMode.type === type ? ' on' : '');
     const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 40; const x = cv2.getContext('2d'); x.scale(2, 2); drawFacIcon(x, type, 10, 10, 9, rgb[player] || [120, 120, 120], false);
     const t = document.createElement('span'); t.innerHTML = '<b></b><small></small><i></i>';
-    t.querySelector('b').textContent = F.name; t.querySelector('small').textContent = F.info + ' · ' + F.days + ' дн.'; t.querySelector('i').textContent = fmtMoney(priceOf(player, type));
+    t.querySelector('b').textContent = factName(type); t.querySelector('small').textContent = factInfo(type) + ' · ' + F.days + ' дн.'; t.querySelector('i').textContent = fmtMoney(priceOf(player, type));
     b.append(cv2, t); b.disabled = m < priceOf(player, type);
     b.addEventListener('click', () => econSetMode(econMode && econMode.type === type ? null : { kind: 'build', type }));
     box.append(b);
   }
-  document.querySelectorAll('#ecStrikes button').forEach(b => { const k = b.dataset.strike; b.disabled = st[k] < STRIKE[k].need; b.classList.toggle('on', !!econMode && econMode.type === k); });
+  document.querySelectorAll('#ecStrikes button').forEach(b => { const k = b.dataset.strike; b.hidden = !ft.includes(k) && !st[k]; b.disabled = st[k] < STRIKE[k].need; b.classList.toggle('on', !!econMode && econMode.type === k); });
   const ul = $('#ecList'); ul.textContent = '';
   const mine = facsOf(player);
   $('#ecNone').hidden = mine.length > 0;
@@ -10463,7 +10521,7 @@ function renderEcon(hudOnly) {
   for (const f of mine.slice().sort((a, b) => a.left - b.left || a.type.localeCompare(b.type)).slice(0, 60)) {
     const li = document.createElement('li');
     const cv3 = document.createElement('canvas'); cv3.width = cv3.height = 32; const x = cv3.getContext('2d'); x.scale(2, 2); drawFacIcon(x, f.type, 8, 8, 7, rgb[f.owner] || [120, 120, 120], f.left > 0);
-    const t = document.createElement('span'); t.textContent = FACT[f.type].name + (f.city ? ' · ' + f.city : '');
+    const t = document.createElement('span'); t.textContent = factName(f.type) + (f.city ? ' · ' + f.city : '');
     const s = document.createElement('small'); s.textContent = f.left > 0 ? 'строится, ' + f.left + ' дн.' : f.hp < 100 ? 'повреждён, ' + Math.round(f.hp) + '%' : 'работает';
     li.append(cv3, t, s);
     li.addEventListener('click', () => { const g = fromWorld(f); cmdLook(g.x, g.y); });
@@ -12546,6 +12604,8 @@ async function startScenario(id, pl, mode) {
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
     makeObjectives(); supplyCompute(); renderWeather();
+    if (!watch && game.econ) econPrebuild();
+    econMode = null; setTimeout(() => renderEcon());
   } finally { btn.disabled = false; btn.textContent = campMode === 'watch' ? 'Смотреть' : 'В бой'; }
   setMode(watch);
   closeMenu(); renderHud(); scheduleSave();
@@ -12706,6 +12766,7 @@ function renderSettings() {
   check(bt, 'Войска двигают границу (B)', '', () => unitsPushBorder, v => setPushBorder(v));
   mirrorCheck(bt, 'Войска сами сближаются с противником', '', '#autoAdv');
   const gs = card('Игровые системы');
+  seg(gs, 'ИИ противника воюет', [['both', 'Войсками и заводами'], ['troops', 'Только войсками'], ['econ', 'Только заводами и ракетами']], game.aiMode || 'both', { key: 'aim', fn: v => { game.aiMode = v; scheduleSave(); } });
   for (const [key, name, hint] of GAME_SYSTEMS) check(gs, name, hint, () => !!game[key], v => { setSystem(key, v); const cb = $('#gs-' + key); if (cb) cb.checked = v; renderHud(); });
 }
 
