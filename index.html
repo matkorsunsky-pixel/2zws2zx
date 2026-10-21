@@ -1635,6 +1635,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
     <button data-ly="relief" role="menuitemcheckbox"><i></i><b>Рельеф</b><small>горы и равнины, тени с северо-запада</small></button>
     <button data-ly="rivers" role="menuitemcheckbox"><i></i><b>Реки</b><small>крупные всегда, мелкие при приближении</small></button>
     <button data-ly="sup" role="menuitemcheckbox"><i></i><b>Снабжение</b><small>где оно слабеет и где его нет</small></button>
+    <button data-ly="osm" role="menuitemcheckbox"><i></i><b>Населённые пункты</b><small>при приближении: города, сёла и их границы (OpenStreetMap, нужен интернет)</small></button>
     <button data-ly="staff" role="menuitemcheckbox"><i></i><b>Штабная карта</b><small>бумага, сепия, фронт с насечками</small></button>
   </div>
   <div class="paper" aria-hidden="true"></div>
@@ -5940,6 +5941,7 @@ function drawUi() {
   drawRegionHover(ctx);
   if (W && !(watchMode && !game.econ)) drawScars(ctx);
   drawInfoHover(ctx);
+  drawOsm(ctx);
   drawEcon(ctx);
   drawLfOverlay(ctx);
   drawPocketTags(ctx);
@@ -6470,7 +6472,7 @@ function aiPlanBlows(owner) {
 // north-west, mountains a little darker) laid over the countries in soft light, so it shades them without
 // changing their colours; rivers are Natural Earth's, the big ones always, the smaller as you zoom in. Mountains
 // slow a march and help a defence, a river helps whoever holds its bank against an attack across it.
-const layers = { relief: true, rivers: true, staff: false };
+const layers = { relief: true, rivers: true, staff: false, osm: true };
 let reliefImg = null, reliefMeta = null, riverSets = null, roughA = null, riverA = null;
 const ROUGH_W = 768, RIVM_W = 2048;
 function layersInit() {
@@ -8060,6 +8062,99 @@ function setLiveFront(on, quiet) {
   liveFront = on; LS.set('mezha-live2', on ? '1' : '0'); liveEpoch++;
   renderLiveBar(); const ck = $('#liveChk'); if (ck) ck.checked = on; requestDraw();
   if (!quiet) toast(on ? 'Живой фронт: вдоль границы встала плотная цепь войск обеих сторон — тяните границу, войска пойдут за ней' : 'Живой фронт выключен: войска стоят, граница двигается без них');
+}
+
+// ---------- settlements at close zoom: towns, villages and their built-up outlines from OpenStreetMap ----------
+// The map holds only the big cities. Closer in, the places of the area on screen are asked from OpenStreetMap
+// (the Overpass service), a tile at a time, and kept: under ~400 km of view the names of towns and villages, under
+// ~60 km the outlines of their built-up land, which are the borders of a town or a village as they stand on the
+// ground. Without a connection nothing is shown and the game goes on as before.
+const OSM_URL = 'https://overpass-api.de/api/interpreter';
+const osm = { tiles: new Map(), queue: [], busy: 0, fail: 0, failT: 0 };
+// what is on screen: its width in kilometres and its box in degrees
+function osmView() {
+  if (!geoStore || !win || !W) return null;
+  const r = stage.getBoundingClientRect(), n = worldCells(win.L);
+  const m = (x, y) => [(win.cx0 + (x - view.x) / view.s) / n, (win.cy0 + (y - view.y) / view.s) / n];
+  const [x0, y0] = m(0, 0), [x1, y1] = m(r.width, r.height);
+  const km = r.width / view.s * metersPerCell() / 1000;
+  return { km, la0: latAtY(Math.min(1, y1)), la1: latAtY(Math.max(0, y0)), lo0: x0 * 360 - 180, lo1: x1 * 360 - 180 };
+}
+function osmTick() {
+  if (!layers.osm || document.hidden) return;
+  if (osm.fail >= 3 && performance.now() - osm.failT < 120000) return;
+  const v = osmView(); if (!v || v.km > 400) return;
+  const want = [['places', .5]]; if (v.km < 60) want.push(['areas', .1]);
+  for (const [kind, T] of want) {
+    let n = 0;
+    for (let la = Math.floor(v.la0 / T) * T; la < v.la1 && n < 16; la += T) for (let lo = Math.floor(v.lo0 / T) * T; lo < v.lo1 && n < 16; lo += T, n++) {
+      const key = kind + ':' + la.toFixed(2) + ':' + lo.toFixed(2);
+      if (osm.tiles.has(key) || osm.queue.some(q => q.key === key)) continue;
+      osm.queue.push({ key, kind, la, lo, T });
+    }
+  }
+  while (osm.busy < 2 && osm.queue.length) osmFetch(osm.queue.shift());
+}
+async function osmFetch(q) {
+  osm.busy++; osm.tiles.set(q.key, null);
+  const bb = [q.la, q.lo, q.la + q.T, q.lo + q.T].map(v => v.toFixed(3)).join(',');
+  const ql = q.kind === 'places'
+    ? '[out:json][timeout:25];node["place"~"^(city|town|village|hamlet)$"](' + bb + ');out;'
+    : '[out:json][timeout:25];(way["landuse"="residential"](' + bb + ');way["place"~"^(city|town|village|hamlet|suburb|neighbourhood)$"](' + bb + '););out geom;';
+  try {
+    const r = await fetch(OSM_URL, { method: 'POST', body: 'data=' + encodeURIComponent(ql), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json(), items = [];
+    for (const e of d.elements || []) {
+      const t = e.tags || {}, name = t['name:ru'] || t.name || '';
+      if (e.type === 'node') items.push({ mx: lonToX(e.lon), my: latToY(e.lat), name, place: t.place, pop: +t.population || 0 });
+      else if (e.geometry && e.geometry.length > 3) {
+        const a = new Float64Array(e.geometry.length * 2); let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+        e.geometry.forEach((g, i) => { const x = lonToX(g.lon), y = latToY(g.lat); a[2 * i] = x; a[2 * i + 1] = y; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; });
+        items.push({ a, box: [x0, y0, x1, y1], name, place: t.place || '' });
+      }
+    }
+    osm.tiles.set(q.key, items); osm.fail = 0; requestUi();
+  } catch (e) { osm.tiles.delete(q.key); osm.fail++; osm.failT = performance.now(); }
+  finally { osm.busy--; }
+}
+setInterval(osmTick, 1200);
+// drawn over the map: the outlines dotted, the names by size, none over another
+function drawOsm(c) {
+  if (!layers.osm || !geoStore || !win || !W || !osm.tiles.size) return;
+  const v = osmView(); if (!v || v.km > 400) return;
+  const n = worldCells(win.L), vw = uiCv.width / dpr, vh = uiCv.height / dpr;
+  const sx = mx => ((mx - Math.floor(mx)) * n - win.cx0) * view.s + view.x, sy = my => (my * n - win.cy0) * view.s + view.y;
+  c.save();
+  if (v.km < 60) {
+    c.lineWidth = 1; c.setLineDash([3, 2]); c.strokeStyle = 'rgba(232,214,170,.75)'; c.fillStyle = 'rgba(232,214,170,.07)';
+    for (const [key, items] of osm.tiles) {
+      if (!items || !key.startsWith('areas')) continue;
+      for (const it of items) {
+        if (!it.a) continue;
+        const X0 = sx(it.box[0]), X1 = sx(it.box[2]), Y0 = sy(it.box[1]), Y1 = sy(it.box[3]);
+        if (X1 < 0 || Y1 < 0 || X0 > vw || Y0 > vh || (X1 - X0 < 2 && Y1 - Y0 < 2)) continue;
+        c.beginPath(); for (let i = 0; i < it.a.length; i += 2) { const x = sx(it.a[i]), y = sy(it.a[i + 1]); i ? c.lineTo(x, y) : c.moveTo(x, y); } c.closePath(); c.fill(); c.stroke();
+      }
+    }
+    c.setLineDash([]);
+  }
+  // names: towns first, villages when close, hamlets very close
+  const RANK = { city: 0, town: 1, village: 2, hamlet: 3 }, shown = [];
+  const all = []; for (const [key, items] of osm.tiles) if (items && key.startsWith('places')) for (const it of items) all.push(it);
+  all.sort((a, b) => RANK[a.place] - RANK[b.place] || b.pop - a.pop);
+  const maxRank = v.km < 25 ? 3 : v.km < 120 ? 2 : 1;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (const it of all) {
+    const rk = RANK[it.place]; if (rk > maxRank || !it.name) continue;
+    const x = sx(it.mx), y = sy(it.my); if (x < -50 || y < -20 || x > vw + 50 || y > vh + 20) continue;
+    const fs = [13, 12, 11, 10][rk], w = it.name.length * fs * .55 + 6;
+    if (shown.some(b => Math.abs(b[0] - x) < (b[2] + w) / 2 && Math.abs(b[1] - y) < fs + 2)) continue;
+    shown.push([x, y, w]); if (shown.length > 400) break;
+    c.beginPath(); c.arc(x, y + fs * .9, rk < 2 ? 2.6 : 1.8, 0, Math.PI * 2); c.fillStyle = 'rgba(240,230,205,.9)'; c.fill();
+    c.font = `${rk < 2 ? 600 : 500} ${fs}px ${FONT_UI}`; c.lineWidth = 3; c.strokeStyle = 'rgba(15,15,18,.8)'; c.strokeText(it.name, x, y); c.fillStyle = rk < 2 ? '#f2e8d2' : 'rgba(225,215,195,.9)'; c.fillText(it.name, x, y);
+  }
+  c.restore();
 }
 // ---------- the live front as the army: strength along the border instead of thousands of units ----------
 // The border is cut into stretches of a few kilometres (blocks of a fixed grid over the world, so they keep their
