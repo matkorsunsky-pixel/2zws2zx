@@ -3632,6 +3632,7 @@ function reloadWindow(tl, nx0, ny0, w, h) {
   backdrop = null;
   // pockets are found again in slices between frames: in one go it would hold the map still for a tenth of a second
   recolor(); pocketJob = null; computePocketsSoon(renderPockets);
+  if (typeof lfPlace === 'function') lfPlace();
   checkCities(true);                 // a city on a border can land on either side at another detail level: that is not a capture
   updateDetailInfo();
   scheduleSave();
@@ -8586,18 +8587,110 @@ function lfStrNear(x, y, o) {
 }
 const lfStr = (key, o) => { const e = econ.front && econ.front.s[key]; return e ? e[o] || 0 : 0; };
 function lfAdd(key, o, v) { const S = lfState().s, e = S[key] || (S[key] = {}); e[o] = Math.max(0, (e[o] || 0) + v); if (e[o] < .05) delete e[o]; if (!Object.keys(e).length) delete S[key]; }
-// the border stretches in the window: samples a block apart (twice), an edge where two countries at war meet
+// ---- the front grid: the live front's own map of the whole theatre ----
+// The front does not live in the working window (which follows the camera: zoomed in it holds only a piece of the
+// front, zoomed out its cells are too coarse for the blocks). It has a grid of its own: one level for the war,
+// fine enough for the blocks, over the box of every border between countries at war, read from the store once.
+// The stretches are found on it, the battles move its cells, the changes go into the store and from there into
+// the window. So the troops stand along the whole front, and zooming moves nothing.
+let fg = null, fgOwn = null, fgFlips = [];
+const FG_CAP = 4.5e6;
+// the box of the borders between countries at war, in parts of the world (on the planet at level 3)
+function fgTheatre() {
+  const l = 3, n = worldCells(l), g = new Uint8Array(n * n);
+  readGrid(l, 0, 0, n, n, g);
+  let x0 = n, y0 = n, x1 = -1, y1 = -1;
+  for (let y = 1; y < n - 1; y++) for (let x = 1, i = y * n + 1; x < n - 1; x++, i++) {
+    const o = g[i]; if (!o || o === 255) continue;
+    for (const q of [g[i + 1], g[i + n], g[i + n + 1], g[i + n - 1]]) if (q && q !== o && q !== 255 && warM[(o << 8) | q] === 1) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; break; }
+  }
+  if (x1 < 0) return null;
+  // room for the front to move: a third of the box around it, at least a few hundred kilometres
+  const px = Math.max(6, (x1 - x0) * .33), py = Math.max(6, (y1 - y0) * .33);
+  return [Math.max(0, x0 - px) / n, Math.max(0, y0 - py) / n, Math.min(n, x1 + 1 + px) / n, Math.min(n, y1 + 1 + py) / n];
+}
+let fgSig = '';
+// the front grid for the wars of the moment: built at the start of a war, again when a war begins or ends
+function fgEnsure(force) {
+  if (!geoStore || !win) return false;
+  let sig = countries.length + ':'; for (let a = 1; a <= countries.length; a++) for (let b = a + 1; b <= countries.length; b++) if (warM[(a << 8) | b] === 1) sig += a + '-' + b + ',';
+  if (!force && fg && fgOwn && sig === fgSig) return true;
+  fgSig = sig;
+  if (win) commitWindow();
+  const box = fgTheatre();
+  if (!box) { fg = null; fgOwn = null; return false; }
+  // the finest level whose box still fits; a block at least two cells (level 5) whatever the theatre
+  let L = 8;
+  for (; L > 5; L--) { const n = worldCells(L); if ((box[2] - box[0]) * n * (box[3] - box[1]) * n <= FG_CAP) break; }
+  const n = worldCells(L), x0 = Math.floor(box[0] * n), y0 = Math.floor(box[1] * n);
+  const w = Math.max(16, Math.ceil(box[2] * n) - x0), h = Math.max(16, Math.ceil(box[3] * n) - y0);
+  fg = { L, x0, y0, w, h, lat: latAtY((y0 + h / 2) / n) };
+  fgOwn = new Uint8Array(w * h); readGrid(L, x0, y0, w, h, fgOwn); fgFlips = [];
+  lfGround = new Map();
+  return true;
+}
+// what the player changed by hand in the window reaches the front grid (through the store)
+function fgPull() {
+  if (!fg || !win || drag || !commitWindow()) return;
+  readGrid(fg.L, fg.x0, fg.y0, fg.w, fg.h, fgOwn);
+}
+// kilometres in a cell of the front grid
+const fgKm = () => fg ? 40075.016 * Math.cos(fg.lat * Math.PI / 180) / worldCells(fg.L) : 1;
+// window cells in a front-grid cell, and the place of a front-grid point in the window
+const fgF = () => worldCells(win.L) / worldCells(fg.L);
+const fgToWin = (x, y) => { const f = fgF(); return { x: (fg.x0 + x) * f - win.cx0, y: (fg.y0 + y) * f - win.cy0 }; };
+// the stretches put where the window has them now (after a zoom the window's cells are others)
+function lfPlace(m = lfBorder) {
+  if (!fg || !win) return;
+  const f = fgF();
+  for (const e of m.values()) { e.x = (fg.x0 + e.fx) * f - win.cx0; e.y = (fg.y0 + e.fy) * f - win.cy0; }
+}
+// the cells the battles changed: into the store, then into the window where it covers them
+function* fgFlushGen() {
+  if (!fgFlips.length || !fg) return;
+  let bx0 = fg.w, by0 = fg.h, bx1 = -1, by1 = -1;
+  for (const i of fgFlips) { const x = i % fg.w, y = (i - x) / fg.w; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+  // written tile by tile of the store: the changes of a tick lie all along the front, and one box round them all
+  // would be most of the theatre
+  const byTile = new Map();
+  for (const i of fgFlips) { const x = i % fg.w, y = (i - x) / fg.w, k = ((fg.y0 + y) >> 8) * 65536 + ((fg.x0 + x) >> 8); (byTile.get(k) || byTile.set(k, []).get(k)).push(i); }
+  fgFlips = [];
+  for (const list of byTile.values()) {
+    let x0 = fg.w, y0 = fg.h, x1 = -1, y1 = -1;
+    for (const i of list) { const x = i % fg.w, y = (i - x) / fg.w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, msk = new Uint8Array(w * h), src = new Uint8Array(w * h);
+    for (const i of list) { const x = i % fg.w, y = (i - x) / fg.w, j = (y - y0) * w + x - x0; msk[j] = 1; src[j] = fgOwn[i]; }
+    storeWrite(fg.L, fg.x0 + x0, fg.y0 + y0, w, h, msk, src, 0);
+    yield* yieldPoint();
+  }
+  if (!win || !own) return;
+  const f = fgF();
+  const wx0 = clamp(Math.floor((fg.x0 + bx0) * f - win.cx0) - 1, 0, W), wx1 = clamp(Math.ceil((fg.x0 + bx1 + 1) * f - win.cx0) + 1, 0, W);
+  const wy0 = clamp(Math.floor((fg.y0 + by0) * f - win.cy0) - 1, 0, H), wy1 = clamp(Math.ceil((fg.y0 + by1 + 1) * f - win.cy0) + 1, 0, H);
+  if (wx1 <= wx0 || wy1 <= wy0) return;
+  const ww = wx1 - wx0, wh = wy1 - wy0, tmp = new Uint8Array(ww * wh);
+  readGrid(win.L, win.cx0 + wx0, win.cy0 + wy0, ww, wh, tmp);
+  let any = false;
+  for (let y = 0; y < wh; y++) for (let x = 0, i = (wy0 + y) * W + wx0, k = y * ww; x < ww; x++, i++, k++) {
+    const v = tmp[k]; if (own[i] === v) continue;
+    occTrack(i, own[i], v); own[i] = v; winOwn0[i] = v; any = true;
+  }
+  if (any) { liveEpoch++; addDirty(wx0, wy0, wx1, wy1); markFrontDirty(wx0, wy0, wx1, wy1); }
+}
+const lfFgKey = (x, y) => { const n = worldCells(fg.L); let bx = Math.floor((x + fg.x0) / n * LF_NW); bx = ((bx % LF_NW) + LF_NW) % LF_NW; return bx * LF_NW + Math.floor((y + fg.y0) / n * LF_NW); };
+// the border stretches of the theatre: samples on the front grid half a block apart, an edge where two countries
+// at war meet
 function* lfScanGen() {
-  if (!own || !W || !win || !geoStore) return;
-  const bc = lfBC(), s = Math.max(2, Math.floor(bc / 2)), m = new Map();
-  for (let y = 0; y + s < H; y += s) {
+  if (!geoStore || !win || !fgEnsure()) { lfBorder = new Map(); lfMine = new Map(); return; }
+  const FW = fg.w, FH = fg.h, G = fgOwn, bc = worldCells(fg.L) / LF_NW, s = Math.max(1, Math.floor(bc / 2)), m = new Map();
+  for (let y = 0; y + s < FH; y += s) {
     if ((y / s & 15) === 0) yield* yieldPoint();
-    for (let x = 0, i = y * W; x + s < W; x += s, i += s) {
-      const o = own[i]; if (!o || o === 255) continue;
-      const r = own[i + s], d = own[i + s * W];
+    for (let x = 0, i = y * FW; x + s < FW; x += s, i += s) {
+      const o = G[i]; if (!o || o === 255) continue;
+      const r = G[i + s], d = G[i + s * FW];
       for (const [q, ex, ey, nx, ny] of [[r, x + s / 2, y, 1, 0], [d, x, y + s / 2, 0, 1]]) {
         if (!q || q === o || q === 255 || warM[(o << 8) | q] !== 1) continue;
-        const key = lfKey(ex, ey);
+        const key = lfFgKey(ex, ey);
         let e = m.get(key);
         if (!e) { e = { a: Math.min(o, q), b: Math.max(o, q), sx: 0, sy: 0, n: 0, nx: 0, ny: 0, pts: [] }; m.set(key, e); }
         if ((o === e.a && q === e.b) || (o === e.b && q === e.a)) { const sg = o === e.a ? 1 : -1; e.sx += ex; e.sy += ey; e.n++; e.nx += nx * sg; e.ny += ny * sg; if (e.pts.length < 24) e.pts.push(ex, ey, nx * sg, ny * sg); }
@@ -8605,7 +8698,8 @@ function* lfScanGen() {
     }
   }
   const mine = new Map();
-  for (const [key, e] of m) { e.s = s; e.key = key; e.x = e.sx / e.n; e.y = e.sy / e.n; const l = Math.hypot(e.nx, e.ny) || 1; e.nx /= l; e.ny /= l; for (const o of [e.a, e.b]) (mine.get(o) || mine.set(o, []).get(o)).push(key); }
+  for (const [key, e] of m) { e.s = s; e.key = key; e.fx = e.sx / e.n; e.fy = e.sy / e.n; const l = Math.hypot(e.nx, e.ny) || 1; e.nx /= l; e.ny /= l; for (const o of [e.a, e.b]) (mine.get(o) || mine.set(o, []).get(o)).push(key); }
+  lfPlace(m);
   lfBorder = m; lfMine = mine; lfScanT = performance.now();
 }
 // troops whose stretch is gone (the border moved away from it): to the nearest stretch of their own within a few
@@ -8643,13 +8737,12 @@ const lfEnt = (key, o) => { const m = econ.front.ent && econ.front.ent[key]; ret
 function lfSetKO(name, key, o, v) { const F = econ.front, T = F[name] || (F[name] = {}), m = T[key] || (T[key] = {}); m[o] = clamp(v, 0, 1); }
 // how much the ground and the trenches multiply a defender's strength on a stretch: mountains, a river in front,
 // a town to hold, and the trenches dug while it stood
-let lfGround = new Map(), lfGroundWin = null;
+let lfGround = new Map();
 function lfGroundOf(key) {
-  if (lfGroundWin !== win) { lfGround = new Map(); lfGroundWin = win; }
   let g = lfGround.get(key); if (g !== undefined) return g;
-  const e = lfBorder.get(key); if (!e) return 1;
+  const e = lfBorder.get(key); if (!e || !fg) return 1;
   let rough = 0, river = 0;
-  if (game.terrain !== false) for (let j = 0; j < Math.min(e.pts.length, 24); j += 8) { const t = terrainAt({ x: e.pts[j], y: e.pts[j + 1] }); rough = Math.max(rough, t.rough); if (t.river) river = 1; }
+  if (game.terrain !== false) for (let j = 0; j < Math.min(e.pts.length, 24); j += 8) { const t = terrainAt(fgToWin(e.pts[j], e.pts[j + 1])); rough = Math.max(rough, t.rough); if (t.river) river = 1; }
   const km = metersPerCell() / 1000; let town = 0;
   for (const c of cities) { const d = Math.hypot(c.x - e.x, c.y - e.y) * km; if (d < 6 + Math.min(25, c.vp || 1) * .5) town = Math.max(town, Math.min(1, .35 + (c.vp || 1) / 20)); }
   g = 1 + .6 * rough + .35 * river + .5 * town;
@@ -8712,22 +8805,22 @@ function lfAiRedeploy(o, keys) {
 // an advance on a stretch: at every point of its line a round bite of the enemy's land, deep as the advance, wide
 // enough to meet the bites of the points beside it, so the front bends as a curve and not by squares
 function lfAdvance(e, A, B, depth) {
-  const pts = e.pts, r = Math.max(e.s * 1.15, depth * 1.2, 1.2), sg = A === e.a ? 1 : -1;
-  let bx0 = W, by0 = H, bx1 = 0, by1 = 0, flipped = 0;
+  const pts = e.pts, r = Math.max(e.s * 1.15, depth * 1.2, 1.2), sg = A === e.a ? 1 : -1, FW = fg.w, FH = fg.h, G = fgOwn;
+  let flipped = 0;
   for (let j = 0; j < pts.length; j += 4) {
     const nx = pts[j + 2] * sg, ny = pts[j + 3] * sg, cx = pts[j] + nx * (depth - r), cy = pts[j + 1] + ny * (depth - r), R2 = r * r;
-    const x0 = Math.max(1, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r)), y0 = Math.max(1, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
-    for (let y = y0; y < y1; y++) { const dy = y + .5 - cy; for (let x = x0, i = y * W + x0; x < x1; x++, i++) { if (own[i] !== B) continue; const dx = x + .5 - cx; if (dx * dx + dy * dy > R2) continue; occTrack(i, B, A); own[i] = A; flipped++; if (x < bx0) bx0 = x; if (x >= bx1) bx1 = x + 1; if (y < by0) by0 = y; if (y >= by1) by1 = y + 1; } }
+    const x0 = Math.max(1, Math.floor(cx - r)), x1 = Math.min(FW - 1, Math.ceil(cx + r)), y0 = Math.max(1, Math.floor(cy - r)), y1 = Math.min(FH - 1, Math.ceil(cy + r));
+    for (let y = y0; y < y1; y++) { const dy = y + .5 - cy; for (let x = x0, i = y * FW + x0; x < x1; x++, i++) { if (G[i] !== B) continue; const dx = x + .5 - cx; if (dx * dx + dy * dy > R2) continue; G[i] = A; fgFlips.push(i); flipped++; } }
   }
-  if (flipped) { addDirty(bx0, by0, bx1, by1); markFrontDirty(bx0, by0, bx1, by1); lfWarHarm(e, B, flipped); }
+  if (flipped) lfWarHarm(e, B, flipped * fgKm() * fgKm());
   return flipped;
 }
 // what the fighting does to the land it passes over: ruins in the region, its people killed and driven out, more
 // of both in and around a town; a town fought through keeps a dark scar
-function lfWarHarm(e, B, cells) {
+function lfWarHarm(e, B, area) {
   if (!geoStore) return;
   const w = toWorld(e.x, e.y), f = regionOfPoint(w.mx, w.my); if (!f) return;
-  const km = metersPerCell() / 1000, area = cells * km * km, kmc = km;
+  const kmc = metersPerCell() / 1000;
   const city = cities.find(c => Math.hypot(c.x - e.x, c.y - e.y) * kmc < 8 + (c.vp || 1) * .6);
   const P = regionPop(f), dens = P.now / Math.max(1, P.area) * (city ? 3 + Math.min(city.vp || 1, 25) / 3 : 1);
   const st = (econ.pop || (econ.pop = {}))[regionKey(f)] || (econ.pop[regionKey(f)] = {});
@@ -8737,13 +8830,29 @@ function lfWarHarm(e, B, cells) {
   stAdd(B, 'civLost', dead);
   if (city && Math.random() < .15) addScar(e, Math.max(2, Math.sqrt(area)));
 }
+// how far a stretch has run ahead of its neighbours (two blocks either way, the same two countries) toward the
+// enemy: 1 = level with them, falling to 0 some 6 km ahead
+function lfFlank(e, A, km) {
+  const bx = Math.floor(e.key / LF_NW), by = e.key % LF_NW, sg = A === e.a ? 1 : -1;
+  let sx = 0, sy = 0, n = 0;
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+    if (!dx && !dy) continue;
+    const q = lfBorder.get((((bx + dx) % LF_NW) + LF_NW) % LF_NW * LF_NW + by + dy);
+    if (q && q.a === e.a && q.b === e.b) { sx += q.fx; sy += q.fy; n++; }
+  }
+  if (n < 2) return n ? .5 : .3;                 // a lone stretch: a narrow wedge already
+  const ahead = ((e.fx - sx / n) * e.nx + (e.fy - sy / n) * e.ny) * sg * km;
+  return clamp(1 - ahead / 6, 0, 1);
+}
 // a tick of the live front: h hours of battle on every stretch. The defender's strength counts with the ground and
 // his trenches, both sides' with their spirit; an attack wears the attacker's spirit down (and the defender's, the
 // harder it is pressed), a quiet stretch gets it back and digs in; ground lost leaves the trenches behind
 function* lfTickGen(h) {
+  if (fg) fgPull();
   yield* lfScanGen();
+  if (!fg) return;
   lfMigrate();
-  const F = econ.front, acc = F.acc || (F.acc = {}), ai = {}, km = metersPerCell() / 1000;
+  const F = econ.front, acc = F.acc || (F.acc = {}), ai = {}, km = fgKm();
   const fought = new Set();
   let moved = 0, i = 0;
   for (const [key, e] of lfBorder) {
@@ -8759,15 +8868,17 @@ function* lfTickGen(h) {
     const oA = lfOrg(key, A), oB = lfOrg(key, B), D = lfDefMul(key, B);
     const eA = sA * (.25 + .75 * oA), eB = sB * (.25 + .75 * oB) * D;
     const r1 = .8 + Math.random() * .4, r2 = .8 + Math.random() * .4;
-    const lossA = Math.min(sA, .012 * h * eB * r1), lossB = Math.min(sB, .009 * h * eA * r2 / Math.sqrt(D));
+    const lossA = Math.min(sA, .006 * h * eB * r1), lossB = Math.min(sB, .0045 * h * eA * r2 / Math.sqrt(D));
     lfAdd(key, A, -lossA); lfAdd(key, B, -lossB);
     stAdd(A, 'lfLost', lossA); stAdd(B, 'lfLost', lossB); stAdd(A, 'lfKilled', lossB); stAdd(B, 'lfKilled', lossA);
     lfSetKO('org', key, A, oA - .007 * h * (1 + Math.min(2, eB / (eA + .5))));
     lfSetKO('org', key, B, oB - .004 * h * Math.min(2, eA / (eB + .5)));
     const nA = (sA - lossA) * (.25 + .75 * oA), nB = (sB - lossB) * (.25 + .75 * oB) * D;
     if (nA > nB * 1.15 && sA - lossA >= 1) {
-      // the advance: up to a kilometre an hour against nobody, slower the closer the fight
-      const kmh = .25 * Math.min(4, nA / (nB + .5) - 1);
+      // the advance: a breakthrough makes up to some 9 km a day, a close fight one or two
+      // a stretch already ahead of the stretches beside it is under fire from the flanks: it slows and stops,
+      // so the front moves as a line and not in fingers
+      const kmh = .12 * Math.min(3, nA / (nB + .5) - 1) * lfFlank(e, A, km);
       const a2 = (acc[key] || 0) + kmh * h / km, layers = Math.floor(a2); acc[key] = a2 - layers;
       if (layers > 0) { const f = lfAdvance(e, A, B, layers); if (f) { moved += f; lfSetKO('ent', key, B, lfEnt(key, B) * .5); lfSetKO('ent', key, A, 0); } }
     }
@@ -8783,6 +8894,7 @@ function* lfTickGen(h) {
     }
   }
   F.ai = ai;
+  yield* fgFlushGen();
   if (moved) { F.cells = (F.cells || 0) + moved; checkCities(); renderScore(); }
   lfRenderBar();
 }
@@ -8931,7 +9043,7 @@ const LF_START = {
   donbas2015: { s: { 'Россия': 8, 'ДНР и ЛНР': 7, 'Украина': 7 }, ent: .8 },
   svo2022: { s: { 'Россия': 14, 'Белоруссия': 3, 'ДНР и ЛНР': 7, 'Украина': 7 }, ent: .4 },
   ukr: { s: { 'Россия': 9, 'Украина': 8 }, ent: .9 },
-  karabakh2020: { s: { 'Азербайджан': 11, 'Арцах (НКР)': 6 }, ent: .8 },
+  karabakh2020: { s: { 'Азербайджан': 11, 'Арцах (НКР)': 9, 'Армения': 6 }, ent: .9 },
   syria2015: { ent: .6 },
   gaza2023: { s: { 'Израиль': 15, 'ХАМАС': 5 } },
   yugo1991: { s: { 'Югославия': 10 } },
@@ -8957,6 +9069,7 @@ const LF_START = {
 function lfInit(per = 6, w) {
   const L = w && (LF_START[w.id] || LF_START[w.series]) || {}, n = o => (L.s && countries[o - 1] && L.s[countries[o - 1].name]) || per;
   econ.front = { s: {}, res: {}, atk: {}, org: {}, ent: {}, plan: {}, ent0: L.ent || .3 };
+  fgEnsure(true);
   drain(lfScanGen());
   for (const [key, e] of lfBorder) { lfAdd(key, e.a, n(e.a)); lfAdd(key, e.b, n(e.b)); }
   setLiveFront(true, true); lfRenderBar();
@@ -9083,7 +9196,7 @@ $('#lfBar').addEventListener('click', e => {
 $('#lfSide').addEventListener('change', e => { lfSide = +e.target.value; lfRenderBar(); requestUi(); });
 $('#mobBox [data-mb="close"]').addEventListener('click', () => { $('#mobBox').hidden = true; lfRenderBar(); });
 // the scan when time stands (the brush needs the stretches) and on a guest, who runs no battle
-setInterval(() => { if (lfOn() && W && geoStore && (!battlesOn || mpGuest()) && performance.now() - lfScanT > 600) runJob('lfscan', (function* () { yield* lfScanGen(); lfRenderBar(); requestUi(); })()); }, 700);
+setInterval(() => { if (lfOn() && W && geoStore && (!battlesOn || mpGuest()) && performance.now() - lfScanT > 600) runJob('lfscan', (function* () { if (fg && !mpGuest()) fgPull(); yield* lfScanGen(); lfRenderBar(); requestUi(); })()); }, 700);
 // the bar over the map with the border tool: the switch and the arms that follow
 function renderLiveBar() {
   const box = $('#liveBar');
