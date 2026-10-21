@@ -12750,7 +12750,10 @@ function econImpact(k, kind, g, k2, quiet) {
   if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
   // battalions of the live front under the blast
   let lfHit = 0;
-  if (lfOn()) for (const [key, e] of lfBorder) { if (Math.hypot(e.x - g.x, e.y - g.y) > R + lfBC()) continue; for (const o of [e.a, e.b]) if (atWar(k, o)) { const v = lfStr(key, o), d = Math.min(v, (v * .12 + .6) * S.dmg * k2); if (d > 0) { lfAdd(key, o, -d); lfHit += d; stAdd(o, 'lfLost', d); stAdd(k, 'lfKilled', d); } } }
+  // a strike hits the stretches under it: a few per cent of the battalions there and a fraction of one, by its power
+  // (by the weapon's own radius in km: the units' size on screen has nothing to do with it)
+  const Rlf = geo ? Math.max(S.radius, 2) * 1000 / metersPerCell() : R;
+  if (lfOn()) for (const [key, e] of lfBorder) { if (Math.hypot(e.x - g.x, e.y - g.y) > Rlf + lfBC() * .5) continue; for (const o of [e.a, e.b]) if (atWar(k, o)) { const v = lfStr(key, o), d = Math.min(v, (v * .04 + .15) * S.dmg * k2); if (d > 0) { lfAdd(key, o, -d); lfHit += d; stAdd(o, 'lfLost', d); stAdd(k, 'lfKilled', d); } } }
   const civ = strikeCivilians(kind, g, S.radius);
   stAdd(k, 'hitUnits', hit.length); stAdd(k, 'civKilled', civ); stAdd(fineOwner(g.x, g.y), 'civLost', civ); if (fac) { stAdd(k, 'facKilled'); stAdd(fac.owner, 'facLost'); }
   const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + [hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : '', lfHit >= .5 ? 'выбито батальонов: ' + Math.round(lfHit) : '', fac ? 'уничтожен завод' : ''].filter(Boolean).join(', ').replace(/^$/, 'без потерь у противника') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
