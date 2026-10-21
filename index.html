@@ -1857,6 +1857,10 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
           <button data-tr="mob" role="radio"><b>Война с мобилизацией</b><small>Рекомендуется. ИИ воюет против вас; новые батальоны — только призывом в областях. Ставите их кистью на фронт и наступаете</small></button>
           <button data-tr="free" role="radio"><b>Свободный фронт</b><small>Без ИИ: живой фронт вдоль всех границ, вы сами двигаете границы; плотность войск настраивается</small></button>
         </div>
+        <div class="ctroops" id="campHistBox" role="radiogroup" aria-label="ИИ">
+          <button data-h="1" role="radio"><b>Историчный</b><small>ИИ идёт по истории: наступает туда, где армия была к следующему этапу войны, и не уходит дальше</small></button>
+          <button data-h="0" role="radio"><b>Неисторичный</b><small>ИИ воюет как вздумается: сам ищет слабые места и бьёт куда выгодно</small></button>
+        </div>
         <div class="cgo"><button class="bigbtn" id="campGo">В бой</button><span id="campAs"></span></div>
       </div>
     </div>
@@ -8776,6 +8780,52 @@ const LF_ERA = {
   modern: { entMax: .8, entRate: .004, wear: .005, kmh: .1, cap: 3, ratio: 1.15, want: 1.6, secs: 2, broad: 2.2, exploit: false }
 };
 const lfEra = () => LF_ERA[era] || (era === 'ancient' || era === 'medieval' ? LF_ERA.gunpowder : LF_ERA.modern);
+// ---- the historical AI: the war's later stages are its targets ----
+// The stages of a war's series are its own scenarios on later dates. For the next stage after today the AI gets a
+// map of who held what then, on the front grid; it attacks only where the land beyond a stretch was its own on
+// that date, and sends its main blows there. When the date passes, the stage after it is the target.
+const lfHistStages = () => { const w = WARS.find(q => q.id === curWarId); return w && w.series ? WARS.filter(q => q.series === w.series && !q.peace && q.date > w.date) : []; };
+let lfHist = null;
+function lfHistTarget() {
+  if (!econ.front || !econ.front.hist || !fg || !game.ai) return null;
+  const now = new Date(gameDate).toISOString().slice(0, 10);
+  const next = lfHistStages().filter(q => q.date > now).sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!next) return null;
+  if (lfHist && lfHist.id === next.id && lfHist.fg === fg) return lfHist;
+  lfHist = { id: next.id, date: next.date, fg, grid: stageGrid(next) };
+  logEvent('История: цель — линия фронта на ' + fmtDate(Date.parse(next.date)) + (next.stage ? ' (' + next.stage + ')' : '') + '.', 0);
+  return lfHist;
+}
+// who held what on a stage, on the front grid (the stage's outlines drawn as the scenario tiles are; its countries
+// matched to today's by name)
+function stageGrid(w) {
+  const vs = buildVsrc({ war: w.id }); if (!vs) return null;
+  const map = new Uint8Array(256); w.countries.forEach((c, i) => { map[i + 1] = countries.findIndex(q => q.name === c.name) + 1; });
+  // two levels coarser than the front grid: the targets need blocks, not cells, and a sixteenth of the tiles
+  const L = Math.max(2, fg.L - 2), sh = fg.L - L, n_ = worldCells(L), gx0 = fg.x0 >> sh, gy0 = fg.y0 >> sh, gw = (fg.w >> sh) + 2, gh = (fg.h >> sh) + 2, g = new Uint8Array(gw * gh);
+  const tx0 = Math.floor(gx0 / TS), tx1 = Math.floor((gx0 + gw - 1) / TS), ty0 = Math.floor(gy0 / TS), ty1 = Math.floor((gy0 + gh - 1) / TS);
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const out = new Uint8Array(TS * TS);
+    for (const job of vs.jobs) {
+      const o = job.owner, ov = job.over;
+      if (job.keep) { rasterJob(job, L, tx, ty, i => { if (!nearKeep(job, (tx * TS + (i & 255) + .5) / n_, (ty * TS + (i >> 8) + .5) / n_)) out[i] = o; }); continue; }
+      rasterJob(job, L, tx, ty, ov ? (ov < 0 ? i => { if (out[i]) out[i] = o; } : i => { if (out[i] === ov) out[i] = o; }) : i => { out[i] = o; });
+    }
+    const x0 = Math.max(gx0, tx * TS), x1 = Math.min(gx0 + gw, (tx + 1) * TS), y0 = Math.max(gy0, ty * TS), y1 = Math.min(gy0 + gh, (ty + 1) * TS);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) g[(y - gy0) * gw + x - gx0] = map[out[((y - ty * TS) << 8) | (x - tx * TS)]];
+  }
+  return { g, sh, gx0, gy0, gw, gh };
+}
+// whether the land a block or two beyond a stretch, toward the enemy, was o's on the target stage
+function lfHistAhead(e, o, H) {
+  if (!H || !H.grid) return true;
+  const sg = o === e.a ? 1 : -1, bc = worldCells(fg.L) / LF_NW;
+  for (const d of [.8, 1.6, 2.6]) {
+    const G = H.grid, x = ((fg.x0 + Math.round(e.fx + e.nx * sg * d * bc)) >> G.sh) - G.gx0, y = ((fg.y0 + Math.round(e.fy + e.ny * sg * d * bc)) >> G.sh) - G.gy0;
+    if (x >= 0 && y >= 0 && x < G.gw && y < G.gh && G.g[y * G.gw + x] === o) return true;
+  }
+  return false;
+}
 // who attacks a stretch: the player where marked; the AI on the sector of its main blow when it is the stronger
 // there, elsewhere only where the enemy is much the weaker; an attack lasts while the stretch's spirit holds, then
 // the troops stop to rest and dig in, and go again once they have recovered — the blows come in waves
@@ -8785,6 +8835,7 @@ function lfAttacks(o, key, so, se) {
   const F = econ.front, org = lfOrg(key, o), was = F.ai && F.ai[key] === o;
   if (org < (was ? .3 : .75)) return false;
   const e = lfBorder.get(key), en = e.a === o ? e.b : e.a;
+  const H = lfHistTarget(); if (H && !lfHistAhead(e, o, H)) return false;      // history: no further than it went
   const E = lfEra(), ratio = so * org / (se * lfOrg(key, en) * lfDefMul(key, en) + .5), p = F.plan && F.plan[o];
   // a blow that has stalled is pressed harder: the AI accepts worse odds rather than sit in a stalemate
   if (p && p.k.includes(key)) return ratio > Math.max(.9, E.ratio - .1 * (p.push || 0));
@@ -8820,12 +8871,12 @@ function lfAiPlan(o, keys) {
   let mine = F.res[o] || 0, foe = 0;
   const km = metersPerCell() / 1000, info = [];
   // a stalled blow: its sector is worth less, so the next one tends to fall elsewhere
-  const stale = old && old.stalled ? new Set(old.k) : null;
+  const stale = old && old.stalled ? new Set(old.k) : null, H = lfHistTarget();
   for (const k of keys) {
     const e = lfBorder.get(k), en = e.a === o ? e.b : e.a, me = lfStr(k, o), they = lfStr(k, en) * lfOrg(k, en) * lfDefMul(k, en);
     mine += me; foe += lfStr(k, en);
     let prize = 0; for (const c of cities) if (cityOwner(c) === en && Math.hypot(c.x - e.x, c.y - e.y) * km < 40) prize += Math.min(25, c.vp || 1);
-    info.push({ k, x: e.x, y: e.y, en, v: (3 / (1 + they) + me / (me + they + 1) + prize * .08) * (stale && stale.has(k) ? .5 : 1), nx: e.a === o ? e.nx : -e.nx, ny: e.a === o ? e.ny : -e.ny });
+    info.push({ k, x: e.x, y: e.y, en, v: (3 / (1 + they) + me / (me + they + 1) + prize * .08) * (stale && stale.has(k) ? .5 : 1) * (H ? (lfHistAhead(e, o, H) ? 3 : .05) : 1), nx: e.a === o ? e.nx : -e.nx, ny: e.a === o ? e.ny : -e.ny });
   }
   if (!info.length || mine < foe * .7) { delete P[o]; return; }
   const R = lfBC() * Math.max(4.5, Math.sqrt(info.length) * .9), step = Math.max(1, Math.floor(info.length / 80));
@@ -14683,6 +14734,8 @@ function renderCampDetail() {
   }
   const hasWar = scenarioWars(w).length > 0;
   $('#campTroopsBox').hidden = !hasWar || campMode === 'watch';
+  $('#campHistBox').hidden = !hasWar || campMode === 'watch' || campTroops === 'free';
+  document.querySelectorAll('#campHistBox button').forEach(b => { const on = b.dataset.h === (campHist ? '1' : '0'); b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   document.querySelectorAll('#campModeSeg button').forEach(b => { const on = b.dataset.m === campMode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
   $('#campGo').textContent = campMode === 'watch' ? 'Смотреть' : 'В бой';
   $('#scrCampaign .mhead h2').textContent = campMode === 'watch' ? 'Смотреть войну' : 'Своя игра';
@@ -14970,6 +15023,7 @@ function deploySize() {
   return true;
 }
 let campTroops = LS.get('mezha-troops3', 'mob') === 'free' ? 'free' : 'mob';
+let campHist = LS.get('mezha-hist', '1') === '1';      // the AI follows history (the war's later stages) or goes its own way
 async function startScenario(id, pl, mode) {
   if (mp && !mp.starting) mpLeave();
   const watch = mode === 'watch' || (mode === undefined && watchMode);
@@ -15009,8 +15063,8 @@ async function startScenario(id, pl, mode) {
     setLiveFront(true, true); setTool('warp'); lfRenderBar();
     setTimeout(() => toast('Свободный фронт: вдоль всех границ стоит живой фронт. Тяните границу инструментом «Граница» (W) — войска пойдут за ней. Плотность цепи — на панели инструмента: «Редко», «Плотно», «Очень плотно».'), 900);
   } else if (!watch && wars.length) {
-    lfInit(6, WARS.find(x => x.id === id)); econ.front.mode = lfm; econFrontPosts(); setTool('units');
-    setTimeout(() => toast('Война с мобилизацией: у каждой стороны силы на участках фронта. «Мобилизация» — призыв в областях, «＋ Войска на фронт» — кисть из резерва, «Наступать» — где ударить. Пуск — P.'), 900);
+    lfInit(6, WARS.find(x => x.id === id)); econ.front.mode = lfm; econ.front.hist = campHist; econFrontPosts(); setTool('units');
+    setTimeout(() => toast((campHist ? (lfHistStages().length ? 'Историчный ИИ: стороны идут к линиям следующих этапов войны. ' : 'Историчный ИИ: у этой войны нет этапов — ИИ воюет свободно. ') : 'Неисторичный ИИ. ') + 'Война с мобилизацией: у каждой стороны силы на участках фронта. «Мобилизация» — призыв в областях, «＋ Войска на фронт» — кисть из резерва, «Наступать» — где ударить. Пуск — P.'), 900);
   } else lfRenderBar();
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
@@ -15678,6 +15732,7 @@ $('#wcFold').addEventListener('click', () => $('#watchCard').classList.toggle('f
 $('#hudModeW').addEventListener('click', () => { if (watchMode || !curWarId) return; if (units.length && !confirm('Перейти в просмотр? Текущая партия закончится — её можно сохранить в файл в меню.')) return; startScenario(curWarId, player || 1, 'watch'); });
 $('#hudModeP').addEventListener('click', () => { if (watchMode) $('#wcPlay').click(); });
 document.querySelectorAll('#campTroopsBox button').forEach(b => b.addEventListener('click', () => { campTroops = b.dataset.tr === 'free' ? 'free' : 'mob'; LS.set('mezha-troops3', campTroops); renderCampDetail(); }));
+document.querySelectorAll('#campHistBox button').forEach(b => b.addEventListener('click', () => { campHist = b.dataset.h === '1'; LS.set('mezha-hist', campHist ? '1' : '0'); renderCampDetail(); }));
 
 // the title screen's backdrop: the world's coasts and borders on a dark sea, drawn once
 let menuBgDone = false;
