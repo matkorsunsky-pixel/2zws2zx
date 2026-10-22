@@ -9262,8 +9262,8 @@ function manDay() {
 }
 // the first men of the war: a reserve for a few divisions and their losses, more for a country with fewer troops
 function manInit() {
-  const st = econ.man = { res: {}, mob: [], mobT: {} };
-  for (let k = 1; k <= countries.length; k++) { if (!atWarAny(k)) continue; const n = units.filter(u => u.owner === k).length; st.res[k] = Math.round(DIV_BAT * Math.max(4, n * .2)); }
+  const st = econ.man = { res: {}, mob: [], mobT: {}, cap: {} };
+  for (let k = 1; k <= countries.length; k++) { if (!atWarAny(k)) continue; const n = units.filter(u => u.owner === k).length; st.res[k] = Math.round(DIV_BAT * Math.max(4, n * .3)); st.cap[k] = Math.max(Math.ceil(n * 1.3), n + 3, 4); }
 }
 // a call-up over the whole country in one press: the most populous regions open for it (three for a partial,
 // six for a general one)
@@ -9449,7 +9449,7 @@ function lfSpread(o, n) {
 // in the war with mobilisation the divisions take their men from the manpower reserve (econ.man): a call-up fills
 // it, a new division takes DIV_BAT battalions for each set of its equipment, filling up losses takes men too
 const DIV_BAT = 10;
-let DIV_CAP = 160;                                  // divisions of all sides put on the fronts at the start
+let DIV_CAP = 50;                                  // divisions of all sides put on the fronts at the start
 const divMode = () => !!(econ && econ.divs) && !lfOn();
 const mobSt = () => lfOn() ? lfState() : econ.man || (econ.man = { res: {}, mob: [], mobT: {} });
 const MOB = { part: { name: 'Частичная', rate: .004, days: 12, cd: 30 }, full: { name: 'Всеобщая', rate: .015, days: 20, cd: 60 } };
@@ -10007,7 +10007,7 @@ const EQ_FULL = { inf: 'Стрелковое оружие', art: 'Артилле
 const unitCost = u => roleOf(u).cost * eraPrice() * (ECH_EQ[u.ech || ''] || 1);
 // paying for the troops put down: money and equipment of the country; a refusal names what is missing
 const paidDeploy = () => game.econ && game.paid && !watchMode && W > 0;
-function payFor(k, list) {
+function payFor(k, list, quiet) {
   if (mp && mp.live && mp.rules && mp.rules.cap && isHuman(k)) { const n = units.filter(u => u.owner === k).length + list.filter(u => !units.includes(u)).length; if (n > mp.rules.cap) { if (k === player) toast('Предел войск в сетевой игре: ' + mp.rules.cap + ' отрядов на игрока.'); return false; } }
   if (!paidDeploy() || !list.length || !countries[k - 1]) { if (list.length && W && !watchMode) stAdd(k, 'deployed', list.length); return true; }
   const need = { inf: 0, art: 0, tank: 0, air: 0 }; let sum = 0;
@@ -10016,11 +10016,11 @@ function payFor(k, list) {
   if (money(k) < sum) miss.push(fmtMoney(sum - money(k)));
   for (const q in need) if (need[q] > (st.eq[q] || 0) + 1e-9) miss.push(EQ_NAMES[q] + ' ' + fmtNum(need[q] - (st.eq[q] || 0)));
   if (man && men > (man.res[k] || 0) + 1e-9) miss.push('людей ' + fmtPeople((men - (man.res[k] || 0)) * 650).replace(/\.$/, ''));
-  if (miss.length) { if (k === player) toast('Не хватает на ' + list.length + ' ' + plural(list.length, 'отряд', 'отряда', 'отрядов') + ': ' + miss.join(', ') + '.' + (man && men > (man.res[k] || 0) ? ' Людей даёт призыв — кнопка «Призыв» вверху.' : '') + ' Снаряжение делают военные заводы (вкладка «Экономика»).'); return false; }
+  if (miss.length) { if (k === player && !quiet) toast('Не хватает на ' + list.length + ' ' + plural(list.length, 'отряд', 'отряда', 'отрядов') + ': ' + miss.join(', ') + '.' + (man && men > (man.res[k] || 0) ? ' Людей даёт призыв — кнопка «Призыв» вверху.' : '') + ' Снаряжение делают военные заводы (вкладка «Экономика»).'); return false; }
   econ.money[k] -= sum; stAdd(k, 'deployed', list.length); stAdd(k, 'armySpent', sum);
   if (man) man.res[k] -= men;
   for (const q in need) st.eq[q] -= need[q];
-  if (k === player) toast('Размещено за ' + fmtMoney(sum) + ' и ' + Object.entries(need).filter(([, v]) => v).map(([q, v]) => fmtNum(v) + ' компл. (' + EQ_NAMES[q] + ')').join(', ') + '.');
+  if (k === player && !quiet) toast('Размещено за ' + fmtMoney(sum) + ' и ' + Object.entries(need).filter(([, v]) => v).map(([q, v]) => fmtNum(v) + ' компл. (' + EQ_NAMES[q] + ')').join(', ') + '.');
   renderEcon(true);
   return true;
 }
@@ -12307,6 +12307,8 @@ function* reinforceTickGen(h) {
     if (f.rclock < 24) continue;
     f.rclock = 0;
     if (reinforce(f)) {
+      // in the war of divisions the replacement is bought like any division: money, equipment and men
+      if (divMode()) { const u = units[units.length - 1]; if (!payFor(f.owner, [u], true)) { units.pop(); continue; } }
       f.lost--;
       if (!f.rsent) { f.rsent = true; const g = f.gen && genById(f.gen); logEvent((g ? 'Армия ' + g.name : ownerName(f.owner)) + ': на фронт идут подкрепления — ' + (f.lost + 1) + ' ' + plural(f.lost + 1, 'дивизия', 'дивизии', 'дивизий'), f.owner); }
       if (!f.lost) delete f.rsent;
@@ -12684,6 +12686,8 @@ const aiDeployQ = new Set();
 function aiDeployNext(n) { pathBudget = 2; try { for (const k of aiDeployQ) { if (n-- <= 0) break; aiDeployQ.delete(k); if (countries[k - 1] && paidDeploy()) aiDeploy(k); } } finally { pathBudget = Infinity; } }
 function aiDeploy(k, reps = 1) {
   const st = stock(k), mine = units.filter(u => u.owner === k);
+  // in the war of divisions the AI keeps its army near the size it began with: a few more, not hundreds
+  if (divMode()) { const cap = (mobSt().cap || {})[k] || 0; if (mine.length >= cap) return; reps = 1; }
   const eras = new Map(); for (const u of mine) eras.set(u.era, (eras.get(u.era) || 0) + 1);
   const ek = eras.size ? [...eras].sort((a, b) => b[1] - a[1])[0][0] : era, E = ERAS[ek] || ERAS.ww2;
   for (const q of ['inf', 'tank', 'art', 'air']) for (let r = 0; r < reps; r++) {
@@ -15585,8 +15589,24 @@ function* deployFrontsGen(opts = {}) {
   // 3. a unit every sp along each chain on each side, a little back into its own land
   const sides = new Map();            // owner -> [{ units, pts, len }] stretches
   let k = 0;
-  for (const ch of chains) {
-    const L = ch.L, len = L[L.length - 1], spc = dense ? sp : unitCellsAt(ch[ch.length >> 1].y) / .75, n = Math.max(1, Math.floor(len / spc));
+  // in the war of divisions the spacing widens until all the fronts together hold no more than DIV_CAP (the size of
+  // a division on the map has its limit; the stretch it holds has none)
+  let widen = 1;
+  const divs = econ.divs && !dense && !opts.rect;
+  if (divs) { let est = 0; for (const ch of chains) est += 2 * ch.L[ch.L.length - 1] / (unitCellsAt(ch[ch.length >> 1].y) / .75); widen = Math.max(1, est / DIV_CAP); }
+  // there the little pieces of a border (a bend cut off, an islet) share their divisions: the length of a pair's
+  // pieces is carried over until it makes up one, and a pair that got none gets one on its last piece
+  let carry = 0, placed = 0;
+  for (let ci = 0; ci < chains.length; ci++) {
+    const ch = chains[ci], L = ch.L, len = L[L.length - 1], spc = (dense ? sp : unitCellsAt(ch[ch.length >> 1].y) / .75) * widen;
+    let n = Math.max(1, Math.floor(len / spc));
+    if (divs) {
+      const nx = chains[ci + 1], last = !nx || nx[0].o !== ch[0].o || nx[0].q !== ch[0].q;
+      carry += len / spc; n = Math.floor(carry); carry -= n;
+      if (last && !placed && !n) n = 1;
+      placed += n; if (last) { carry = 0; placed = 0; }
+      if (!n) continue;
+    }
     const o = ch[0].o, q = ch[0].q, so = { units: [], pts: ch, len }, sq = { units: [], pts: ch, len };
     let seg = 1;
     for (let j = 0; j < n; j++) {
@@ -15636,7 +15656,7 @@ function* deployFrontsGen(opts = {}) {
     }
     if (!order.length) continue;
     let gens = generals.filter(g => g.owner === o);
-    const K = dense ? (gens.length ? Math.min(gens.length, 12) : clamp(Math.round(order.length * sp / 400), 1, 6)) : clamp(Math.ceil(order.length / 24), 1, 24);
+    const K = dense ? (gens.length ? Math.min(gens.length, 12) : clamp(Math.round(order.length * sp / 400), 1, 6)) : clamp(Math.ceil(order.length / (divs ? 8 : 24)), 1, 24);
     if (!dense) {
       // an army of up to 24 divisions under every general: the scenario's own first, then new ones
       for (let n = gens.length; n < K; n++) { const g = { id: genSeq++, name: 'Генерал ' + (generals.filter(x => x.owner === o).length + 1), owner: o, photo: '', rank: 'Генерал', skill: 2 + (n % 3 === 0 ? 1 : 0) }; generals.push(g); }
