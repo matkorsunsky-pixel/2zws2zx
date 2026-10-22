@@ -2212,6 +2212,7 @@ let toastT = 0;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 function addDirty(x0, y0, x1, y1) {
   vecVersion++;
+  if (drag && drag.mode === 'warp' && drag.wm === 'rubber') { freshLog.push({ v: vecVersion, r: [x0, y0, x1, y1] }); if (freshLog.length > 600) freshLog.splice(0, 300); }
   if (liveFront && liveDirty.length < 64) liveDirty.push([x0, y0, x1, y1]);
   markFrontDirty(x0, y0, x1, y1);          // the front lines look again at the land that changed
   if (preview) previewGrow(x0, y0, x1, y1);
@@ -2602,7 +2603,9 @@ function drawVectorMap(c) {
   }
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
-  drawVecSet(c, vec, null);
+  const patch = rubberPatch();
+  if (patch) { drawVecSet(c, vec, patch.win); drawVecSet(c, patch, null); }
+  else drawVecSet(c, vec, null);
 }
 // one set of outlines: fills, coasts, borders, fronts, old borders; `hole` keeps out the area another set covers;
 // `part` draws only the fills (opaque) or only the hatching and lines
@@ -6261,6 +6264,28 @@ function drawPreview(vecMode) {
   ctx.drawImage(over, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0, sy0, sx1 - sx0, sy1 - sy0);
   ctx.restore();
 }
+// The rubber, smooth and sharp in every frame: the outlines of the whole window are traced in the background a few
+// times a second, and what the hand changed since the last tracing (a patch round the cursor) is traced in place
+// each frame; the map is drawn with the old outlines round the patch and the new ones in it. The patch is traced a
+// few cells wider than it is drawn, so its curves meet the older ones at its edge without a seam.
+let freshLog = [], rubberVec = null;
+function rubberPatch() {
+  if (!freshLog.length) return null;
+  const base = vec ? vec.version : -1;
+  if (freshLog[0].v <= base) freshLog = freshLog.filter(e => e.v > base);
+  if (!freshLog.length) return null;
+  let b = null; for (const e of freshLog) b = b ? [Math.min(b[0], e.r[0]), Math.min(b[1], e.r[1]), Math.max(b[2], e.r[2]), Math.max(b[3], e.r[3])] : e.r.slice();
+  const m = borderW + 3, M = m + 10;
+  // the edges of the patch on whole pixels of the screen: two clips meeting inside a pixel leave a faint seam
+  const k = dpr * view.s, sx = v => (Math.round(v * k + view.x * dpr) - view.x * dpr) / k, sy = v => (Math.round(v * k + view.y * dpr) - view.y * dpr) / k;
+  const clip = [sx(Math.max(0, b[0] - m)), sy(Math.max(0, b[1] - m)), sx(Math.min(W, b[2] + m)), sy(Math.min(H, b[3] + m))];
+  if (clip[2] <= clip[0] || clip[3] <= clip[1]) return null;
+  if (!rubberVec || rubberVec.version !== vecVersion || rubberVec.key !== clip.join()) {
+    rubberVec = buildVectors(Math.max(0, b[0] - M), Math.max(0, b[1] - M), Math.min(W, b[2] + M), Math.min(H, b[3] + M));
+    rubberVec.key = clip.join();
+  }
+  return Object.assign({}, rubberVec, { win: clip });
+}
 // the map as it was before the last change of the land, fading out over the new one (two canvases taking turns)
 let fadeCv = null, fadeCv2 = null, fadeT0 = 0, fadeMs = 300, layerView = '';
 const fadeSnap = () => fadeCv2 || fadeCv;
@@ -6285,7 +6310,7 @@ function drawMap() {
   const rubber = !!(drag && drag.mode === 'warp' && drag.wm === 'rubber');
   if (vecMode && editing && !preview && !rubber) startPreview();
   if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && (!editing || rubber)) vecAsync(...vec.win);
-  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
+  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, freshLog.length ? 'p' + vecVersion : '', vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   // while the map is being moved (pan, zoom, pinch) the last full picture is only shifted and scaled: retracing
   // borders, imagery and relief for every frame of a pan cost tens of milliseconds; the full picture comes back
   // 170 ms after the movement stops. In battle the land changes many times a second: the full picture is redrawn
