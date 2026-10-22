@@ -1330,6 +1330,8 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
 .eceq span { font-size: 11.5px; }
 .ecmoney .ecstock b { font: 700 12.5px var(--f-mono); color: var(--ink); }
 .eclist li { grid-template-columns: 16px 1fr auto; }
+.ecrep { grid-column: 1 / -1; margin: 3px 0 2px 24px; padding: 5px 10px; font-size: 12px; font-weight: 600; background: rgb(229 173 72 / .14); border-color: rgb(229 173 72 / .4); }
+.ecrep:disabled { opacity: .5; }
 .ecline { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin: 2px 0 2px 24px; }
 .ecline select { padding: 5px 26px 5px 8px; font-size: 12px; }
 .ecline i { grid-column: 1 / -1; height: 4px; border-radius: 3px; background: linear-gradient(90deg, var(--accent) var(--e), var(--line2) var(--e)); }
@@ -1601,7 +1603,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
       </section>
       <section><h2>Удары</h2>
         <div class="ecstrikes" id="ecStrikes"></div>
-        <p class="hint">Заводы делают оружие, а запускают его отдельные постройки. Дроны взлетают с пунктов дроноводов (их ставят не дальше 60 км от фронта), ракеты — с пусковых установок в тылу или у фронта. У каждого вида свои дальность, радиус и сила: дешёвые FPV-дроны бьют только у самого фронта и слабо, но их много; дорогие баллистические и гиперзвуковые ракеты бьют далеко и мощно, а ПВО почти не может их сбить. Что делать, выбирается на линии завода дронов или ракет. Бомбардировщики летят до 800 км от авиазаводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может уничтожить завод.</p>
+        <p class="hint">Заводы делают оружие, а запускают его отдельные постройки. Дроны взлетают с пунктов дроноводов (их ставят не дальше 60 км от фронта), ракеты — с пусковых установок в тылу или у фронта. У каждого вида свои дальность, радиус и сила: дешёвые FPV-дроны бьют только у самого фронта и слабо, но их много; дорогие баллистические и гиперзвуковые ракеты бьют далеко и мощно, а ПВО почти не может их сбить. Что делать, выбирается на линии завода дронов или ракет. Бомбардировщики летят до 800 км от авиазаводов. ПВО противника сбивает часть ударов, войска рядом со своими ПВО теряют вдвое меньше. Удар может разрушить завод: руины ничего не делают, пока их не восстановят за деньги (кнопка «Восстановить» в списке заводов ниже).</p>
       </section>
       <section><h2>Помощь</h2>
         <div class="ecaid"><select id="ecAidTo" aria-label="Кому помочь"></select>
@@ -12605,16 +12607,19 @@ function* econDayGen() {
       if (f.owner !== k) continue;
       const F = FACT[f.type];
       if (f.left > 0) { if (--f.left === 0) { stAdd(k, 'facBuilt'); logEvent(ownerName(k) + ': построен ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(factName(f.type) + ' построен' + (f.city ? ' у города ' + f.city : '') + '.'); } continue; }
-      if (F.income) { inc += F.income * P * f.hp / 100; facInc += F.income * P * f.hp / 100; }
-      if (F.upkeep) exp += F.upkeep * P;
+      if (F.income) { inc += F.income * P * hpF(f) / 100; facInc += F.income * P * hpF(f) / 100; }
+      if (f.rep > 0) { f.hp = Math.min(100, hpF(f) + (f.repStep || 10)); if (--f.rep <= 0 || f.hp >= 100) { f.hp = 100; delete f.rep; delete f.repStep; delete f.ruined; logEvent(ownerName(k) + ': восстановлен ' + factName(f.type).toLowerCase() + (f.city ? ' у города ' + f.city : ''), k); if (k === player) toast(factName(f.type) + (f.city ? ' у города ' + f.city : '') + ' восстановлен.'); } else if (f.hp > 0) delete f.ruined; }
+      if (f.hp !== undefined && f.hp < 0) f.hp = 0;
+      if (F.upkeep && !f.ruined) exp += F.upkeep * P;
+      if (f.ruined) continue;
       if (!F.make || broke) continue;
       if (++f.t < F.every) continue;
       f.t = 0;
-      if (F.make === 'eq') { f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02); const q = f.line || 'inf', v = LINE_OUT[q] * f.eff * f.hp / 100; st.eq[q] = (st.eq[q] || 0) + v; stAdd(k, 'made_' + q, v); }
+      if (F.make === 'eq') { f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02); const q = f.line || 'inf', v = LINE_OUT[q] * f.eff * hpF(f) / 100; st.eq[q] = (st.eq[q] || 0) + v; stAdd(k, 'made_' + q, v); }
       else if (F.lines) {
         // a line of drones or missiles: the cheaper the weapon, the more of them a day; a part made is carried over
         f.eff = Math.min(1, (f.eff === undefined ? (f.pre ? .8 : .1) : f.eff) + .02);
-        const v = f.line && STRIKE[f.line] && STRIKE[f.line].kind === F.lines ? f.line : F.make, a = (f.acc || 0) + STRIKE[v].rate * f.eff * f.hp / 100, n = Math.floor(a);
+        const v = f.line && STRIKE[f.line] && STRIKE[f.line].kind === F.lines ? f.line : F.make, a = (f.acc || 0) + STRIKE[v].rate * f.eff * hpF(f) / 100, n = Math.floor(a);
         f.acc = a - n; if (n) { st[v] = (st[v] || 0) + n; stAdd(k, 'made_' + v, n); }
       }
       else { st[F.make] += F.n; stAdd(k, 'made_' + F.make, F.n); }
@@ -12660,8 +12665,26 @@ function econAid() {
   renderEcon();
 }
 // the other sides: build now and then, strike with what they have
+// a factory's state, 0 … 100 (an old save may hold less than nothing)
+const hpF = f => clamp(f.hp === undefined ? 100 : f.hp, 0, 100);
+// rebuilding: a ruin costs 60% of a new factory and half its building time, a damaged one in proportion
+function repairCost(f) { const lost = (100 - hpF(f)) / 100; return { cost: priceOf(f.owner, f.type) * .6 * lost, days: Math.max(1, Math.ceil(FACT[f.type].days * .5 * lost)) }; }
+function econRepair(k, id, quiet) {
+  const f = econ.facs.find(x => x.id === id); if (!f || f.owner !== k) return false;
+  if (mpGuest() && !mpApplying) return mpGuestCmd({ t: 'repair', id });
+  if (hpF(f) >= 100 || f.rep > 0) return false;
+  const R = repairCost(f);
+  if (money(k) < R.cost) { if (!quiet) toast('Не хватает денег на восстановление: нужно ' + fmtMoney(R.cost) + '.'); return false; }
+  econ.money[k] -= R.cost; stAdd(k, 'buildSpent', R.cost); stAdd(k, 'repairs');
+  f.rep = R.days; f.repStep = (100 - hpF(f)) / R.days;
+  if (!quiet) toast(factName(f.type) + (f.city ? ' у города ' + f.city : '') + ': восстановление за ' + fmtMoney(R.cost) + ', ' + R.days + ' ' + plural(R.days, 'день', 'дня', 'дней') + '.');
+  renderEcon(); requestDraw(); scheduleSave();
+  return true;
+}
 function econAi(k) {
   const st = stock(k), mine = facsOf(k);
+  // the AI rebuilds what was hit, the worst first, while it has the money to spare
+  for (const f of mine.filter(f => hpF(f) < 70 && !(f.rep > 0)).sort((a, b) => hpF(a) - hpF(b)).slice(0, 2)) if (money(k) > repairCost(f).cost * 3) econRepair(k, f.id, true);
   if (Math.random() < .25) {
     const ft = factTypes(), order = (mine.length < 2 ? ['civil', 'drone', 'bomber'] : ['civil', 'drone', 'drone', 'bomber', 'missile', 'armor', 'armor', 'aa', 'civil']).filter(t => ft.includes(t));
     // weapons need a place to go up from: a post of drone operators by the front, a launcher for the missiles
@@ -12689,7 +12712,7 @@ function econAi(k) {
   // missiles and bombers: an enemy factory within reach first (the dear ones keep for those), else a knot of troops
   for (const v of Object.keys(STRIKE)) {
     const S = STRIKE[v]; if (S.kind === 'drone' || !((st[v] || 0) >= S.need) || Math.random() > .5) continue;
-    const fs = econ.facs.filter(f => atWar(k, f.owner) && econCanReach(k, v, f));
+    const fs = econ.facs.filter(f => atWar(k, f.owner) && !f.ruined && econCanReach(k, v, f));
     if (fs.length && (S.dmg >= 1.4 || Math.random() < .5)) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, v, fromWorld(f), true); }
     else { const ts = targetsNear(v); if (ts.length) econStrike(k, v, ts[Math.floor(Math.random() * ts.length)], true); }
   }
@@ -12703,7 +12726,7 @@ function econAi(k) {
 function econLaunch(k, kind, w) {
   const S = STRIKE[kind];
   let best = null, bd = Infinity;
-  for (const f of econ.facs) if (f.owner === k && f.type === LAUNCH[S.kind] && !(f.left > 0)) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
+  for (const f of econ.facs) if (f.owner === k && f.type === LAUNCH[S.kind] && !(f.left > 0) && !f.ruined && hpF(f) >= 25) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
   return best && bd <= S.range ? best : null;
 }
 const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
@@ -12740,14 +12763,17 @@ function econImpact(k, kind, g, k2, quiet) {
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) { noteLosses(dead, k); stAdd(k, 'strikeKills', dead.length); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
   // a factory under the blast
+  // a factory under the blast: its state falls (never below nothing); at nothing it is a ruin, which stands on the
+  // map and makes nothing until its owner pays to rebuild it
   let fac = null;
   for (const f of econ.facs) {
-    if (!atWar(k, f.owner)) continue;
+    if (!atWar(k, f.owner) || f.ruined) continue;
     const p = fromWorld(f); if (Math.hypot(p.x - g.x, p.y - g.y) > R) continue;
-    f.hp -= (S.kind === 'missile' ? 45 : S.kind === 'bomber' ? 55 : 15) * S.dmg * k2;
-    if (f.hp <= 0) fac = f;
+    f.hp = Math.max(0, hpF(f) - (S.kind === 'missile' ? 45 : S.kind === 'bomber' ? 55 : 15) * S.dmg * k2);
+    if (f.rep) { delete f.rep; delete f.repStep; }                 // a repair under way is undone by the strike
+    if (f.hp <= 0) { f.hp = 0; f.ruined = true; fac = f; }
   }
-  if (fac) { econ.facs = econ.facs.filter(f => f !== fac); logEvent(ownerName(k) + ' уничтожает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); }
+  if (fac) { logEvent(ownerName(k) + ' разрушает ' + factName(fac.type).toLowerCase() + (fac.city ? ' у города ' + fac.city : '') + ' (' + ownerName(fac.owner) + ')', k); if (fac.owner === player) toast(factName(fac.type) + (fac.city ? ' у города ' + fac.city : '') + ' разрушен. Его можно восстановить на вкладке «Экономика».'); }
   // battalions of the live front under the blast
   let lfHit = 0;
   // a strike hits the stretches under it: a few per cent of the battalions there and a fraction of one, by its power
@@ -12756,7 +12782,7 @@ function econImpact(k, kind, g, k2, quiet) {
   if (lfOn()) for (const [key, e] of lfBorder) { if (Math.hypot(e.x - g.x, e.y - g.y) > Rlf + lfBC() * .5) continue; for (const o of [e.a, e.b]) if (atWar(k, o)) { const v = lfStr(key, o), d = Math.min(v, (v * .04 + .15) * S.dmg * k2); if (d > 0) { lfAdd(key, o, -d); lfHit += d; stAdd(o, 'lfLost', d); stAdd(k, 'lfKilled', d); } } }
   const civ = strikeCivilians(kind, g, S.radius);
   stAdd(k, 'hitUnits', hit.length); stAdd(k, 'civKilled', civ); stAdd(fineOwner(g.x, g.y), 'civLost', civ); if (fac) { stAdd(k, 'facKilled'); stAdd(fac.owner, 'facLost'); }
-  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + [hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : '', lfHit >= .5 ? 'выбито батальонов: ' + Math.round(lfHit) : '', fac ? 'уничтожен завод' : ''].filter(Boolean).join(', ').replace(/^$/, 'без потерь у противника') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
+  const txt = ownerName(k) + ': ' + S.name.toLowerCase() + ' — ' + [hit.length ? 'поражено отрядов: ' + hit.length + (lost ? ', уничтожено: ' + lost : '') : '', lfHit >= .5 ? 'выбито батальонов: ' + Math.round(lfHit) : '', fac ? 'разрушен завод' : ''].filter(Boolean).join(', ').replace(/^$/, 'без потерь у противника') + (civ ? ', погибло мирных: ' + fmtPeople(civ) : '');
   logEvent(txt, k);
   if (!quiet || (player && fineOwner(g.x, g.y) === player && (kind === 'missile' || fac))) toast(txt);
   renderEcon(); if (infoSel) renderInfoCard(); requestDraw();
@@ -12864,7 +12890,15 @@ function drawEcon(c) {
     if (game.fog && player && !allied(f.owner, player) && !allied(cellOwner(g.x, g.y), player)) continue;
     drawFacIcon(c, f.type, x, y, r, rgb[f.owner] || [90, 90, 90], f.left > 0);
     if (f.left > 0) { c.font = `600 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)'; c.strokeText(f.left + ' дн.', x, y + r + 2); c.fillStyle = '#e6c27a'; c.fillText(f.left + ' дн.', x, y + r + 2); }
-    else if (f.hp < 100) { c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - r, y + r + 2, r * 2, 3); c.fillStyle = '#d2432d'; c.fillRect(x - r, y + r + 2, r * 2 * f.hp / 100, 3); }
+    else if (f.ruined) {
+      c.fillStyle = 'rgba(20,20,20,.72)'; c.beginPath(); c.arc(x, y, r + 1, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.moveTo(x - r * .7, y - r * .7); c.lineTo(x + r * .7, y + r * .7); c.moveTo(x + r * .7, y - r * .7); c.lineTo(x - r * .7, y + r * .7); c.lineWidth = 2; c.strokeStyle = '#d2432d'; c.stroke();
+      c.font = `600 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)'; const lb = f.rep > 0 ? 'ремонт ' + f.rep + ' дн.' : 'руины'; c.strokeText(lb, x, y + r + 2); c.fillStyle = f.rep > 0 ? '#e6c27a' : '#e2715f'; c.fillText(lb, x, y + r + 2);
+    }
+    else if (hpF(f) < 100) {
+      c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - r, y + r + 2, r * 2, 3); c.fillStyle = f.rep > 0 ? '#e6c27a' : '#d2432d'; c.fillRect(x - r, y + r + 2, r * 2 * hpF(f) / 100, 3);
+      if (f.rep > 0) { c.font = `600 9px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'top'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)'; c.strokeText('ремонт ' + f.rep + ' дн.', x, y + r + 7); c.fillStyle = '#e6c27a'; c.fillText('ремонт ' + f.rep + ' дн.', x, y + r + 7); }
+    }
   }
   // what is being placed or aimed, under the cursor
   if (econMode && hover) {
@@ -12981,12 +13015,28 @@ function renderEcon(hudOnly) {
   const mine = facsOf(player);
   $('#ecNone').hidden = mine.length > 0;
   const cnt = {}; for (const f of mine) cnt[f.type] = (cnt[f.type] || 0) + 1;
-  for (const f of mine.slice().sort((a, b) => a.left - b.left || a.type.localeCompare(b.type)).slice(0, 60)) {
+  // everything hit, at once
+  const hurt = mine.filter(f => !(f.left > 0) && hpF(f) < 100 && !(f.rep > 0));
+  if (hurt.length > 1) {
+    const tot = hurt.reduce((s, f) => s + repairCost(f).cost, 0), li = document.createElement('li'), b = document.createElement('button');
+    b.className = 'ecrep'; b.textContent = 'Восстановить всё (' + hurt.length + ') · ' + fmtMoney(tot); b.disabled = money(player) < tot;
+    b.addEventListener('click', () => { let n = 0; for (const f of hurt.sort((a, b) => hpF(a) - hpF(b))) if (econRepair(player, f.id, true)) n++; toast(n ? 'Восстановление начато: ' + n + ' ' + plural(n, 'завод', 'завода', 'заводов') + '.' : 'Не хватает денег.'); });
+    li.append(b); ul.append(li);
+  }
+  for (const f of mine.slice().sort((a, b) => (a.ruined ? 0 : 1) - (b.ruined ? 0 : 1) || hpF(a) - hpF(b) || a.left - b.left || a.type.localeCompare(b.type)).slice(0, 60)) {
     const li = document.createElement('li');
     const cv3 = document.createElement('canvas'); cv3.width = cv3.height = 32; const x = cv3.getContext('2d'); x.scale(2, 2); drawFacIcon(x, f.type, 8, 8, 7, rgb[f.owner] || [120, 120, 120], f.left > 0);
     const t = document.createElement('span'); t.textContent = factName(f.type) + (f.city ? ' · ' + f.city : '');
-    const s = document.createElement('small'); s.textContent = f.left > 0 ? 'строится, ' + f.left + ' дн.' : f.hp < 100 ? 'повреждён, ' + Math.round(f.hp) + '%' : 'работает';
+    const s = document.createElement('small'); s.textContent = f.left > 0 ? 'строится, ' + f.left + ' дн.' : f.rep > 0 ? 'восстанавливается, ' + f.rep + ' дн. (' + Math.round(hpF(f)) + '%)' : f.ruined ? 'разрушен — не работает' : hpF(f) < 100 ? 'повреждён, ' + Math.round(hpF(f)) + '% (работает на ' + Math.round(hpF(f)) + '%)' : 'работает';
+    if (f.ruined && !(f.rep > 0)) s.style.color = '#e2715f';
     li.append(cv3, t, s);
+    if (!(f.left > 0) && hpF(f) < 100 && !(f.rep > 0)) {
+      const R = repairCost(f), b = document.createElement('button'); b.className = 'ecrep';
+      b.textContent = (f.ruined ? 'Восстановить' : 'Починить') + ' · ' + fmtMoney(R.cost) + ' · ' + R.days + ' дн.';
+      b.disabled = money(player) < R.cost;
+      b.addEventListener('click', e => { e.stopPropagation(); econRepair(player, f.id); });
+      li.append(b);
+    }
     // a military factory: its line and how well it runs
     if ((f.type === 'armor' || FACT[f.type].lines) && !(f.left > 0)) {
       const row = document.createElement('div'); row.className = 'ecline';
@@ -15976,6 +16026,7 @@ function mpOnMsg(peer, m) {
     case 'lfgen': { const g = generals.find(x => x.id === m.id); if (!g || g.owner !== k || !lfOn()) return; mpApplying = true; try { if (m.key === null) { delete econ.front.gen[m.id]; } else lfGenAssign(m.id, m.key, true); } finally { mpApplying = false; } return; }
     case 'lfmob': { const f = decodeRegions().a1.find(x => regionKey(x) === m.reg); if (f && lfOn()) { mpApplying = true; try { lfMobilize(k, f, m.lv === 'full' ? 'full' : 'part', false); } finally { mpApplying = false; } } return; }
     case 'lf': { if (!lfOn()) return; lfStroke = { seen: new Set(), n: 0 }; for (const key of m.keys || []) { const e = lfBorder.get(key); if (e && (e.a === k || e.b === k)) lfApply(k, m.mode, key, Math.min(10, +m.step || 5), !!m.alt); } lfStroke = null; return; }
+    case 'repair': { mpApplying = true; try { econRepair(k, m.id, true); } finally { mpApplying = false; } return; }
     case 'line': { const f = econ.facs.find(x => x.id === m.id); if (f && f.owner === k) setLine(f, m.line); return; }
     case 'aid': { const to = +m.to, pk = Object.assign({}, m.pack); if (pk.eq === 'inf') pk.eq = Infinity; if (countries[to - 1] && to !== k && !atWar(k, to)) aidSend(k, to, pk, true); return; }
   }
