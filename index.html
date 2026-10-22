@@ -1897,7 +1897,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
         <p id="campInfo"></p>
         <div class="csides" id="campSides"></div>
         <div class="ctroops" id="campTroopsBox" role="radiogroup" aria-label="Войска">
-          <button data-tr="mob" role="radio"><b>Война с мобилизацией</b><small>Рекомендуется. Дивизии в армиях генералов, как в Hearts of Iron: выделяете мышью, рисуете линии фронта и обороны, ведёте в атаку. ИИ воюет против вас, людей на новые дивизии даёт призыв</small></button>
+          <button data-tr="mob" role="radio"><b>Война с мобилизацией</b><small>Рекомендуется. Тысячи отрядов по 75 м и больше вдоль всего фронта: выделяете мышью, ведёте армии генералов, рисуете линии фронта и обороны. Бой решают сила отрядов и ресурсы стран, людей даёт призыв</small></button>
           <button data-tr="free" role="radio"><b>Свободный фронт</b><small>Без ИИ: живой фронт вдоль всех границ, вы сами двигаете границы; плотность войск настраивается</small></button>
         </div>
         <div class="ctroops" id="campHistBox" role="radiogroup" aria-label="ИИ">
@@ -2109,7 +2109,7 @@ const HINTS = {
   cities: 'Щелчок по карте ставит город. Город можно перетащить, щелчок открывает его настройки.',
   units: 'Фронт. Квадратики на карте — ваши армии. Щёлкните по армии, потом по месту на фронте — она пойдёт туда (или перетащите). В окне «Армии»: «Наступать» или «Оборона». «Призыв» — новые батальоны, они сами пополнят армии. Линию между армиями войска держат сами. «Точно ▾» — ручные кисти по участкам.',
 };
-const DIV_HINT = 'Дивизии, как в Hearts of Iron. Выделяйте их мышью (щелчок, рамка, Ctrl+A) и отдавайте приказ: «Наступать», «Оборона» или правой кнопкой — куда идти. «Генералу…» — передать выделенные в армию генерала. Выберите генерала внизу: «Фронт» (G) — его линия вдоль границы, «Оборона» (V) — линия обороны где угодно на своей земле, «Наступление» (T) — куда идти, «▶ Выполнить план» — в атаку. Новые дивизии — «Ставить» (Q): нужны деньги, снаряжение и люди из призыва.';
+const DIV_HINT = 'Войска — квадратики размером с отряд: бой идёт только там, где квадратики касаются. Исход решают сила отрядов, род войск, местность, снабжение и ресурсы стран (люди, заводы, оружие на складах, казна). Выделяйте отряды мышью (щелчок, рамка, Ctrl+A) и отдавайте приказ: «Наступать», «Оборона» или правой кнопкой — куда идти. «Генералу…» — передать выделенные в армию генерала. Выберите генерала внизу: «Фронт» (G), «Оборона» (V), «Наступление» (T), «▶ В атаку». Новые отряды — «Ставить» (Q): деньги, снаряжение и люди из призыва';
 
 // ---------- state ----------
 let watchMode = false;   // watching a war by its stages, not playing it (setMode)
@@ -6679,8 +6679,8 @@ const resistPace = r => clamp(r.f * r.f * 1.6, .05, 1);
 function resistPay(r, mv) {
   if (!r || !r.D.length || mv <= 0) return;
   const p = mv / BR(), w = 1 - r.f + .25;
-  for (const u of r.D) { u.org = Math.max(0, orgOf(u) - 70 * p * w); u.hp = hpOf(u) - 9 * p * w; u.fighting = true; }
-  for (const u of r.A) { u.org = Math.max(0, orgOf(u) - 22 * p * r.f); u.hp = hpOf(u) - 2.5 * p * (1 - r.f + .1); u.fighting = true; }
+  for (const u of r.D) { u.hp = hpOf(u) - 14 * p * w; u.fighting = true; }
+  for (const u of r.A) { u.hp = hpOf(u) - 3.5 * p * (1 - r.f + .1); u.fighting = true; }
   drag.fought = true;
 }
 // after the drag: the destroyed are struck off, as after a battle
@@ -6894,7 +6894,7 @@ function aiWeakSpot(f) {
   const step = Math.max(1, Math.floor(ls.length / 30));
   for (let k = 0; k < ls.length; k += step) {
     const u = ls[k], R = bodyS(u) * 5;
-    let n = 0; forNear(u, R, v => { if (atWar(v.owner, f.owner) && Math.hypot(v.x - u.x, v.y - u.y) < R) n += orgOf(v) / 100 * hpOf(v) / 100; });
+    let n = 0; forNear(u, R, v => { if (atWar(v.owner, f.owner) && Math.hypot(v.x - u.x, v.y - u.y) < R) n += hpOf(v) / 100; });
     // the way into enemy land from here
     let dx = 0, dy = 0;
     for (let j = 0; j < 16; j++) { const a = j * Math.PI / 8, cx = Math.cos(a), cy = Math.sin(a), o = cellOwner(u.x + cx * R * .8, u.y + cy * R * .8); if (o && atWar(o, f.owner)) { dx += cx; dy += cy; } }
@@ -9449,6 +9449,7 @@ function lfSpread(o, n) {
 // in the war with mobilisation the divisions take their men from the manpower reserve (econ.man): a call-up fills
 // it, a new division takes DIV_BAT battalions for each set of its equipment, filling up losses takes men too
 const DIV_BAT = 10;
+const DIV_TARGET = 5000;                            // units on all the fronts at the start of a war with mobilisation
 const divMode = () => !!(econ && econ.divs) && !lfOn();
 const mobSt = () => lfOn() ? lfState() : econ.man || (econ.man = { res: {}, mob: [], mobT: {} });
 const MOB = { part: { name: 'Частичная', rate: .004, days: 12, cd: 30 }, full: { name: 'Всеобщая', rate: .015, days: 20, cd: 60 } };
@@ -9493,8 +9494,8 @@ function lfRegionsOf(o) {
     C.regs = decodeRegions().a1.map(f => { let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } } return best ? [f, (best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2] : null; }).filter(Boolean);
     C.own = new Map(C.regs.map(([f, x, y]) => [f, ownerAtWorld(x, y)])); C.next = 0; C.title = mapTitle + countries.length; C.day = day; C.all = null;
   } else if (day !== C.day) {
-    // only the regions of countries at war can change hands: a fifteenth of them a day
-    let n = Math.ceil(C.regs.length / 15);
+    // only the regions of countries at war can change hands: a thirtieth of them a day
+    let n = Math.ceil(C.regs.length / 30);
     for (let i = 0; i < C.regs.length && n > 0; i++) {
       const [f, x, y] = C.regs[C.next]; C.next = (C.next + 1) % C.regs.length;
       const k0 = C.own.get(f); if (k0 && !atWarAny(k0)) continue;
@@ -9734,7 +9735,7 @@ function renderDivCnt(box) {
   const st = mobSt(), S = statsOf(o), res = st.res[o] || 0, train = st.mob.filter(m => m.o === o).reduce((t, m) => t + m.n, 0);
   let mine = 0, foe = 0; for (const u of units) { if (u.owner === o) mine++; else if (atWar(o, u.owner)) foe++; }
   const rifles = game.econ ? Math.floor(stock(o).eq.inf || 0) : Infinity;
-  const chips = [['Дивизий : у врага', fmtInt(mine) + ' : ' + fmtInt(foe), foe > mine * 1.5 ? 'bad' : '', 'Ваших дивизий на карте и дивизий противника'], ['Людской резерв', fmtPeople(res * 650), res >= DIV_BAT ? 'gold' : 'bad', 'Хватит на ' + Math.floor(res / DIV_BAT) + ' новых дивизий (каждая — ' + fmtPeople(DIV_BAT * 650) + ' человек); пополнение потерь тоже берёт людей отсюда'], ['Готовятся', fmtPeople(train * 650), '', 'Призванные, которые ещё учатся'], ['Разгромлено: своих : чужих', fmtInt(S.lost) + ' : ' + fmtInt(S.kills), '', 'Сколько ваших дивизий разгромлено и сколько дивизий противника разгромили вы']];
+  const chips = [['Отрядов : у врага', fmtInt(mine) + ' : ' + fmtInt(foe), foe > mine * 1.5 ? 'bad' : '', 'Ваших дивизий на карте и дивизий противника'], ['Людской резерв', fmtPeople(res * 650), res >= DIV_BAT ? 'gold' : 'bad', 'Хватит на ' + Math.floor(res / DIV_BAT) + ' новых дивизий (каждая — ' + fmtPeople(DIV_BAT * 650) + ' человек); пополнение потерь тоже берёт людей отсюда'], ['Готовятся', fmtPeople(train * 650), '', 'Призванные, которые ещё учатся'], ['Уничтожено: своих : чужих', fmtInt(S.lost) + ' : ' + fmtInt(S.kills), '', 'Сколько ваших дивизий разгромлено и сколько дивизий противника разгромили вы']];
   if (rifles !== Infinity) chips.push(['Оружия', fmtInt(rifles), rifles < 2 ? 'bad' : '', 'Комплекты стрелкового оружия на складах: на столько новых дивизий пехоты']);
   const html = chips.map(([n, v, c, t]) => `<span class="ac ${c}" title="${t}"><small>${n}</small><b>${v}</b></span>`).join('');
   if (box.innerHTML !== html) box.innerHTML = html;
@@ -10265,13 +10266,13 @@ let layoutSig = '', unitSum = 0, layoutView = '', layoutT = 0;
 function layoutUnits() {
   // in battle with many troops the stacks follow them a few times a second (a stack of hundreds moves a pixel or two
   // a frame): laid out every frame they cost most of the frame; a change of the view is laid out at once
-  const r0 = stage.getBoundingClientRect(), vk = [view.x, view.y, view.s, r0.width, r0.height, selGen, targets().length, unitSize, echScale, game.fog, player].join(), now = performance.now();
+  const r0 = stage.getBoundingClientRect(), vk = [ctrPxNow(), view.x, view.y, view.s, r0.width, r0.height, selGen, targets().length, unitSize, echScale, game.fog, player].join(), now = performance.now();
   if (battlesOn && units.length > 3000 && vk === layoutView && now - layoutT < Math.min(400, units.length / 500)) return;
   layoutView = vk; layoutT = now;
   let sum = units.length;
   for (let i = 0; i < units.length; i++) { const u = units[i]; sum = (sum + u.x * 7.31 + u.y * 3.17 + u.owner) % 1e9; }
   unitSum = sum;
-  for (let i = 0; i < units.length; i++) { const u = units[i]; sum = (sum + (u.hp || 0) * 1.3 + (u.org || 0) * .7 + (u.fighting ? 5 : 0)) % 1e9; }
+  for (let i = 0; i < units.length; i++) { const u = units[i]; sum = (sum + (u.hp || 0) * 1.3 + (u.fighting ? 5 : 0)) % 1e9; }
   const r = stage.getBoundingClientRect();
   const sig = [view.x, view.y, view.s, r.width, r.height, sum, selGen, targets().length, unitSize, echScale, game.fog, player].join();
   if (sig === layoutSig) return;
@@ -10281,11 +10282,18 @@ function layoutUnits() {
 // Counters, as in Hearts of Iron: every unit is drawn at one size on the screen whatever the zoom, and units whose
 // counters would cover each other are one stack with their number on it (each stays a unit of its own: zooming in
 // parts them, a click on a stack picks them all). Only within the view.
-const CTR_PX = 20;                        // a counter's square, in screen pixels
+// a counter's square, in screen pixels: in the war with mobilisation the unit's own square on the map (its reach in
+// battle and in taking ground), never under 7 px so that it stays visible; elsewhere 20 px whatever the zoom
+let CTR_PX = 20;
+function ctrPxNow() {
+  if (!divMode() || !geoStore) return 20;
+  const r = stage.getBoundingClientRect();
+  return clamp(Math.round(unitCellsAt((r.height / 2 - view.y) / view.s) * view.s), 7, 600);
+}
 const ctrS = () => CTR_PX / view.s;       // the same in cells of the map
 let dotUnits = [];
 function layoutTree() {
-  shown = []; dotUnits = [];
+  shown = []; dotUnits = []; CTR_PX = ctrPxNow();
   const r = stage.getBoundingClientRect(), s = view.s, pad = CTR_PX, fog = game.fog && player;
   const cell = CTR_PX, join = CTR_PX * 1.05, stacks = new Map(), many = units.length > 20000;
   for (let i = 0; i < units.length; i++) {
@@ -10332,10 +10340,10 @@ function layoutTree() {
 // what a stack shows: the arm most of its units are, their side, mean organisation and strength
 function stackMarker(L) {
   // a stack of thousands is judged by a hundred or so of its units, taken evenly through it
-  const kinds = new Map(), step = Math.max(1, Math.floor(L.length / 96)); let hp = 0, org = 0, oos = 0, fight = 0, n = 0, gen = L[0].gen;
-  for (let i = 0; i < L.length; i += step) { const u = L[i], k = u.era + '|' + u.type; kinds.set(k, (kinds.get(k) || 0) + 1); hp += hpOf(u); org += orgOf(u); if (u.oos) oos++; if (u.fighting) fight++; if (u.gen !== gen) gen = 0; n++; }
+  const kinds = new Map(), step = Math.max(1, Math.floor(L.length / 96)); let hp = 0, oos = 0, fight = 0, n = 0, gen = L[0].gen;
+  for (let i = 0; i < L.length; i += step) { const u = L[i], k = u.era + '|' + u.type; kinds.set(k, (kinds.get(k) || 0) + 1); hp += hpOf(u); if (u.oos) oos++; if (u.fighting) fight++; if (u.gen !== gen) gen = 0; n++; }
   const [era_, type] = [...kinds].sort((a, b) => b[1] - a[1])[0][0].split('|');
-  return { x: 0, y: 0, era: era_, type, owner: L[0].owner, ech: L[0].ech, label: '', hp: hp / n, org: org / n, oos: oos * 2 > n, fighting: fight > 0, n: L.length, gen: gen || 0 };
+  return { x: 0, y: 0, era: era_, type, owner: L[0].owner, ech: L[0].ech, label: '', hp: hp / n, oos: oos * 2 > n, fighting: fight > 0, n: L.length, gen: gen || 0 };
 }
 function hitShown(g) {
   const sx = g.x * view.s + view.x, sy = g.y * view.s + view.y, h = CTR_PX / 2 + 2;
@@ -10443,11 +10451,10 @@ function drawCounter(c, it, sel) {
   c.globalAlpha = sel ? 1 : .9;
   const gold = u.gen && u.gen === selGen;
   if (sel || gold) { c.lineWidth = 2; c.strokeStyle = sel ? '#ffd65a' : '#e2b84a'; c.strokeRect(x - h - 1.5, y - h - 1.5, P + 3, P + 3); }
-  // bars: organisation over strength
-  const org = clamp(orgOf(u), 0, 100) / 100, hp = clamp(hpOf(u), 0, 100) / 100, by = y + h + 1;
-  c.fillStyle = 'rgba(20,24,30,.85)'; c.fillRect(x - h, by, P, 6);
-  c.fillStyle = org > .5 ? '#4cc764' : org > .2 ? '#d9b23a' : '#d0473f'; c.fillRect(x - h + 1, by + 1, (P - 2) * org, 2);
-  c.fillStyle = '#d8dde3'; c.fillRect(x - h + 1, by + 4, (P - 2) * hp, 1.5);
+  // the bar of strength, green to red
+  const hp = clamp(hpOf(u), 0, 100) / 100, by = y + h + 1;
+  c.fillStyle = 'rgba(20,24,30,.85)'; c.fillRect(x - h, by, P, 4);
+  c.fillStyle = hp > .6 ? '#4cc764' : hp > .3 ? '#d9b23a' : '#d0473f'; c.fillRect(x - h + 1, by + 1, (P - 2) * hp, 2);
   if (it.leaves) {
     const t = String(it.leaves.length);
     c.font = `800 10px ${FONT_UI}`; const tw = Math.max(13, c.measureText(t).width + 6);
@@ -10521,9 +10528,9 @@ function renderUnitPanel() {
       $('#unitStats').textContent = fm.n + ' дивизий · общая сила ' + list.reduce((t, u) => t + unitPower(u), 0).toFixed(1) + ' · среднее состояние ' + Math.round(list.reduce((t, u) => t + hpOf(u), 0) / list.length) + '% · перетащите значок, чтобы двинуть всё соединение, ПКМ — приказ на марш';
     } else if (many) {
       $('#unitSelName').textContent = 'Выбрано отрядов: ' + list.length + (oneOwner && c ? ' · ' + c.name : '');
-      $('#unitStats').textContent = 'Организация ' + Math.round(list.reduce((t, u) => t + orgOf(u), 0) / list.length) + '% · сила ' + Math.round(list.reduce((t, u) => t + hpOf(u), 0) / list.length) + '% · Shift + щелчок убирает из выбора, Esc снимает выбор';
+      $('#unitStats').textContent = 'Сила ' + Math.round(list.reduce((t, u) => t + hpOf(u), 0) / list.length) + '% · Shift + щелчок убирает из выбора, Esc снимает выбор';
     } else
-    $('#unitStats').textContent = roleOf(selUnit).job[0].toUpperCase() + roleOf(selUnit).job.slice(1) + '. Атака ×' + roleOf(selUnit).atk + ', оборона ×' + roleOf(selUnit).def + ' · опыт ' + Math.round((selUnit.xp || 0) * 100) + '% · организация ' + Math.round(orgOf(selUnit)) + '% · сила ' + Math.round(hpOf(selUnit)) + '% · окопы ' + Math.round((selUnit.ent || 0) * 100) + '% · мощь ' + unitPower(selUnit).toFixed(2) + (selUnit.oos && game.supply ? ' · без снабжения' : '') + (selUnit.fighting ? ' · в бою' : selUnit.rest ? ' · отдыхает после боя' : selUnit.retreat > 0 ? ' · отступает' : selUnit.order ? ' · на марше' : '');
+    $('#unitStats').textContent = roleOf(selUnit).job[0].toUpperCase() + roleOf(selUnit).job.slice(1) + '. Атака ×' + roleOf(selUnit).atk + ', оборона ×' + roleOf(selUnit).def + ' · опыт ' + Math.round((selUnit.xp || 0) * 100) + '% · сила ' + Math.round(hpOf(selUnit)) + '% · ресурсы страны ×' + resPower(selUnit.owner).toFixed(2) + ' · мощь ' + unitPower(selUnit).toFixed(2) + (selUnit.oos && game.supply ? ' · без снабжения' : '') + (selUnit.fighting ? ' · в бою' : selUnit.rest ? ' · ждёт пополнения' : selUnit.retreat > 0 ? ' · отступает' : selUnit.order ? ' · на марше' : '');
     $('#unitLabel').value = selUnit.label || '';
     $('#unitEch').value = unitEch;
     const sc = Math.round((selUnit.scale || 1) * 100);
@@ -10636,7 +10643,7 @@ function renderArmyBar() {
   box.hidden = !g;
   if (!g) return;
   const us = genUnits(g), fs = fronts.filter(f => f.gen === g.id), front = fs.filter(f => f.kind === 'front').pop();
-  let org = 0, hp = 0; for (const u of us) { org += orgOf(u); hp += hpOf(u); }
+  let hp = 0; for (const u of us) hp += hpOf(u);
   const n = us.length, pct = v => n ? Math.round(v / n) + '%' : '—';
   const state = !fs.length ? 'без линии' : front && front.mode === 'attack' ? (front.goal ? 'наступает к линии' : 'наступает') : fs[fs.length - 1].kind === 'area' ? 'держит область' : 'обороняется';
   box.textContent = '';
@@ -10649,9 +10656,8 @@ function renderArmyBar() {
   const row1 = document.createElement('div'), row2 = document.createElement('div'); row1.className = row2.className = 'arow';
   box.append(row1, row2); row1.append(head);
   const stat = (name, v, hint, frac) => { const d = document.createElement('div'); d.className = 'astat'; d.title = hint; d.innerHTML = '<small></small><b></b><i><s></s></i>'; d.children[0].textContent = name; d.children[1].textContent = v; d.querySelector('s').style.width = clamp(frac, 0, 1) * 100 + '%'; row1.append(d); return d; };
-  stat('Организация', pct(org), 'Воля и порядок войск: тратится в бою, восстанавливается на отдыхе. Без неё дивизия отступает', n ? org / n / 100 : 0).classList.add('org');
   stat('Сила', pct(hp), 'Люди и техника: потери в боях, медленно пополняются при снабжении', n ? hp / n / 100 : 0);
-  if (front) stat('План', Math.round((front.plan || 0) * 100) + '%', 'Подготовка наступления: растёт, пока армия держит фронт, даёт до +35% к атаке и тратится в наступлении', front.plan || 0).classList.add('plan');
+  stat('Ресурсы', '×' + resPower(g.owner).toFixed(2), 'Что стоит за армией: оружие на складах, военные заводы против вражеских, казна и люди в резерве. Умножает силу в бою', (resPower(g.owner) - .6) / .9).classList.add('plan');
   let into = row2;
   const sep = () => { const d = document.createElement('span'); d.className = 'asep'; into.append(d); };
   const btn = (name, key, title, fn, on, cls) => { const b = document.createElement('button'); b.className = (on ? 'on ' : '') + (cls || ''); b.title = title + (key ? ' (' + key + ')' : ''); b.append(name); if (key) { const k = document.createElement('kbd'); k.textContent = key; b.append(k); } b.addEventListener('click', fn); into.append(b); return b; };
@@ -10663,7 +10669,7 @@ function renderArmyBar() {
   btn('Оборона', 'V', 'Провести линию обороны на своей земле', mode('defense'), draw && unitMode === 'defense');
   btn('Область', 'N', 'Обвести область, которую армия займёт', mode('area'), draw && unitMode === 'area');
   sep();
-  const go = btn('▶ Выполнить план', '', 'Армия переходит в наступление через свою линию фронта' + (front && front.goal ? ' — к линии наступления' : ''), () => { setFrontMode(us, 'attack'); }, front && front.mode === 'attack', 'go');
+  const go = btn('▶ В атаку', '', 'Армия переходит в наступление через свою линию фронта' + (front && front.goal ? ' — к линии наступления' : ''), () => { setFrontMode(us, 'attack'); }, front && front.mode === 'attack', 'go');
   go.disabled = !front || !n;
   const st = btn('■ Стоп', '', 'Остановить наступление: армия держит линию, где стоит', () => { setFrontMode(us, 'hold'); }, false, 'stop');
   st.disabled = !front || front.mode !== 'attack';
@@ -10779,12 +10785,12 @@ const ECH_K = ECH_SIZE;
 // what a marker of grid size S is drawn at: never smaller than UNIT_MIN_PX on screen
 const drawS = S => Math.max(S, UNIT_MIN_PX / view.s);
 const hpOf = u => u.hp === undefined ? 100 : u.hp;
-const orgOf = u => u.org === undefined ? 100 : u.org;
+
 const immobile = u => unitDef(u).def[2] === 'tower';
 function unitPower(u, mode) { const g = u.gen && genById(u.gen), R = mode && roleOf(u); return (mode === 'atk' ? R.atk : mode === 'def' ? R.def : TYPE_POWER[unitDef(u).def[2]] || 1) * (1 + .25 * (u.xp || 0)) * (ECH_POWER[u.ech || ''] || 1) * (hpOf(u) / 100 * .7 + .3) * (g ? 1 + .06 * g.skill : 1) * (u.oos && game.supply ? .6 : 1); }
 function cellOwner(x, y) { const gx = Math.floor(x), gy = Math.floor(y); return gx < 0 || gy < 0 || gx >= W || gy >= H ? 0 : own[gy * W + gx]; }
 // on the Earth a unit of a few metres takes at least the cells it walks through; on a picture, a few cells around it
-const pushRadius = u => Math.max(geoStore ? .6 : 3, bodyS(u) * .9 * pushK);
+const pushRadius = u => Math.max(geoStore ? .6 : 3, bodyS(u) * (divMode() ? .55 : .9) * pushK);
 // the working grid is the part of the world that lives: units outside it wait until the view comes back to them
 const inWin = u => u.x >= 0 && u.y >= 0 && u.x < W && u.y < H;
 
@@ -10824,26 +10830,54 @@ function marchCells(u) {
 function moveUnit(u, nx, ny, step) {
   const from = { x: u.x, y: u.y };
   u.x = clamp(nx, 0, W); u.y = clamp(ny, 0, H);
-  if (u.ent && (u.x !== from.x || u.y !== from.y)) u.ent = 0;       // on the move: out of its trenches
   // an attack takes land as a front (lineFill); a march through one's own land takes none; the step a winner makes
   // in a fight takes the ground it covers (for a unit of a few metres, nothing of a coarse map)
-  if (unitsPushBorder && !u.atk && !(u.order && u.redeploy)) captureAlong(from, u, step ? bodyS(u) * .9 * pushK : pushRadius(u), u.owner);
+  if (unitsPushBorder && !u.atk && !(u.order && u.redeploy)) captureAlong(from, u, step ? bodyS(u) * (divMode() ? .55 : .9) * pushK : pushRadius(u), u.owner);
 }
-// --- battles, as in Hearts of Iron ---
-// A unit has strength (hp, its men and machines) and organisation (org, its will and order to fight). Only a unit
-// told to attack starts a battle (a front on «Наступать», a group sent into the enemy's land, the AI); two lines
-// that hold face each other in silence. In a battle both sides lose mostly organisation and a little strength; a
-// defender out of organisation gives way and falls back, the attacker takes the ground; an attacker out of it stops
-// to rest and goes on by itself once it has recovered. Holding still digs a unit in, a held front plans its blow.
-const ORG_PER_H = 2.6, HP_PER_H = .12, REST_AT = 12, GO_AT = 55;
+// --- battles: strength against strength, and the country behind each side ---
+// A unit has its strength alone (hp: its men and machines). Only a unit told to attack starts a battle (a front on
+// «Наступать», a group sent into the enemy's land, the AI); two lines that hold face each other in silence. Units
+// fight only where their squares touch. The hour goes by the strength and arm of the units, the ground, the supply
+// and what their countries have behind them (resPower: weapons on the stocks, war industry, money, men in
+// reserve). The side with the upper hand pushes: the defender falls back a step of its own size and the attacker
+// comes on; a unit with no strength left is destroyed; an attacker worn below WORN_AT stops until it is refilled.
+const HP_PER_H = .45, WORN_AT = 30, FRESH_AT = 60;
 const inBattle = new Set();               // the units that fought in the last tick
+// how close two units' middles are when they are in contact, in their mean size: squares touching in the war with
+// mobilisation, a little apart elsewhere
+const CONTACT = () => divMode() ? 1.15 : 1.9;
+// what a country has behind its troops, 0.6 … 1.5: its might against all its enemies together (people, and the
+// factories that work for it: the war industry counts double), weapons on its stocks for its units, its treasury
+// and the men it has in reserve; worked out once a game day
+const resCache = new Map();
+function mightOf(k) {
+  const day = Math.floor(gameDate / 864e5), c = resCache.get('m' + k);
+  if (c && c.day === day) return c.v;
+  let pop = 0; for (const f of lfRegionsOf(k)) pop += regionPop(f).now;
+  let fac = 0; for (const f of econ.facs) if (f.owner === k && !(f.left > 0) && !f.ruined) fac += (FACT[f.type] && FACT[f.type].make === 'eq' ? 2 : 1) * hpF(f) / 100;
+  const v = Math.sqrt(pop / 1e6 + 1) * (1 + .08 * fac); resCache.set('m' + k, { day, v }); return v;
+}
+function resPower(k) {
+  const day = Math.floor(gameDate / 864e5), c = resCache.get(k);
+  if (c && c.day === day) return c.v;
+  let v = 1;
+  if (game.econ && countries[k - 1] && W) {
+    let n = 0; for (const u of units) if (u.owner === k) n++;
+    const me = mightOf(k); let foe = 0; for (let q = 1; q <= countries.length; q++) if (atWar(k, q)) foe += mightOf(q);
+    const m = me / (me + foe || 1);                                              // a half: as mighty as all its enemies
+    const st = stock(k), eq = (st.eq.inf || 0) + (st.eq.art || 0) + (st.eq.tank || 0) + (st.eq.air || 0);
+    const arms = clamp(eq / Math.max(1, n * .1), 0, 1);                         // a set for one unit in ten: well armed
+    const men = divMode() ? clamp((mobSt().res[k] || 0) / Math.max(1, n * .5), 0, 1) : .5;
+    v = (.7 + .7 * m) * (.85 + .25 * arms) * (money(k) > 0 ? 1 : .85) * (.94 + .12 * men);
+  }
+  v = clamp(v, .6, 1.5); resCache.set(k, { day, v }); return v;
+}
 function attackValue(a) {
-  const f = a.fl && frontById(a.fl);
-  return unitPower(a, 'atk') * (1 + supOf(a)) * (.35 + .65 * orgOf(a) / 100) * (1 + .35 * (f ? f.plan || 0 : 0)) * supplyOf(a) * weatherOf(a).a * terrainAttack(a);
+  return unitPower(a, 'atk') * (1 + supOf(a)) * resPower(a.owner) * supplyOf(a) * weatherOf(a).a * terrainAttack(a);
 }
 function defendValue(b) {
   const f = b.fl && frontById(b.fl);
-  return terrainDefend(b) * supplyOf(b) * unitPower(b, 'def') * (.25 + .75 * orgOf(b) / 100) * (1 + .5 * (b.ent || 0)) * (f && f.kind !== 'front' ? 1.1 : 1) * (allied(cellOwner(b.x, b.y), b.owner) ? 1.1 : 1);
+  return terrainDefend(b) * supplyOf(b) * unitPower(b, 'def') * resPower(b.owner) * (f && f.kind !== 'front' ? 1.1 : 1) * (allied(cellOwner(b.x, b.y), b.owner) ? 1.1 : 1);
 }
 // one hour (times h) of a battle of attacker a against defender b
 function fight(a, b, h) {
@@ -10851,32 +10885,32 @@ function fight(a, b, h) {
   const pa = attackValue(a) * (.75 + Math.random() * .5) * (b._st === supTick && b._at && roleOf(a).eq === 'tank' ? .7 : 1), pb = defendValue(b) * (.75 + Math.random() * .5);
   a.xp = Math.min(1, (a.xp || 0) + .0015 * h); b.xp = Math.min(1, (b.xp || 0) + .0015 * h);
   const r = pa / (pa + pb);                 // 0 … 1: the attacker's share of the battle
-  b.org = Math.max(0, orgOf(b) - ORG_PER_H * h * 2 * r);
-  a.org = Math.max(0, orgOf(a) - ORG_PER_H * h * 2 * (1 - r) * .85);
   b.hp = hpOf(b) - HP_PER_H * h * 2 * r;
-  a.hp = hpOf(a) - HP_PER_H * h * 2 * (1 - r) * .8;
+  a.hp = hpOf(a) - HP_PER_H * h * 2 * (1 - r) * .85;
   inBattle.add(a); inBattle.add(b);
-  a.fighting = true; b.fighting = true; b.ent = Math.max(0, (b.ent || 0) - .01 * h);
-  if (orgOf(a) < REST_AT) { a.rest = true; }
+  a.fighting = true; b.fighting = true;
+  if (hpOf(a) < WORN_AT) a.rest = true;
   let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
-  let win = null;
-  if (orgOf(b) <= 0 && !immobile(b)) {
-    // broken: the defender falls back a step of its own size into its land, the attacker comes on after it
+  let win = r >= .5 ? a : b;
+  // the upper hand pushes: the stronger the edge, the likelier the defender gives a step this hour (an even fight
+  // only wears both down)
+  if (!immobile(b) && hpOf(b) > 0 && Math.random() < clamp((r - .52) * 3, 0, 1) * Math.min(1, h / 4) * .7) {
+    // the defender falls back a step of its own size into its land, the attacker comes on after it
     // straight away from the attacker, or turned up to a right angle from it, wherever its own land is
     const step = Math.max(bodyS(b), bodyS(a)) * 1.1;
     let to = null;
     for (const t of [0, .5, -.5, 1, -1, 1.5, -1.5]) {
       const c = Math.cos(t), s_ = Math.sin(t), rx = dx * c - dy * s_, ry = dx * s_ + dy * c;
-      const tx = clamp(b.x + rx * step, 0, W - 1), ty = clamp(b.y + ry * step, 0, H - 1), q = fineOwner(tx, ty);
+      const tx = clamp(b.x + rx * step, 0, W - 1), ty = clamp(b.y + ry * step, 0, H - 1), q = cellOwner(tx, ty);   // a step of a unit's size: the cell is enough
       if (allied(q, b.owner)) { to = { x: tx, y: ty }; break; }
     }
     if (!to) b.hp -= 4 * h;                 // nowhere to fall back: cut to pieces
-    else { b.x = to.x; b.y = to.y; b.ent = 0; b.retreat = 6; delete b.order; delete b.route; }
+    else { b.x = to.x; b.y = to.y; b.retreat = 6; delete b.order; delete b.route; }
     win = a;
     const adv = Math.max(0, Math.hypot(b.x - a.x, b.y - a.y) - (bodyS(a) + bodyS(b)) / 2 * 1.05);
     if (!immobile(a) && adv > 0) moveUnit(a, a.x + dx * Math.min(adv, step), a.y + dy * Math.min(adv, step), true);
   } else if (a.rest) win = b;
-  engaged.push([a, b, win || (r >= .5 ? a : b)]);
+  engaged.push([a, b, win]);
 }
 const frontById = id => fronts.find(f => f.id === id);
 // is a unit set on attacking, and able to
@@ -10933,7 +10967,7 @@ function* battleTickRun() {
     const bi = nearestEnemyIdx(ui, bodyS(u) * (autoAdvance ? 8 : 2.2), j => list[j].retreat > 0);   // the retreating are let go
     if (bi < 0) continue;
     const best = list[bi], bd = Math.hypot(best.x - u.x, best.y - u.y);
-    if (bd <= (bodyS(u) + bodyS(best)) / 2 * 1.9) { if (attacking(u) || autoAdvance) fight(u, best, h * slices); }
+    if (bd <= (bodyS(u) + bodyS(best)) / 2 * CONTACT()) { if (attacking(u) || autoAdvance) fight(u, best, h * slices); }
     else if (autoAdvance && !immobile(u) && !u.order && bd <= bodyS(u) * 8) {
       const k = bodyS(u) * .06 / bd;
       moveUnit(u, u.x + (best.x - u.x) * k, u.y + (best.y - u.y) * k);
@@ -10953,8 +10987,7 @@ function* battleTickRun() {
     if (inBattle.has(u)) continue;
     if (u.fighting) delete u.fighting;
     const cut = u.oos && sup;
-    if (u.org !== undefined && u.org < 100) { u.org = Math.min(100, u.org + h * (cut ? .3 : u.order ? 1 : 2.2)); if (u.org >= 100) delete u.org; }
-    if (u.rest && orgOf(u) >= GO_AT) delete u.rest;
+    if (u.rest && hpOf(u) >= FRESH_AT) delete u.rest;        // refilled: ready to attack again
     if (cut) u.hp = hpOf(u) - .25 * h / 4;                 // cut off: no supplies, slow attrition
     else if (u.hp !== undefined && u.hp < 100) {
       // with the economy on, lost men and machines come back only from the stockpile of equipment, as in Hearts of Iron
@@ -10964,12 +10997,6 @@ function* battleTickRun() {
       if (dh && divMode()) { const R = mobSt().res, men = dh / 100 * (ECH_EQ[u.ech || ''] || 1) * DIV_BAT; if ((R[u.owner] || 0) >= men) R[u.owner] -= men; else dh = 0; }
       u.hp = Math.min(100, u.hp + dh); if (u.hp >= 100) delete u.hp;
     }
-    if (!u.order && !immobile(u)) { const f = u.fl && frontById(u.fl); u.ent = Math.min(1, (u.ent || 0) + h * (f && f.kind !== 'front' ? .02 : .01)); }
-  }
-  // fronts plan their blow while they hold, and use the plan up while they attack
-  for (const f of fronts) {
-    if (f.kind !== 'front') continue;
-    f.plan = clamp((f.plan || 0) + (f.mode === 'attack' ? -.004 : .005) * h, 0, 1);
   }
   yield* yieldPoint();
   if (lfOn()) yield* lfTickGen(h);
@@ -11372,7 +11399,7 @@ function pausedHint() {
 }
 function enemyContact(u) {
   let hit = false;
-  forNear(u, bodyS(u) * 2, v => { if (atWar(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (bodyS(u) + bodyS(v)) / 2 * 1.9) { hit = true; return false; } });
+  forNear(u, bodyS(u) * 2, v => { if (atWar(v.owner, u.owner) && Math.hypot(v.x - u.x, v.y - u.y) <= (bodyS(u) + bodyS(v)) / 2 * CONTACT()) { hit = true; return false; } });
   return hit;
 }
 let marchNoWar = 0, marchCommits = 0;
@@ -12239,7 +12266,7 @@ function goalFromStroke(raw) {
   f.goal = smoothLine(P, 2);
   selFront = f; setSel(frontUnits(f));
   updUndo(); scheduleSave(); renderSidePick(); renderArmyBar(); requestDraw();
-  toast('Линия наступления задана. «Выполнить план» — армия пойдёт к ней' + (f.plan ? ' (план готов на ' + Math.round(f.plan * 100) + '%)' : '') + '.');
+  toast('Линия наступления задана. «▶ В атаку» — армия пойдёт к ней.');
 }
 // --- the enemy's armies: they hold their fronts while they plan, and attack where they are ready and strong ---
 function aiFronts(h) { drain(aiFrontsGen(h)); }
@@ -12252,23 +12279,25 @@ function* aiFrontsGen(h) {
     if (f.kind !== 'front' || humanAllied(f.owner)) continue;
     const ls = frontUnits(f).filter(u => !immobile(u));
     if (!ls.length) continue;
-    let org = 0, resting = 0;
-    for (const u of ls) { org += orgOf(u); if (u.rest) resting++; }
-    org /= ls.length;
+    let hp = 0, resting = 0;
+    for (const u of ls) { hp += hpOf(u); if (u.rest) resting++; }
+    hp /= ls.length;
     if (f.mode === 'attack') {
-      if (org < 30 || resting > ls.length * .6 || (divHistTarget() && !divHistAhead(divHistTarget(), f))) { f.aiAimed = false; f.goal = null; applyFrontMode(f, 'hold'); logEvent(ownerName(f.owner) + ': наступление выдохлось, войска переходят к обороне', f.owner); }
+      if (hp < 40 || resting > ls.length * .6 || (divHistTarget() && !divHistAhead(divHistTarget(), f))) { f.aiAimed = false; f.goal = null; applyFrontMode(f, 'hold'); logEvent(ownerName(f.owner) + ': наступление выдохлось, войска переходят к обороне', f.owner); }
       continue;
     }
-    if (org < 80 || (f.plan || 0) < .55) continue;
+    if (hp < 70 || resting > ls.length * .3) continue;
     // the historical AI goes only where its side went on the next stage of the war
     const H = divHistTarget(); if (H && !divHistAhead(H, f)) continue;
     // the enemy facing this front: the units within a few of their sizes of a share of its own
     const seen = new Set(), step = Math.max(1, Math.floor(ls.length / 40));
     for (let k = 0; k < ls.length; k += step) forNear(ls[k], bodyS(ls[k]) * 3, v => { if (atWar(v.owner, f.owner) && Math.hypot(v.x - ls[k].x, v.y - ls[k].y) < bodyS(ls[k]) * 3) seen.add(v); });
-    let eorg = 0; for (const v of seen) eorg += orgOf(v);
-    const foes = seen.size * step; eorg = seen.size ? eorg / seen.size : 100;
-    // attack when not much weaker than the enemy facing it, or when the enemy is worn out (a counterblow)
-    if (!foes || ls.length >= foes * .8 || eorg < 45) { if (applyFrontMode(f, 'attack')) logEvent(ownerName(f.owner) + ' переходит в наступление', f.owner); }
+    let ehp = 0; for (const v of seen) ehp += hpOf(v);
+    const foes = seen.size * step; ehp = seen.size ? ehp / seen.size : 100;
+    // attack when stronger than the enemy facing it (its numbers, strength and the country behind it), or when the
+    // enemy is worn out (a counterblow)
+    const mine = ls.length * hp * resPower(f.owner), theirs = foes * ehp * (seen.size ? resPower([...seen][0].owner) : 1);
+    if (!foes || mine >= theirs * (H ? .55 : .75) || ehp < 45) { if (applyFrontMode(f, 'attack')) logEvent(ownerName(f.owner) + ' переходит в наступление', f.owner); }
   }
   // the armies that attack aim at the weak spots of the enemy, in pairs where they can close a ring
   for (const o of new Set(fronts.filter(f => f.kind === 'front' && f.mode === 'attack' && !humanAllied(f.owner)).map(f => f.owner))) aiPlanBlows(o);
@@ -12394,7 +12423,9 @@ function deleteFront(f) {
   updUndo(); scheduleSave(); renderSidePick(); requestDraw();
   toast('Линия убрана, отряды остались на местах.');
 }
-const frontVisible = f => !player || allied(f.owner, player) || f === selFront;
+// in the war with mobilisation the lines of the armies, threaded through thousands of small units, are shown only for
+// the general picked below (or the line picked), or while a line tool is in hand
+const frontVisible = f => f === selFront || ((!player || allied(f.owner, player)) && (!divMode() || (selGen && f.gen === selGen) || (tool === 'units' && lineMode())));
 function hitFront(g) {
   const R = 7 / view.s;
   let best = null, bd = R;
@@ -12910,8 +12941,8 @@ function econImpact(k, kind, g, k2, quiet) {
   // troops under the cover of air defence (an AA unit of their side nearby) take half the damage
   const cover = new Map();
   const aaK = u => { if (!cover.has(u)) { let c = false; forNear(u, bodyS(u) * 3, v => { if (roleOf(v).aa && allied(v.owner, u.owner)) { c = true; return false; } }); cover.set(u, roleOf(u).aa || c ? .5 : 1); } return cover.get(u); };
-  if (S.kind !== 'drone' || S.area) { const d = 40 * S.dmg; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - d * 1.2 * m); } }
-  else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * S.dmg * m; u.org = Math.max(0, (u.org === undefined ? 100 : u.org) - 12 * S.dmg * m); }
+  if (S.kind !== 'drone' || S.area) { const d = 40 * S.dmg; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; } }
+  else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * S.dmg * m; }
   const dead = units.filter(u => hpOf(u) <= 0);
   if (dead.length) { noteLosses(dead, k); stAdd(k, 'strikeKills', dead.length); units = units.filter(u => hpOf(u) > 0); selUnits = selUnits.filter(u => hpOf(u) > 0); if (selUnit && hpOf(selUnit) <= 0) selUnit = null; lost = dead.length; }
   // a factory under the blast
@@ -13382,7 +13413,7 @@ function isVisible(u) {
 function aiStep() {
   if (!game.ai) return;
   for (const u of units) {
-    if (humanAllied(u.owner) || u.fl || u.order || u.rest || immobile(u) || !inWin(u) || orgOf(u) < 80) continue;
+    if (humanAllied(u.owner) || u.fl || u.order || u.rest || immobile(u) || !inWin(u) || hpOf(u) < 70) continue;
     let best = null, bd = bodyS(u) * 12;
     forNear(u, bd, v => { if (atWar(v.owner, u.owner)) { const d = Math.hypot(v.x - u.x, v.y - u.y); if (d < bd) { bd = d; best = v; } } });
     if (!best && game.cities) {
@@ -13663,7 +13694,7 @@ function renderSidePick() {
   for (const [m, name, key, icon] of [['place', 'Ставить', 'Q', '<path d="M12 5v14M5 12h14"/>'], ['sector', 'Участок', 'U', '<rect x="3" y="6" width="18" height="12" rx="1" stroke-dasharray="3 2"/><path d="M5 14c3-4 5 1 8-3s4 1 6-2"/>'], ['move', divMode() ? 'Выделять' : 'Двигать', 'E', '<path d="M5 12h12"/><path d="M13 7l5 5-5 5"/>'], ['front', 'Фронт', 'G', '<path d="M3 15c3-5 5 1 9-4s6 2 9-3"/><path d="M6 19l1.5-3M12 16l1.5-3M18 13l1.5-3"/>'], ['defense', 'Оборона', 'V', '<path d="M3 14c3-3 6-3 9 0s6 3 9 0" stroke-dasharray="3 3"/><path d="M12 4l6 3v4c0 4-3 6-6 7-3-1-6-3-6-7V7z"/>'], ['area', 'Область', 'N', '<path d="M5 7l6-3 8 4-1 9-8 3-6-5z" stroke-dasharray="3 2.5"/><circle cx="11" cy="12" r="1.6"/>'], ['goal', 'Наступление', 'T', '<path d="M3 18c4-1 7-4 9-9"/><path d="M8 8l5 0 0 5"/><path d="M14 4c2 1 5 1 7 0" stroke-dasharray="2 2"/>']]) {
     if (m === 'sector' && divMode()) continue;           // both sides' troops for nothing: not in a war of men and money
     const b = document.createElement('button'); b.className = unitMode === m ? 'on' : ''; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', unitMode === m); b.dataset.um = m;
-    b.title = (m === 'sector' ? 'Войска на участок фронта: протяните рамку по линии фронта — дивизии обеих сторон встанут только там (с Shift — только ваши)' : m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : m === 'defense' ? 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её' : m === 'area' ? 'Область обороны: выберите генерала внизу и обведите область — его армия равномерно расположится по ней' : 'Линия наступления, как в Hearts of Iron: выберите армию с линией фронта и проведите по земле противника, куда ей выйти. «Выполнить план» — в атаку') + ' (' + key + ')';
+    b.title = (m === 'sector' ? 'Войска на участок фронта: протяните рамку по линии фронта — дивизии обеих сторон встанут только там (с Shift — только ваши)' : m === 'place' ? 'Ставить войска: щелчок по карте ставит отряд' : m === 'move' ? 'Двигать войска: щелчок и рамка выделяют, тянуть — передвинуть, ПКМ — приказ, протянуть ПКМ — маршрут' : m === 'front' ? 'Линия фронта, как в Hearts of Iron: выберите генерала внизу и протяните линию вдоль границы — его армия встанет на неё и будет двигаться вместе с границей' : m === 'defense' ? 'Линия обороны, как в Hearts of Iron: выберите генерала внизу и проведите линию на своей земле — его армия займёт её' : m === 'area' ? 'Область обороны: выберите генерала внизу и обведите область — его армия равномерно расположится по ней' : 'Линия наступления, как в Hearts of Iron: выберите армию с линией фронта и проведите по земле противника, куда ей выйти. «▶ В атаку» — в атаку') + ' (' + key + ')';
     b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>';
     b.append(name); const kb = document.createElement('kbd'); kb.textContent = key; b.append(kb);
     b.addEventListener('click', () => setUnitMode(m));
@@ -15054,7 +15085,7 @@ if (phone()) { const st = $('#genStrip'); if (st && !st.classList.contains('fold
 
 const TOOL_NAMES = { warp: 'Граница', lasso: 'Окружение', brush: 'Кисть', eraser: 'Ластик', fill: 'Заливка', units: 'Фронт', arrows: 'Стрелки', cities: 'Города', region: 'Область детализации', info: 'Сведения', pan: 'Двигать карту' };
 function renderToolHead(t) {
-  $('#toolName').textContent = t === 'units' && divMode() ? 'Дивизии' : TOOL_NAMES[t] || '';
+  $('#toolName').textContent = t === 'units' && divMode() ? 'Войска' : TOOL_NAMES[t] || '';
   $('#toolDesc').textContent = (t === 'units' && divMode() ? DIV_HINT : HINTS[t]) || '';
   const b = document.querySelector('#tools [data-tool="' + t + '"] svg');
   $('#toolIcon').innerHTML = b ? b.outerHTML : '';
@@ -15530,7 +15561,7 @@ fxResist = LS.get('mezha-resist', '1') === '1'; fxOn = LS.get('mezha-fx', '1') =
 warpProfile = WARP_PROFILES[LS.get('mezha-wprof', 'arc')] ? LS.get('mezha-wprof', 'arc') : 'arc';
 liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
-const denseDeploy = () => deployCap >= 100000;
+const denseDeploy = () => deployCap >= 100000 && !(econ && econ.divs);      // the war with mobilisation has its own count (DIV_TARGET)
 // a division's name: its number in its army list and its arm
 const ARM_ADJ = { x: 'пехотная', muskets: 'пехотная', sword: 'пехотная', spear: 'пехотная', armor: 'танковая', tankmk: 'танковая', mech: 'механизированная', motor: 'моторизованная',
   art: 'артиллерийская', heavyart: 'артиллерийская', mlrs: 'артиллерийская', cannon: 'артиллерийская', cav: 'кавалерийская', horseshoe: 'кавалерийская', sabre: 'кавалерийская', dragoon: 'кавалерийская',
@@ -15605,7 +15636,9 @@ function* deployFrontsGen(opts = {}) {
   if (!dense && !(opts.rect && units.length)) {
     // divisions: the stretch each holds, and the size of a division on the map from it (a sector added to troops
     // already on the map keeps their size)
-    const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / deployCap);
+    // in the war with mobilisation: about DIV_TARGET units on all the fronts, side by side, each at least 75 m
+    // (its square is its frontage; a front of a hundred kilometres has squares of a hundred metres)
+    const spKm = econ.divs && geoStore ? Math.max(.1, totalKm * 2 / DIV_TARGET) : Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / deployCap);
     if (geoStore) setUnitSize(spKm * .75, true); else { unitSize = clamp(spKm * .75, usMin(), usMax()); setUnitSize(unitSize, true); }
   }
   const S = unitCellsAt(H / 2), sp = dense ? Math.max(S * 1.6, total * 2 / deployCap) : S / .75;
@@ -15740,7 +15773,7 @@ async function startScenario(id, pl, mode) {
       btn.textContent = 'Расставляю войска…';
       clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
       const n = deployFronts();
-      if (n) toast(denseDeploy() ? 'Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.' : 'На фронте ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + ' в армиях генералов. Выберите армию внизу: «Выполнить план» — наступление, P — время.');
+      if (n) toast(denseDeploy() ? 'Войска на фронте: ' + n + ' ' + plural(n, 'отряд', 'отряда', 'отрядов') + ' по ' + fmtUnitSize(unitSize) + '.' : 'На фронте ' + n + ' ' + plural(n, 'дивизия', 'дивизии', 'дивизий') + ' в армиях генералов. Выберите армию внизу: «▶ В атаку» — наступление, P — время.');
     }
     const w = WARS.find(x => x.id === id); mapTitle = w ? w.name : '';
     makeObjectives(); supplyCompute(); renderWeather();
@@ -15762,7 +15795,7 @@ async function startScenario(id, pl, mode) {
     // with mobilisation: divisions in the armies of generals, as in Hearts of Iron, fed by call-ups
     clearTimeout(settleT); maybeReload(); await new Promise(r => setTimeout(r, 30));
     divStart(); econ.hist = campHist; divHist = null; setTool('units');
-    setTimeout(() => toast((campHist ? (lfHistStages().length ? 'Историчный ИИ: армии наступают к линиям следующих этапов войны. ' : 'Историчный ИИ: у этой войны нет этапов — ИИ воюет свободно. ') : 'Неисторичный ИИ. ') + 'Дивизии в армиях генералов. Выберите генерала в полосе внизу: «Фронт» (G) — протянуть его линию фронта, «Оборона» (V) — нарисовать линию обороны, «Наступление» (T) — куда идти, «▶ Выполнить план» — в атаку. Рамкой выделяйте дивизии мышью, правой кнопкой — приказ. «Призыв» даёт людей на новые дивизии. Пуск — P.'), 900);
+    setTimeout(() => toast((campHist ? (lfHistStages().length ? 'Историчный ИИ: армии наступают к линиям следующих этапов войны. ' : 'Историчный ИИ: у этой войны нет этапов — ИИ воюет свободно. ') : 'Неисторичный ИИ. ') + 'На фронте ' + units.length.toLocaleString('ru') + ' отрядов по ' + fmtUnitSize(unitSize) + '. Выберите генерала внизу: «Фронт» (G), «Оборона» (V), «Наступление» (T), «▶ В атаку». Рамкой выделяйте отряды, правой кнопкой — приказ. «Призыв» даёт людей на новые отряды. Пуск — P.'), 900);
   } else lfRenderBar();
 }
 // the war with mobilisation begins: no live front, the divisions of both sides along every front, men in reserve
