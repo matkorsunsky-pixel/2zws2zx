@@ -182,6 +182,8 @@ section > h2:hover { color: var(--ink); }
 
 .sizer { grid-column: span 2; display: flex; gap: 8px; align-items: center; }
 .sizer input[type=range] { flex: 1; min-width: 0; }
+.sizer10 { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sizer10 button { height: 30px; justify-content: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sizer button { width: 32px; height: 32px; padding: 0; justify-content: center; font-size: 17px; flex: none; }
 .presets { grid-column: span 2; display: flex; gap: 4px; flex-wrap: wrap; }
 .presets button { padding: 5px 8px; font: 12px var(--f-mono); }
@@ -1218,6 +1220,9 @@ body.battling :is(.lfbar, .sidepick, .armybar, .gstrip, .hud, .objbox, #objBox, 
 body.divs #sidePick { top: calc(68px + var(--lfh, 84px) + env(safe-area-inset-top, 0px)); }
 body.divs .lfbar .lfadv { display: contents; } body.divs .lfbar .lfadv > :not([data-lfa="mob"]) { display: none; }
 .mpf:has(#mpCap) { display: none; }
+/* the free front: of the economy only the strikes, free */
+.pane.freearms > :not(section:has(#ecStrikes)) { display: none; }
+.pane.freearms #ecStrikes + .hint { display: none; }
 /* --- Discord --- */
 .dcid { background: #10151b; color: #ece8df; border: 1px solid rgb(255 255 255 / .14); border-radius: 9px; padding: 7px 9px; font: 13px ui-monospace, Consolas, monospace; }
 .dcstate { margin: 0; font-size: 12px; color: var(--m-muted, #9aa3ad); } .dcstate.good { color: #8fd6a8; } .dcstate.bad { color: #e6b45a; }
@@ -1399,6 +1404,7 @@ body.mode-watch #hudMoney, body.mode-watch .ptabs [data-tab="econ"] { display: n
           <input type="range" id="size" min="0" max="1000" value="600">
           <button id="sizeUp" title="Увеличить ( ] )" aria-label="Увеличить радиус">+</button>
         </div>
+        <div class="sizer10"><button id="sizeM10" title="Радиус на 10 меньше (Shift + [ )">−10</button><button id="sizeP10" title="Радиус на 10 больше (Shift + ] )">+10</button></div>
         <div class="presets" id="presets">
           <button data-size="5">5</button><button data-size="15">15</button><button data-size="40">40</button><button data-size="90">90</button><button data-size="200">200</button><button data-size="450">450</button>
         </div>
@@ -6274,8 +6280,11 @@ function drawMap() {
   // territory changed under the curves: retrace them in the background; the layer below is kept until then
   // (not while a border is being dragged: the dragged area is painted from cells over the layer meanwhile)
   const editing = (drag && (drag.mode === 'warp' || drag.mode === 'paint')) || !!morph;
-  if (vecMode && editing && !preview) startPreview();
-  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && !editing) vecAsync(...vec.win);
+  // the rubber: the front bends smoothly, so it is traced as curves while it is being pulled too (a few times a
+  // second, a moment behind the hand), never shown as the cells of the grid
+  const rubber = !!(drag && drag.mode === 'warp' && drag.wm === 'rubber');
+  if (vecMode && editing && !preview && !rubber) startPreview();
+  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && (!editing || rubber)) vecAsync(...vec.win);
   const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   // while the map is being moved (pan, zoom, pinch) the last full picture is only shifted and scaled: retracing
   // borders, imagery and relief for every frame of a pan cost tens of milliseconds; the full picture comes back
@@ -12629,6 +12638,9 @@ function stAdd(k, key, v = 1) {
 }
 let econ = econBlank(), econMode = null, econFx = [];
 const econOn = () => game.econ && !watchMode && W > 0;
+// the free front: no economy, and every weapon there is at the player's hand from the start, free and without end,
+// launched from their own land at any range
+const freeArms = () => !game.econ && !!game.freeArms && !watchMode && W > 0;
 function fmtMoney(v) {
   const a = Math.abs(v), s = v < 0 ? '−' : '';
   if (a >= 1e12) return s + (a / 1e12).toFixed(3).replace('.', ',') + ' трлн $';
@@ -12912,14 +12924,22 @@ function econLaunch(k, kind, w) {
   for (const f of econ.facs) if (f.owner === k && f.type === LAUNCH[S.kind] && !(f.left > 0) && !f.ruined && hpF(f) >= 25) { const d = econKm(f, w); if (d < bd) { bd = d; best = f; } }
   return best && bd <= S.range ? best : null;
 }
-const econCanReach = (k, kind, w) => !!econLaunch(k, kind, w);
+const econCanReach = (k, kind, w) => (freeArms() && k === player) || !!econLaunch(k, kind, w);
+// in the free front a strike flies from the player's own city nearest the target (or the nearest own land)
+function freeLaunch(k, g) {
+  let best = null, bd = Infinity;
+  for (const c of cities) if (cityOwner(c) === k) { const d = Math.hypot(c.x - g.x, c.y - g.y); if (d < bd) { bd = d; best = c; } }
+  if (!best) for (let r = 4; r < Math.max(W, H) && !best; r *= 2) for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2, x = g.x + Math.cos(a) * r, y = g.y + Math.sin(a) * r; if (cellOwner(x, y) === k) { best = { x, y }; break; } }
+  return best ? toWorld(best.x, best.y) : toWorld(g.x, g.y);
+}
 function econStrike(k, kind, g, quiet) {
   if (mpGuest() && !mpApplying) { const ok = mpGuestCmd(Object.assign({ t: 'strike', kind }, toWorld(g.x, g.y))); if (ok) toast(STRIKE[kind].name + ': приказ отправлен.'); return ok; }
-  const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y);
-  if (!((st[kind] || 0) >= S.need)) { if (!quiet) toast({ drone: S.name + ': нужно не меньше ' + S.need + ' шт. Поставьте их на линию завода дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: S.name + ': ракет нет. Поставьте их на линию ракетного завода.' }[S.kind]); return false; }
-  const from = econLaunch(k, kind, w);
+  const S = STRIKE[kind], st = stock(k), w = toWorld(g.x, g.y), free = freeArms() && k === player;
+  if (!free && !((st[kind] || 0) >= S.need)) { if (!quiet) toast({ drone: S.name + ': нужно не меньше ' + S.need + ' шт. Поставьте их на линию завода дронов.', bomber: 'Нужно не меньше ' + S.need + ' бомбардировщиков. Постройте авиазавод.', missile: S.name + ': ракет нет. Поставьте их на линию ракетного завода.' }[S.kind]); return false; }
+  const from = free ? freeLaunch(k, g) : econLaunch(k, kind, w);
   if (!from) { if (!quiet) toast('Цель дальше ' + S.range + ' км от ' + { drone: 'ваших пунктов дроноводов (или их нет — постройте пункт у фронта).', bomber: 'ваших авиазаводов.', missile: 'ваших пусковых установок (или их нет — постройте установку).' }[S.kind]); return false; }
-  st[kind] -= S.need; if (k === player && !quiet) tutorNote('strike'); stAdd(k, 'strikes'); stAdd(k, 'launch_' + kind, S.need);
+  if (!free) st[kind] -= S.need;
+  if (k === player && !quiet) tutorNote('strike'); stAdd(k, 'strikes'); stAdd(k, 'launch_' + kind, S.need);
   const def = fineOwner(g.x, g.y), dst = def ? stock(def) : null;
   // interceptors of the side under attack: a missile is shot down more often than a swarm of drones is turned back
   let k2 = 1;
@@ -13017,6 +13037,19 @@ function econClick(g) {
   const ok = m.kind === 'build' ? econBuild(player, m.type, g) : econStrike(player, m.type, g);
   if (ok) econSetMode(null);
 }
+// the arsenal of the free front: every weapon there is, by kind, each a button for the next click on the map
+function renderFreeArms() {
+  const sb = $('#ecStrikes'); sb.textContent = '';
+  if (!player) { sb.textContent = 'Выберите свою страну (щелчок колёсиком по ней или «Играю за» внизу).'; return; }
+  for (const kind of ['missile', 'drone', 'bomber']) for (const v of Object.keys(STRIKE).filter(v => STRIKE[v].kind === kind)) {
+    const S = STRIKE[v], b = document.createElement('button'); b.dataset.strike = v; b.className = econMode && econMode.type === v ? 'on' : '';
+    b.innerHTML = '<b></b><small></small><em></em>';
+    b.querySelector('b').textContent = S.name;
+    b.querySelector('small').textContent = 'радиус ' + String(S.radius).replace('.', ',') + ' км · сила ×' + String(S.dmg).replace('.', ',') + (S.aa ? ' · ПВО сбивает ' + Math.round(S.aa * 100) + '%' : '');
+    b.querySelector('em').textContent = 'без ограничений · бесплатно';
+    sb.append(b);
+  }
+}
 // the factories on the map, the flights of drones and missiles, the ghost of what is being placed
 const FAC_GLYPH = {
   civil: c => { c.moveTo(-.6, .5); c.lineTo(-.6, -.1); c.lineTo(-.25, -.35); c.lineTo(-.25, -.1); c.lineTo(.1, -.35); c.lineTo(.1, -.1); c.lineTo(.45, -.35); c.lineTo(.45, -.6); c.lineTo(.6, -.6); c.lineTo(.6, .5); c.closePath(); },
@@ -13065,7 +13098,7 @@ function drawDroneSprite(c, x, y, ang, k) {
   c.restore();
 }
 function drawEcon(c) {
-  if (!econOn()) { econFx = []; return; }
+  if (!econOn() && !freeArms()) { econFx = []; return; }
   const r = 9, vw = uiCv.width / dpr, vh = uiCv.height / dpr;
   for (const f of econ.facs) {
     const g = fromWorld(f), x = g.x * view.s + view.x, y = g.y * view.s + view.y;
@@ -13144,8 +13177,10 @@ function drawEcon(c) {
 }
 // the panel's tab and the money in the HUD
 function renderEcon(hudOnly) {
-  const on = !!game.econ;
+  const on = !!game.econ, free = freeArms();
   $('#hudMoney').hidden = !on || watchMode || !W || !player;
+  $('#panel [data-pane="econ"]').classList.toggle('freearms', free);
+  if (free && !hudOnly && !$('#panel [data-pane="econ"]').hidden) return renderFreeArms();
   if (!player || !on) return;
   const m = money(player), l = econ.last[player], st = stock(player);
   $('#hudMoney .mv').textContent = fmtMoney(m);
@@ -14325,8 +14360,8 @@ window.addEventListener('keydown', e => {
     if (selUnit) setUnitsScale(targets(), v => (v.scale || 1) * k, true, selUnit); else setUnitSize(unitSize * k, true);
     return;
   }
-  if (e.code === 'BracketLeft') bumpBrush(-1);
-  else if (e.code === 'BracketRight') bumpBrush(1);
+  if (e.code === 'BracketLeft') e.shiftKey ? setBrush(brush - 10) : bumpBrush(-1);
+  else if (e.code === 'BracketRight') e.shiftKey ? setBrush(brush + 10) : bumpBrush(1);
   else if (e.code === 'KeyF') fit();
 });
 window.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; setTool(tool); } });
@@ -15762,7 +15797,7 @@ async function startScenario(id, pl, mode) {
   if (!watch && watchMode) setMode(false);
   // the mode of the war: free — no AI, no economy; with mobilisation — the AI and the economy
   const lfm = campTroops === 'free' ? 'free' : 'mob';
-  if (!watch) { game.ai = lfm === 'mob'; game.econ = lfm === 'mob'; game.paid = lfm === 'mob'; applySystems(); }
+  if (!watch) { game.ai = lfm === 'mob'; game.econ = lfm === 'mob'; game.paid = lfm === 'mob'; game.freeArms = lfm === 'free'; applySystems(); }
   econ = econBlank(); econMode = null; infoSel = infoHover = null; renderInfoCard();
   try {
     $('#warSel').value = id; renderWarPanel();
@@ -16614,6 +16649,8 @@ hudReady = true;
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 $('#size').addEventListener('input', e => setBrush(slider2size(+e.target.value)));
 $('#sizeDown').addEventListener('click', () => bumpBrush(-1));
+$('#sizeM10').addEventListener('click', () => setBrush(brush - 10));
+$('#sizeP10').addEventListener('click', () => setBrush(brush + 10));
 $('#sizeUp').addEventListener('click', () => bumpBrush(1));
 document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => setBrush(+b.dataset.size)));
 $('#showPockets').addEventListener('change', e => { showPockets = e.target.checked; addDirty(0, 0, W, H); });
