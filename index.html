@@ -1213,6 +1213,8 @@ body.lf #sidePick, body.lf #liveBar { display: none !important; }
 /* the divisions are only in the war with mobilisation: elsewhere their panels are gone */
 body:not(.divs) :is(#fUnits, #armyBar, #genCards, #genEmpty, #genAdd, #genFold, #sidePick), #deployBtn, #dDeploy { display: none !important; }
 body.divs .lfbar :is([data-lfa="newarmy"], [data-lfa="armies"], [data-lfa="gen"], [data-lfa="adv"], .lft) { display: none; }
+/* in battle the map under the panels changes every frame: a blurred glass would be repainted with it, solid is cheap */
+body.battling :is(.lfbar, .sidepick, .armybar, .gstrip, .hud, .objbox, #objBox, .tutor, .mpbox) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 body.divs #sidePick { top: calc(68px + var(--lfh, 84px) + env(safe-area-inset-top, 0px)); }
 body.divs .lfbar .lfadv { display: contents; } body.divs .lfbar .lfadv > :not([data-lfa="mob"]) { display: none; }
 .mpf:has(#mpCap) { display: none; }
@@ -6259,6 +6261,8 @@ const fadeSnap = () => fadeCv2 || fadeCv;
 function swapFade() { if (!fadeCv2) { fadeCv2 = fadeCv; fadeCv = document.createElement('canvas'); return; } const t = fadeCv; fadeCv = fadeCv2; fadeCv2 = t; }
 let moveVK = '', moveT = 0, lastFull = null, snapOk = false, settleMapT = 0, fullCost = 0;
 const snapCv = document.createElement('canvas');
+// in battle the full picture of the map (land, borders, relief) at most every MAP_GAP ms; the troops every frame
+const MAP_GAP = 250;
 function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -6282,7 +6286,7 @@ function drawMap() {
   const vk = wX.toFixed(2) + ',' + wY.toFixed(2) + ',' + wS.toPrecision(9) + ',' + cv.width + ',' + cv.height, tnow = performance.now();
   if (vk !== moveVK) { moveVK = vk; moveT = tnow; }
   // only on a machine where the full picture is slow to draw: where it takes a few milliseconds it is drawn every frame
-  const quick = fullCost > 14 && !editing && !preview && !exportNoGeo && !document.body.classList.contains('filming') && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && layerSig !== sigNow();
+  const quick = (fullCost > 14 || battlesOn) && !editing && !preview && !exportNoGeo && !document.body.classList.contains('filming') && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && layerSig !== sigNow();
   // a new working window (the detail level changed, or the view left the old one): its outlines are traced in the
   // background, and the last picture stands in for them, moved to where it belongs, for the few frames that takes
   const standIn = !editing && !preview && !exportNoGeo && geoStore && vecMode && !vec && !vecWorkerOff && lastFull && lastFull.w === mapCv.width && lastFull.h === mapCv.height && !document.body.classList.contains('filming') && (() => {
@@ -6297,14 +6301,14 @@ function drawMap() {
     m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
     m.setTransform(k, 0, 0, k, (wX - lastFull.x * k) * dpr, (wY - lastFull.y * k) * dpr); m.imageSmoothingEnabled = true; m.drawImage(snapCv, 0, 0);
     fadeT0 = 0; layerSig = ''; clearTimeout(settleMapT); if (!standIn) settleMapT = setTimeout(requestDrawFast, 170);
-  } else if (quick && battlesOn && vk === lastFull.vk && tnow - lastFull.t < 200) {
-    clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, 200 - (tnow - lastFull.t));
+  } else if (quick && battlesOn && vk === lastFull.vk && tnow - lastFull.t < MAP_GAP) {
+    clearTimeout(settleMapT); settleMapT = setTimeout(requestDrawFast, MAP_GAP - (tnow - lastFull.t));
   } else if (layerSig !== sigNow()) {
     const m = mctx;
     // the same view with the land changed under it (troops on the move, a border let go): the old picture fades
     // into the new one, so the front line glides instead of jumping from one tracing to the next
     const viewKey = [view.x, view.y, view.s, cv.width, cv.height].join(), now = performance.now();
-    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast' && !(gfx === 'auto' && battlesOn && units.length > 1500)) {   // a big battle: no cross-fade
+    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast' && !(gfx === 'auto' && battlesOn)) {   // in battle no cross-fade: the land changes every moment
       if (!fadeCv) fadeCv = document.createElement('canvas');
       if (fadeCv.width !== mapCv.width || fadeCv.height !== mapCv.height) { fadeCv.width = mapCv.width; fadeCv.height = mapCv.height; }
       const fc = fadeCv.getContext('2d');
@@ -9247,6 +9251,7 @@ function mobArrive(st) {
 // a day of the divisions' men: the call-ups come in; the AI calls up once a week when its reserve runs low
 function manDay() {
   const st = mobSt(); mobArrive(st);
+  lfRegionsOf(0);                                   // a slice of the regions' owners looked at every day
   if (!game.ai) return;
   const day = econ.day || 0;
   for (let k = 1; k <= countries.length; k++) {
@@ -9444,6 +9449,7 @@ function lfSpread(o, n) {
 // in the war with mobilisation the divisions take their men from the manpower reserve (econ.man): a call-up fills
 // it, a new division takes DIV_BAT battalions for each set of its equipment, filling up losses takes men too
 const DIV_BAT = 10;
+let DIV_CAP = 160;                                  // divisions of all sides put on the fronts at the start
 const divMode = () => !!(econ && econ.divs) && !lfOn();
 const mobSt = () => lfOn() ? lfState() : econ.man || (econ.man = { res: {}, mob: [], mobT: {} });
 const MOB = { part: { name: 'Частичная', rate: .004, days: 12, cd: 30 }, full: { name: 'Всеобщая', rate: .015, days: 20, cd: 60 } };
@@ -9479,20 +9485,31 @@ function lfRegionsOf(o) {
   if (!geoStore || !W) return [];
   // every country's regions in one pass over the map, kept three days (the owner of each region's middle is a
   // look through the store: one country at a time it cost a war of many countries a lot every day)
-  const day = econ.day || 0;
-  if (!lfRegCache.all || day - lfRegCache.day >= 3 || day < lfRegCache.day) {
+  // the owner of every region's middle is a look through the map store, a few thousand of them for the world: all
+  // at once only the first time, then a slice of them a day (a whole pass every few days cost a stutter of most
+  // of a second)
+  const day = econ.day || 0, C = lfRegCache;
+  if (!C.own || C.title !== mapTitle + countries.length) {
     if (!popModel) popModelBuild();
-    const all = new Map();
-    for (const f of decodeRegions().a1) {
-      let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } }
-      if (!best) continue;
-      const k = ownerAtWorld((best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2); if (!k) continue;
-      (all.get(k) || all.set(k, []).get(k)).push(f);
+    C.regs = decodeRegions().a1.map(f => { let best = null, ba = -1; for (const p of f.parts) { const a = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]); if (a > ba) { ba = a; best = p; } } return best ? [f, (best.box[0] + best.box[2]) / 2, (best.box[1] + best.box[3]) / 2] : null; }).filter(Boolean);
+    C.own = new Map(C.regs.map(([f, x, y]) => [f, ownerAtWorld(x, y)])); C.next = 0; C.title = mapTitle + countries.length; C.day = day; C.all = null;
+  } else if (day !== C.day) {
+    // only the regions of countries at war can change hands: a fifteenth of them a day
+    let n = Math.ceil(C.regs.length / 15);
+    for (let i = 0; i < C.regs.length && n > 0; i++) {
+      const [f, x, y] = C.regs[C.next]; C.next = (C.next + 1) % C.regs.length;
+      const k0 = C.own.get(f); if (k0 && !atWarAny(k0)) continue;
+      n--; const k = ownerAtWorld(x, y); if (k !== k0) { C.own.set(f, k); C.all = null; }
     }
-    for (const l of all.values()) l.sort((a, b) => regionPop(b).now - regionPop(a).now);
-    lfRegCache.all = all; lfRegCache.day = day;
+    C.day = day;
   }
-  return lfRegCache.all.get(o) || [];
+  if (!C.all || Math.abs(day - C.sortDay) >= 3) {
+    const all = new Map();
+    for (const [f, k] of C.own) if (k) (all.get(k) || all.set(k, []).get(k)).push(f);
+    for (const l of all.values()) l.sort((a, b) => regionPop(b).now - regionPop(a).now);
+    C.all = all; C.sortDay = day;
+  }
+  return C.all.get(o) || [];
 }
 function lfAiMobilize(o, keys, push) {
   const st = lfState(); let mine = st.res[o] || 0, foe = 0;
@@ -10991,6 +11008,7 @@ function setBattles(on) {
 }
 function setPushBorder(on) { unitsPushBorder = on; syncToggles(); scheduleSave(); toast(on ? 'Войска двигают границу.' : 'Войска не трогают границу.'); }
 function syncToggles() {
+  document.body.classList.toggle('battling', battlesOn);
   const pb = $('#tglPush'), bt = $('#tglBattle');
   pb.setAttribute('aria-pressed', unitsPushBorder); pb.querySelector('b').textContent = unitsPushBorder ? 'вкл' : 'выкл';
   bt.setAttribute('aria-pressed', battlesOn); bt.querySelector('b').textContent = battlesOn ? 'идут' : 'выкл';
@@ -11349,6 +11367,8 @@ function marchFrame(t) {
   if (menuPaused) { marchLast = t; marchRaf = requestAnimationFrame(marchFrame); return; }
   // as in Hearts of Iron, nothing moves while time stands: the march goes on when it runs again
   if (!battlesOn) return;
+  // thirty steps a second are smooth enough for troops on a map, and half the work of sixty
+  if (t - marchLast < 30) { marchRaf = requestAnimationFrame(marchFrame); return; }
   if (!gridOk() || performance.now() - bgrid.t > 200) buildBattleGrid();   // neighbours move little in a fifth of a second
   const dt = clamp((t - marchLast) / 1000, 0, .1); marchLast = t;   // a frame stamp can be a little older than the start of the march
   let any = false;
@@ -15556,7 +15576,8 @@ function* deployFrontsGen(opts = {}) {
   if (!dense && !(opts.rect && units.length)) {
     // divisions: the stretch each holds, and the size of a division on the map from it (a sector added to troops
     // already on the map keeps their size)
-    const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / deployCap);
+    // in the war of divisions a few hundred at most: each holds a longer stretch, the map and the battles stay quick
+    const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / (econ.divs ? DIV_CAP : deployCap));
     if (geoStore) setUnitSize(spKm * .75, true); else { unitSize = clamp(spKm * .75, usMin(), usMax()); setUnitSize(unitSize, true); }
   }
   const S = unitCellsAt(H / 2), sp = dense ? Math.max(S * 1.6, total * 2 / deployCap) : S / .75;
@@ -15717,10 +15738,12 @@ async function startScenario(id, pl, mode) {
 }
 // the war with mobilisation begins: no live front, the divisions of both sides along every front, men in reserve
 function divStart() {
+  lfRegCache = new Map(); armyPotCache = new Map();
   econ.front = null; lfBorder = new Map(); lfMine = new Map(); fg = null; fgOwn = null; setLiveFront(false, true);
   econ.divs = true;
   if (!units.length) deployFronts();
   if (!econ.man) manInit();
+  lfRegionsOf(0);                                   // the regions' owners now, while the war is being set up
   econFrontPosts(); lfRenderBar(); renderGenerals(); requestUi();
 }
 $('#campGo').addEventListener('click', () => startScenario(campSel, campPlayer, campMode));
