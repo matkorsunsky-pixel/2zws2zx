@@ -15505,7 +15505,7 @@ fxResist = LS.get('mezha-resist', '1') === '1'; fxOn = LS.get('mezha-fx', '1') =
 warpProfile = WARP_PROFILES[LS.get('mezha-wprof', 'arc')] ? LS.get('mezha-wprof', 'arc') : 'arc';
 liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
-const denseDeploy = () => deployCap >= 100000;
+const denseDeploy = () => deployCap >= 100000 && !(econ && econ.divs);      // the war of divisions never: a few dozen, as in HOI4
 // a division's name: its number in its army list and its arm
 const ARM_ADJ = { x: 'пехотная', muskets: 'пехотная', sword: 'пехотная', spear: 'пехотная', armor: 'танковая', tankmk: 'танковая', mech: 'механизированная', motor: 'моторизованная',
   art: 'артиллерийская', heavyart: 'артиллерийская', mlrs: 'артиллерийская', cannon: 'артиллерийская', cav: 'кавалерийская', horseshoe: 'кавалерийская', sabre: 'кавалерийская', dragoon: 'кавалерийская',
@@ -16706,6 +16706,8 @@ function loadGame(d) {
   if (d.arrowWidth) arrowWidth = d.arrowWidth;
   econ = d.econ && Array.isArray(d.econ.facs) ? Object.assign(econBlank(), d.econ) : econBlank(); econMode = null;
   if (econ.front && econ.front.mode === 'free') econ.front = null;   // the free front of older saves: the live chain again
+  // a war of divisions saved with the troops of an old density setting (tens of thousands): set up again, as it is now
+  if (econ.divs && units.length > DIV_CAP * 8) setTimeout(() => { if (!divMode() || units.length <= DIV_CAP * 8) return; const n = units.length; units = []; forms = []; fronts = []; divStart(); toast('В этом сохранении было ' + n.toLocaleString('ru') + ' отрядов от старой настройки плотности — дивизии расставлены заново: ' + units.length + '.'); }, 300);
   selArrow = selCity = null;
   syncGameControls();
 }
