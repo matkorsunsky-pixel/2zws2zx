@@ -9449,7 +9449,6 @@ function lfSpread(o, n) {
 // in the war with mobilisation the divisions take their men from the manpower reserve (econ.man): a call-up fills
 // it, a new division takes DIV_BAT battalions for each set of its equipment, filling up losses takes men too
 const DIV_BAT = 10;
-let DIV_CAP = 50;                                  // divisions of all sides put on the fronts at the start
 const divMode = () => !!(econ && econ.divs) && !lfOn();
 const mobSt = () => lfOn() ? lfState() : econ.man || (econ.man = { res: {}, mob: [], mobT: {} });
 const MOB = { part: { name: 'Частичная', rate: .004, days: 12, cd: 30 }, full: { name: 'Всеобщая', rate: .015, days: 20, cd: 60 } };
@@ -10262,8 +10261,13 @@ function formMarker(n) {
 // decide what is drawn: each formation either as one marker or opened into its parts (recursively)
 // laid out again only when the view, a unit's place or the selection changed: hundreds of thousands of units at
 // rest cost one quick pass to notice that nothing moved
-let layoutSig = '', unitSum = 0;
+let layoutSig = '', unitSum = 0, layoutView = '', layoutT = 0;
 function layoutUnits() {
+  // in battle with many troops the stacks follow them a few times a second (a stack of hundreds moves a pixel or two
+  // a frame): laid out every frame they cost most of the frame; a change of the view is laid out at once
+  const r0 = stage.getBoundingClientRect(), vk = [view.x, view.y, view.s, r0.width, r0.height, selGen, targets().length, unitSize, echScale, game.fog, player].join(), now = performance.now();
+  if (battlesOn && units.length > 3000 && vk === layoutView && now - layoutT < Math.min(400, units.length / 500)) return;
+  layoutView = vk; layoutT = now;
   let sum = units.length;
   for (let i = 0; i < units.length; i++) { const u = units[i]; sum = (sum + u.x * 7.31 + u.y * 3.17 + u.owner) % 1e9; }
   unitSum = sum;
@@ -10283,13 +10287,15 @@ let dotUnits = [];
 function layoutTree() {
   shown = []; dotUnits = [];
   const r = stage.getBoundingClientRect(), s = view.s, pad = CTR_PX, fog = game.fog && player;
-  const cell = CTR_PX, join = CTR_PX * 1.05, stacks = new Map();
+  const cell = CTR_PX, join = CTR_PX * 1.05, stacks = new Map(), many = units.length > 20000;
   for (let i = 0; i < units.length; i++) {
     const u = units[i], sx = u.x * s + view.x, sy = u.y * s + view.y;
     if (sx < -pad || sy < -pad || sx > r.width + pad || sy > r.height + pad) continue;
     if (fog && !isVisible(u)) continue;
-    // the stack of the same side whose first counter is nearest, among the cells round this one
+    // the stack of the same side whose first counter is nearest, among the cells round this one (with tens of
+    // thousands of troops simply the stack of the cell: a ninth of the look-ups)
     const cx = Math.floor(sx / cell), cy = Math.floor(sy / cell);
+    if (many) { const key = (cx * 8192 + cy) * 256 + u.owner, list = stacks.get(key); if (list) list[0].leaves.push(u); else stacks.set(key, [{ sx, sy, leaves: [u] }]); continue; }
     let best = null, bd = join;
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
       const list = stacks.get(((cx + a) * 8192 + cy + b) * 256 + u.owner);
@@ -10325,10 +10331,11 @@ function layoutTree() {
 }
 // what a stack shows: the arm most of its units are, their side, mean organisation and strength
 function stackMarker(L) {
-  const kinds = new Map(); let hp = 0, org = 0, oos = 0, fight = 0;
-  for (const u of L) { const k = u.era + '|' + u.type; kinds.set(k, (kinds.get(k) || 0) + 1); hp += hpOf(u); org += orgOf(u); if (u.oos) oos++; if (u.fighting) fight++; }
+  // a stack of thousands is judged by a hundred or so of its units, taken evenly through it
+  const kinds = new Map(), step = Math.max(1, Math.floor(L.length / 96)); let hp = 0, org = 0, oos = 0, fight = 0, n = 0, gen = L[0].gen;
+  for (let i = 0; i < L.length; i += step) { const u = L[i], k = u.era + '|' + u.type; kinds.set(k, (kinds.get(k) || 0) + 1); hp += hpOf(u); org += orgOf(u); if (u.oos) oos++; if (u.fighting) fight++; if (u.gen !== gen) gen = 0; n++; }
   const [era_, type] = [...kinds].sort((a, b) => b[1] - a[1])[0][0].split('|');
-  return { x: 0, y: 0, era: era_, type, owner: L[0].owner, ech: L[0].ech, label: '', hp: hp / L.length, org: org / L.length, oos: oos * 2 > L.length, fighting: fight > 0, n: L.length, gen: L.every(u => u.gen === L[0].gen) ? L[0].gen : 0 };
+  return { x: 0, y: 0, era: era_, type, owner: L[0].owner, ech: L[0].ech, label: '', hp: hp / n, org: org / n, oos: oos * 2 > n, fighting: fight > 0, n: L.length, gen: gen || 0 };
 }
 function hitShown(g) {
   const sx = g.x * view.s + view.x, sy = g.y * view.s + view.y, h = CTR_PX / 2 + 2;
@@ -10397,9 +10404,11 @@ function drawUnitsFast(c) {
   c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
   // the selected last, over the others
   const late = [];
+  // the stacks that hold a selected unit: found from the selected units through the map of stacks (not by a look
+  // through every unit of every stack each frame)
+  const selIt = new Set(); if (selSet.size) { const at = shownAt(); for (const v of selSet) { const it = at.get(v); if (it) selIt.add(it); } }
   for (const it of shown) {
-    const sel = it.unit ? selSet.has(it.unit) : it.leaves.some(v => selSet.has(v));
-    if (sel) late.push(it); else drawCounter(c, it, false);
+    if (selIt.has(it)) late.push(it); else drawCounter(c, it, false);
   }
   for (const it of late) drawCounter(c, it, true);
   c.restore();
@@ -10933,11 +10942,12 @@ function* battleTickRun() {
   aiStep(inBattle);
   lineFill();
   // out of battle: organisation comes back, faster at rest; strength slowly, if supplied; the still dig in
-  const sup = game.supply;
+  // (with hundreds of thousands of units, like the fights, a share of them a tick for that many ticks' time)
+  const sup = game.supply, hh = h * slices;
   yield* yieldPoint();
-  for (let i = 0; i < units.length; i++) {
-    if ((i & 255) === 0) yield* yieldPoint();
-    const u = units[i];
+  for (let i = part; i < units.length; i += slices) {
+    if ((i & 255) < slices) yield* yieldPoint();
+    const u = units[i], h = hh;
     if (!u) continue;
     if (u.retreat > 0) u.retreat -= h;
     if (inBattle.has(u)) continue;
@@ -11014,11 +11024,16 @@ function syncToggles() {
   bt.setAttribute('aria-pressed', battlesOn); bt.querySelector('b').textContent = battlesOn ? 'идут' : 'выкл';
   renderHud();
 }
+// which stack each unit is drawn in, and the place of each stack: kept while the stacks are the same
+function shownAt() {
+  if (shownAt.shown !== shown) { const at = new Map(), idx = new Map(); shown.forEach((it, k) => { idx.set(it, k); if (it.unit) at.set(it.unit, it); else for (const u of it.leaves) at.set(u, it); }); shownAt.shown = shown; shownAt.at = at; shownAt.idx = idx; }
+  return shownAt.at;
+}
 function drawBattles(c) {
   if (!battlesOn || !showUnits) return;
   // a fight inside closed formations is drawn once, between the markers that stand for them
-  const at = new Map(), idx = new Map();
-  shown.forEach((it, k) => { idx.set(it, k); if (it.unit) at.set(it.unit, it); else for (const u of it.leaves) at.set(u, it); });
+  if (!engaged.length) return;
+  const at = shownAt(), idx = shownAt.idx;
   const done = new Set();
   for (const [a0, b0, win] of engaged) {
     const ia = at.get(a0), ib = at.get(b0);
@@ -11369,7 +11384,7 @@ function marchFrame(t) {
   if (!battlesOn) return;
   // thirty steps a second are smooth enough for troops on a map, and half the work of sixty
   if (t - marchLast < 30) { marchRaf = requestAnimationFrame(marchFrame); return; }
-  if (!gridOk() || performance.now() - bgrid.t > 200) buildBattleGrid();   // neighbours move little in a fifth of a second
+  if (!gridOk() || performance.now() - bgrid.t > Math.max(200, units.length / 400)) buildBattleGrid();   // neighbours move little in a fifth of a second (half a second with a hundred thousand troops)
   const dt = clamp((t - marchLast) / 1000, 0, .1); marchLast = t;   // a frame stamp can be a little older than the start of the march
   let any = false;
   for (const u of units) {
@@ -11404,8 +11419,13 @@ function marchFrame(t) {
 }
 function drawOrders(c) {
   if (!game.orders) return;
+  // who of a stack is on the march: looked at for every stack only when the stacks are laid out again or a few times a
+  // second (a filter over all the troops every frame was a large part of a frame with a hundred thousand of them)
+  const now = performance.now(), fresh = drawOrders.shown !== shown || now - drawOrders.t > 250;
+  if (fresh) { drawOrders.shown = shown; drawOrders.t = now; }
   for (const it of shown) {
-    const list = it.unit ? [it.unit] : it.leaves, go = list.filter(u => u.order);
+    if (fresh || !it._go) it._go = it.unit ? (it.unit.order ? [it.unit] : []) : it.leaves.filter(u => u.order);
+    const go = it._go.filter(u => u.order);
     if (!go.length) continue;
     const u = it.unit || it.m, col = rgb[u.owner] || [80, 80, 80], S = ctrS();
     // a closed formation: the route of its longest-going division, moved back to the formation's own place
@@ -11917,6 +11937,7 @@ function markFrontDirty(x0, y0, x1, y1) {
 // dragged by hand), a unit that no longer has the enemy's land next to it, or that stands in the enemy's land now,
 // goes to the nearest point of its own border: so the whole front line moves with the border.
 let holdBudget = 0;
+let fineLeft = 0;
 function holdBorder(f, list, dirty) {
   const test = frontTest(f), m = 4;
   for (const u of list) {
@@ -11929,7 +11950,11 @@ function holdBorder(f, list, dirty) {
     const rr = clamp(Math.ceil(bodyS(u) * 3), 2, 40);
     let enemy = false;
     for (let y = gy - rr; y <= gy + rr && !enemy; y++) for (let x = gx - rr; x <= gx + rr; x++) if (x >= 0 && y >= 0 && x < W && y < H && test(own[y * W + x])) { enemy = true; break; }
-    const mine = cellOwner(u.x, u.y) === o || (enemy && fineOwner(u.x, u.y) === o);
+    // the fine owner under a unit standing still is looked up again only every few seconds (a look through the
+    // outlines for each of a hundred thousand troops on the line, twice a second, was most of the front's work)
+    let mine = cellOwner(u.x, u.y) === o;
+    // (a few thousand fresh looks a pass; the rest keep their last answer, or hold where they are, until their turn)
+    if (!mine && enemy) { const c = u._fo, now = performance.now(); if (c && ((c[0] === u.x && c[1] === u.y && now - c[3] < 15000) || fineLeft <= 0)) mine = c[2]; else if (fineLeft-- > 0) { mine = fineOwner(u.x, u.y) === o; u._fo = [u.x, u.y, mine, now]; } else mine = true; }
     if (enemy && mine) continue;
     holdBudget--;
     const b = nearestBorder(u.x, u.y, o, Math.max(30, rr * 3), test);
@@ -12003,7 +12028,7 @@ function* frontTickGen() {
   const dirty = frontDirty; frontDirty = null;
   const by = new Map(); for (const u of units) if (u.fl) (by.get(u.fl) || by.set(u.fl, []).get(u.fl)).push(u);
   let n = 0;
-  orderBudget = 3000; pathBudget = 60; holdBudget = 2000;
+  orderBudget = 3000; pathBudget = 60; holdBudget = 2000; fineLeft = 3000;
   if (!gridOk()) buildBattleGrid();
   for (const f of fronts.slice()) {
     if (jobYield()) { const sv = [orderBudget, pathBudget, holdBudget]; pathBudget = Infinity; yield; [orderBudget, pathBudget, holdBudget] = sv; if (!W) return; if (!gridOk()) buildBattleGrid(); }
@@ -13427,7 +13452,7 @@ function packUnits(list) {
     let t = tk.get(key); if (t === undefined) { t = tab.length; tab.push(key); tk.set(key, t); }
     ti[i] = t; fl[i] = u.fl || 0; ft[i] = u.ft || 0; gen[i] = u.gen || 0; f[i] = u.f || 0;
     let more = null;
-    for (const k in u) if (!UNIT_PLAIN.has(k) && u[k] !== undefined && u[k] !== '') (more || (more = {}))[k] = u[k];
+    for (const k in u) if (!UNIT_PLAIN.has(k) && k[0] !== '_' && u[k] !== undefined && u[k] !== '') (more || (more = {}))[k] = u[k];   // _…: what a tick or a frame keeps for itself
     if (more) rest.push([i, JSON.stringify(more)]);
   });
   return { packed: 1, n, x, y, o, hp, ti, fl, ft, gen, f, tab, rest };
@@ -14837,7 +14862,7 @@ function scheduleSave() {
     saveFn = null;
     if (!own) return;
     dbPut('state', { w: W, h: H, own: own.slice(), countries, active, alpha, borderW, sizes, geo, geoLayer, geoLabels, geoBorders, geoStack, geoStore, win, regionMode, regionLevel, ringMode, hideCursor, spawnSide, unitMode, unitEch, placeCount, echScale, warpMode, mapTitle, wars, settled: [...settled], warOnly, occ: occ.slice(), occTiles: geoStore ? [...occStore] : null, exclaves, vsrc: vsrcDef(), units: packUnits(units), forms, unitSize, era, unitsPushBorder, pushK, battleSpeed, autoAdvance, generals, player, game, gameDate, hoursPerTick, arrows, cities, gameLog: gameLog.slice(0, 150), arrowWidth, fronts, econ }).catch(() => {});
-  }, inBattleNow ? 8000 : typeof units !== "undefined" && units.length > 20000 ? 4000 : 600);
+  }, inBattleNow ? Math.max(8000, units.length / 4) : typeof units !== "undefined" && units.length > 20000 ? 4000 : 600);   // with a hundred thousand troops a save costs a stutter: in battle every half minute
 }
 function saveImage() { base.toBlob(b => { if (b) dbPut('image', b).catch(() => {}); }, 'image/png'); }
 async function restoreSaved() {
@@ -15505,7 +15530,7 @@ fxResist = LS.get('mezha-resist', '1') === '1'; fxOn = LS.get('mezha-fx', '1') =
 warpProfile = WARP_PROFILES[LS.get('mezha-wprof', 'arc')] ? LS.get('mezha-wprof', 'arc') : 'arc';
 liveFront = LS.get('mezha-live2', '0') === '1'; $('#liveChk').checked = liveFront; $('#liveChk').addEventListener('change', e => setLiveFront(e.target.checked)); try { liveOff = new Set(JSON.parse(LS.get('mezha-live-off', '[]') || '[]')); } catch (e) { liveOff = new Set(); }
 let deployCap = clamp(+LS.get('mezha-deploycap3', '1500') || 1500, 300, 400000);
-const denseDeploy = () => deployCap >= 100000 && !(econ && econ.divs);      // the war of divisions never: a few dozen, as in HOI4
+const denseDeploy = () => deployCap >= 100000;
 // a division's name: its number in its army list and its arm
 const ARM_ADJ = { x: 'пехотная', muskets: 'пехотная', sword: 'пехотная', spear: 'пехотная', armor: 'танковая', tankmk: 'танковая', mech: 'механизированная', motor: 'моторизованная',
   art: 'артиллерийская', heavyart: 'артиллерийская', mlrs: 'артиллерийская', cannon: 'артиллерийская', cav: 'кавалерийская', horseshoe: 'кавалерийская', sabre: 'кавалерийская', dragoon: 'кавалерийская',
@@ -15580,8 +15605,7 @@ function* deployFrontsGen(opts = {}) {
   if (!dense && !(opts.rect && units.length)) {
     // divisions: the stretch each holds, and the size of a division on the map from it (a sector added to troops
     // already on the map keeps their size)
-    // in the war of divisions a few hundred at most: each holds a longer stretch, the map and the battles stay quick
-    const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / (econ.divs ? DIV_CAP : deployCap));
+    const spKm = Math.max(clamp(totalKm / 40, geoStore ? 4 : 10, geoStore ? 15 : 60), totalKm * 2 / deployCap);
     if (geoStore) setUnitSize(spKm * .75, true); else { unitSize = clamp(spKm * .75, usMin(), usMax()); setUnitSize(unitSize, true); }
   }
   const S = unitCellsAt(H / 2), sp = dense ? Math.max(S * 1.6, total * 2 / deployCap) : S / .75;
@@ -15589,24 +15613,9 @@ function* deployFrontsGen(opts = {}) {
   // 3. a unit every sp along each chain on each side, a little back into its own land
   const sides = new Map();            // owner -> [{ units, pts, len }] stretches
   let k = 0;
-  // in the war of divisions the spacing widens until all the fronts together hold no more than DIV_CAP (the size of
-  // a division on the map has its limit; the stretch it holds has none)
-  let widen = 1;
-  const divs = econ.divs && !dense && !opts.rect;
-  if (divs) { let est = 0; for (const ch of chains) est += 2 * ch.L[ch.L.length - 1] / (unitCellsAt(ch[ch.length >> 1].y) / .75); widen = Math.max(1, est / DIV_CAP); }
-  // there the little pieces of a border (a bend cut off, an islet) share their divisions: the length of a pair's
-  // pieces is carried over until it makes up one, and a pair that got none gets one on its last piece
-  let carry = 0, placed = 0;
   for (let ci = 0; ci < chains.length; ci++) {
-    const ch = chains[ci], L = ch.L, len = L[L.length - 1], spc = (dense ? sp : unitCellsAt(ch[ch.length >> 1].y) / .75) * widen;
-    let n = Math.max(1, Math.floor(len / spc));
-    if (divs) {
-      const nx = chains[ci + 1], last = !nx || nx[0].o !== ch[0].o || nx[0].q !== ch[0].q;
-      carry += len / spc; n = Math.floor(carry); carry -= n;
-      if (last && !placed && !n) n = 1;
-      placed += n; if (last) { carry = 0; placed = 0; }
-      if (!n) continue;
-    }
+    const ch = chains[ci], L = ch.L, len = L[L.length - 1], spc = dense ? sp : unitCellsAt(ch[ch.length >> 1].y) / .75;
+    const n = Math.max(1, Math.floor(len / spc));
     const o = ch[0].o, q = ch[0].q, so = { units: [], pts: ch, len }, sq = { units: [], pts: ch, len };
     let seg = 1;
     for (let j = 0; j < n; j++) {
@@ -15656,7 +15665,7 @@ function* deployFrontsGen(opts = {}) {
     }
     if (!order.length) continue;
     let gens = generals.filter(g => g.owner === o);
-    const K = dense ? (gens.length ? Math.min(gens.length, 12) : clamp(Math.round(order.length * sp / 400), 1, 6)) : clamp(Math.ceil(order.length / (divs ? 8 : 24)), 1, 24);
+    const K = dense ? (gens.length ? Math.min(gens.length, 12) : clamp(Math.round(order.length * sp / 400), 1, 6)) : clamp(Math.ceil(order.length / 24), 1, 24);
     if (!dense) {
       // an army of up to 24 divisions under every general: the scenario's own first, then new ones
       for (let n = gens.length; n < K; n++) { const g = { id: genSeq++, name: 'Генерал ' + (generals.filter(x => x.owner === o).length + 1), owner: o, photo: '', rank: 'Генерал', skill: 2 + (n % 3 === 0 ? 1 : 0) }; generals.push(g); }
@@ -16706,8 +16715,6 @@ function loadGame(d) {
   if (d.arrowWidth) arrowWidth = d.arrowWidth;
   econ = d.econ && Array.isArray(d.econ.facs) ? Object.assign(econBlank(), d.econ) : econBlank(); econMode = null;
   if (econ.front && econ.front.mode === 'free') econ.front = null;   // the free front of older saves: the live chain again
-  // a war of divisions saved with the troops of an old density setting (tens of thousands): set up again, as it is now
-  if (econ.divs && units.length > DIV_CAP * 8) setTimeout(() => { if (!divMode() || units.length <= DIV_CAP * 8) return; const n = units.length; units = []; forms = []; fronts = []; divStart(); toast('В этом сохранении было ' + n.toLocaleString('ru') + ' отрядов от старой настройки плотности — дивизии расставлены заново: ' + units.length + '.'); }, 300);
   selArrow = selCity = null;
   syncGameControls();
 }
