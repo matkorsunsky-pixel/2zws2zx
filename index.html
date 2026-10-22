@@ -2603,9 +2603,7 @@ function drawVectorMap(c) {
   }
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
   if (!geo) c.drawImage(base, 0, 0);
-  const patch = rubberPatch();
-  if (patch) { drawVecSet(c, vec, patch.win); drawVecSet(c, patch, null); }
-  else drawVecSet(c, vec, null);
+  drawVecSet(c, vec, null);
 }
 // one set of outlines: fills, coasts, borders, fronts, old borders; `hole` keeps out the area another set covers;
 // `part` draws only the fills (opaque) or only the hatching and lines
@@ -2949,7 +2947,7 @@ function territoryLabels() {
   const key = vecVersion + '|' + base;
   if (terrLab && key === terrLabKey) return terrLab;
   // in battle the names move at most once a second
-  if (terrLab && (battlesOn || marchRaf) && terrLabKey.slice(terrLabKey.indexOf('|') + 1) === base && performance.now() - terrLabT < 1000) return terrLab;
+  if (terrLab && (battlesOn || marchRaf || (drag && drag.mode === 'warp')) && terrLabKey.slice(terrLabKey.indexOf('|') + 1) === base && performance.now() - terrLabT < 1000) return terrLab;
   terrLabKey = key; terrLabT = performance.now();
   const B = Math.max(4, Math.round(Math.sqrt(W * H / 40000))), bw = Math.ceil(W / B), bh = Math.ceil(H / B);
   const blk = new Uint8Array(bw * bh), dist = new Int32Array(bw * bh).fill(-1), q = new Int32Array(bw * bh);
@@ -6269,6 +6267,7 @@ function drawPreview(vecMode) {
 // each frame; the map is drawn with the old outlines round the patch and the new ones in it. The patch is traced a
 // few cells wider than it is drawn, so its curves meet the older ones at its edge without a seam.
 let freshLog = [], rubberVec = null;
+function patchArea() { const p = rubberVec && rubberVec.key ? rubberVec.key.split(',').map(Number) : null; return p ? (p[2] - p[0]) * (p[3] - p[1]) : 0; }
 function rubberPatch() {
   if (!freshLog.length) return null;
   const base = vec ? vec.version : -1;
@@ -6292,6 +6291,23 @@ const fadeSnap = () => fadeCv2 || fadeCv;
 function swapFade() { if (!fadeCv2) { fadeCv2 = fadeCv; fadeCv = document.createElement('canvas'); return; } const t = fadeCv; fadeCv = fadeCv2; fadeCv2 = t; }
 let moveVK = '', moveT = 0, lastFull = null, snapOk = false, settleMapT = 0, fullCost = 0;
 const snapCv = document.createElement('canvas');
+// the map layer: imagery, land, relief, supply, labels (on a context set to the screen, or clipped to a part of it)
+function drawLayer(m, vecMode, patch) {
+  m.setTransform(1, 0, 0, 1, 0, 0);
+  if (geo && !exportNoGeo) drawGeoBackdrop(m);
+  m.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
+  if (!geo) { m.fillStyle = 'rgba(0,0,0,.18)'; m.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
+  // the rubber's patch alone: its own outlines cover all of it (they are traced wider than it), so the outlines of
+  // the whole window are not gone through again for a few square centimetres of screen
+  if (patch) { if (!geo) m.drawImage(base, 0, 0); drawVecSet(m, patch, null); }
+  else if (vecMode) drawVectorMap(m);
+  else { m.imageSmoothingEnabled = true; m.drawImage(over, 0, 0); }
+  drawTerrain(m);
+  drawSupplyMap(m);
+  if (geo) drawRegionFrame(m);
+  drawVecLabels(m);
+  drawTerritoryLabels(m);
+}
 // in battle the full picture of the map (land, borders, relief) at most every MAP_GAP ms; the troops every frame
 const MAP_GAP = 250;
 function drawMap() {
@@ -6309,8 +6325,10 @@ function drawMap() {
   // second, a moment behind the hand), never shown as the cells of the grid
   const rubber = !!(drag && drag.mode === 'warp' && drag.wm === 'rubber');
   if (vecMode && editing && !preview && !rubber) startPreview();
-  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && (!editing || rubber)) vecAsync(...vec.win);
-  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, freshLog.length ? 'p' + vecVersion : '', vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
+  // (while the rubber is pulled the whole window is traced again only when the patch has grown big: each tracing
+  // costs a copy of the window and a redraw of the whole map)
+  if (vecMode && vec && vec.version !== vecVersion && !vecWorkerOff && (!editing || (rubber && patchArea() > 160000))) vecAsync(...vec.win);
+  const sigNow = () => [view.x, view.y, view.s, cv.width, cv.height, mapEpoch, vecMode ? 'v' + (vec ? vec.serial : 0) + (vecWorkerOff && vec && vec.version !== vecVersion ? '*' + vecVersion : '') : 'r' + rasterEpoch].join();
   // while the map is being moved (pan, zoom, pinch) the last full picture is only shifted and scaled: retracing
   // borders, imagery and relief for every frame of a pan cost tens of milliseconds; the full picture comes back
   // 170 ms after the movement stops. In battle the land changes many times a second: the full picture is redrawn
@@ -6355,21 +6373,21 @@ function drawMap() {
     } else if (viewKey !== layerView) fadeT0 = 0;
     layerView = viewKey;
     m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, mapCv.width, mapCv.height);
-    if (geo && !exportNoGeo) drawGeoBackdrop(m);
-    m.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
-    if (!geo) { m.fillStyle = 'rgba(0,0,0,.18)'; m.fillRect(2 / view.s, 3 / view.s, W, H); }   // cheap drop shadow
-    if (vecMode) drawVectorMap(m);
-    else { m.imageSmoothingEnabled = true; m.drawImage(over, 0, 0); }
-    drawTerrain(m);
-    drawSupplyMap(m);
-    if (geo) drawRegionFrame(m);
-    drawVecLabels(m);
-    drawTerritoryLabels(m);
+    drawLayer(m, vecMode);
     layerSig = sigNow();
     const cost = performance.now() - tnow; fullCost = fullCost ? fullCost * .6 + cost * .4 : cost;
     lastFull = { x: wX, y: wY, s: wS, vk, t: tnow, w: mapCv.width, h: mapCv.height }; snapOk = false;
   }
   if (preview) drawPreview(vecMode);
+  // the rubber: the patch round the hand, drawn over the layer (which stays as it is) by the same steps as the layer
+  // itself, so it is as sharp and meets it without a seam; the layer under it is left alone, which keeps the drag light
+  const patch = vecMode && freshLog.length ? rubberPatch() : null;
+  if (patch) {
+    const u = patch.win, k = dpr * view.s, X0 = Math.max(0, Math.round(u[0] * k + view.x * dpr)), Y0 = Math.max(0, Math.round(u[1] * k + view.y * dpr));
+    const X1 = Math.min(cv.width, Math.round(u[2] * k + view.x * dpr)), Y1 = Math.min(cv.height, Math.round(u[3] * k + view.y * dpr));
+    if (X1 > X0 && Y1 > Y0) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip(); drawLayer(ctx, vecMode, patch); ctx.restore(); }
+    requestDrawFast();                      // until the outlines of the whole window have caught up
+  }
   if (fadeT0) {
     const t = (performance.now() - fadeT0) / fadeMs;
     if (t >= 1) fadeT0 = 0;
