@@ -1220,9 +1220,18 @@ body.battling :is(.lfbar, .sidepick, .armybar, .gstrip, .hud, .objbox, #objBox, 
 body.divs #sidePick { top: calc(68px + var(--lfh, 84px) + env(safe-area-inset-top, 0px)); }
 body.divs .lfbar .lfadv { display: contents; } body.divs .lfbar .lfadv > :not([data-lfa="mob"]) { display: none; }
 .mpf:has(#mpCap) { display: none; }
+/* a nuclear blast on screen: a white flash from where it fell, the map shaking a moment */
+.nukeflash { position: absolute; inset: 0; z-index: 7; pointer-events: none; background: radial-gradient(circle at var(--x) var(--y), #fff 0, rgb(255 250 230 / .9) 18%, rgb(255 230 190 / .35) 45%, transparent 75%); animation: nukeflash 1.5s ease-out forwards; }
+@keyframes nukeflash { 0% { opacity: 1; } 12% { opacity: .95; } 100% { opacity: 0; } }
+.nukeshake { animation: nukeshake .8s cubic-bezier(.36,.07,.19,.97); }
+@keyframes nukeshake { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); } 30%, 50%, 70% { transform: translate(-6px, 3px); } 40%, 60% { transform: translate(6px, -3px); } }
 /* the free front: of the economy only the strikes, free */
 .pane.freearms > :not(section:has(#ecStrikes)) { display: none; }
 .pane.freearms #ecStrikes + .hint { display: none; }
+.ecstrikes .ecgroup { grid-column: 1 / -1; margin: 8px 0 2px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ecstrikes .ecgroup.nuke { color: #e6c84a; }
+.ecstrikes button.nuke { border-color: rgb(230 200 74 / .45); background: rgb(230 200 74 / .08); }
+.ecstrikes button.nuke b { color: #f0d35a; }
 /* --- Discord --- */
 .dcid { background: #10151b; color: #ece8df; border: 1px solid rgb(255 255 255 / .14); border-radius: 9px; padding: 7px 9px; font: 13px ui-monospace, Consolas, monospace; }
 .dcstate { margin: 0; font-size: 12px; color: var(--m-muted, #9aa3ad); } .dcstate.good { color: #8fd6a8; } .dcstate.bad { color: #e6b45a; }
@@ -10972,7 +10981,7 @@ const frontById = id => fronts.find(f => f.id === id);
 const attacking = u => !!u.atk && !u.rest && !immobile(u) && (u.retreat || 0) <= 0;
 // the calendar alone: a day goes by even where nobody fights (a ceasefire, a map without troops)
 function calendarTick() { drain(calendarTickGen()); }
-function* calendarTickGen() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { yield* econDayGen(); yield* yieldPoint(); popDay(); lfDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
+function* calendarTickGen() { if (!game.calendar) return; const d0 = Math.floor(gameDate / 864e5); gameDate += hoursPerTick * 3600e3; const d1 = Math.floor(gameDate / 864e5); if (d1 !== d0) { objTick(); renderWeather(); for (let d = d0; d < d1 && d < d0 + 10; d++) { yield* econDayGen(); yield* yieldPoint(); popDay(); lfDay(); falloutDay(); } if (infoSel) renderInfoCard(); renderHud(); } }
 // ---------- the frame budget: the heavy work of a battle in slices, a few milliseconds a frame ----------
 // A tick of battle, a pass over the fronts, a day of the economy: each is a generator that gives way whenever its
 // slice of the frame is used up, and goes on in the next frame. The picture keeps its 60 frames a second however
@@ -12634,7 +12643,7 @@ const FACT = {
   civil: { name: 'Гражданский завод', cost: 2e9, days: 30, income: 15e6, from: 0 },
   drone: { name: 'Завод дронов', cost: 1e8, days: 10, upkeep: .5e6, make: 'drone', n: 4, every: 1, from: 2000, info: 'дроны выбранного вида', lines: 'drone' },
   dronepost: { name: 'Пункт дроноводов', cost: 6e7, days: 4, upkeep: .4e6, from: 2000, front: 60, info: 'запускает дроны · не дальше 60 км от фронта' },
-  bomber: { name: 'Авиазавод', cost: 1.2e9, days: 40, upkeep: 2e6, make: 'bomber', n: 1, every: 3, from: 1915, to: 1999, info: 'бомбардировщик раз в 3 дня' },
+  bomber: { name: 'Авиазавод', cost: 1.2e9, days: 40, upkeep: 2e6, make: 'bomber', n: 1, every: 1, from: 1915, info: 'бомбардировщики и бомбы выбранного вида', lines: 'bomber' },
   missile: { name: 'Ракетный завод', cost: 1.5e9, days: 45, upkeep: 2e6, make: 'missile', n: 1, every: 1, from: 1950, info: 'ракеты выбранного вида', lines: 'missile' },
   launcher: { name: 'Пусковая установка', cost: 4e8, days: 12, upkeep: 1e6, from: 1950, info: 'запускает ракеты · в тылу или у фронта' },
   armor: { name: 'Военный завод', cost: 8e8, days: 30, upkeep: 3e6, make: 'eq', n: 1, every: 1, from: 0, info: 'снаряжение для войск' },
@@ -12664,11 +12673,31 @@ const STRIKE = {
   lancet: { kind: 'drone', name: 'Барражирующие боеприпасы', short: '«Ланцет»', need: 3, range: 70, radius: 3, dmg: .9, civ: .5, aa: .2, year: 2019, rate: 6, price: 35e3, fly: 1700 },
   drone: { kind: 'drone', name: 'Ударные дроны дальнего действия', short: '«Шахед»', need: 10, range: 1200, radius: 6, dmg: 1, civ: 1, aa: .35, year: 2000, rate: 4, price: 5e4, fly: 2200 },
   jetdrone: { kind: 'drone', name: 'Реактивные ударные дроны', short: 'реактивные', need: 3, range: 1500, radius: 9, dmg: 1.5, civ: 1.4, aa: .3, year: 2023, rate: 1, price: 6e5, fly: 1700, area: true },
-  bomber: { kind: 'bomber', name: 'Бомбардировка', short: 'бомбардировщики', need: 3, range: 800, radius: 10, dmg: .65, civ: 1, aa: .35, year: 1915, to: 1999, price: 4e7, fly: 1600 },
+  bomber: { kind: 'bomber', name: 'Бомбардировка', short: 'бомбардировщики', need: 3, range: 800, radius: 10, dmg: .65, civ: 1, aa: .35, year: 1915, to: 1999, rate: .34, price: 4e7, fly: 1600 },
   tactical: { kind: 'missile', name: 'Тактические ракеты', short: 'тактические', need: 1, range: 150, radius: 7, dmg: .6, civ: .5, aa: .5, year: 1970, rate: 1, price: 4e5, fly: 1100 },
   cruise: { kind: 'missile', name: 'Крылатые ракеты', short: 'крылатые', need: 1, range: 2500, radius: 11, dmg: 1, civ: 1, aa: .6, year: 1977, rate: .5, price: 1.5e6, fly: 1900 },
   missile: { kind: 'missile', name: 'Баллистические ракеты', short: 'баллистические', need: 1, range: 500, radius: 14, dmg: 1.4, civ: 1.2, aa: .4, year: 1950, rate: .4, price: 3e6, fly: 1400 },
-  hyper: { kind: 'missile', name: 'Гиперзвуковые ракеты', short: 'гиперзвуковые', need: 1, range: 2000, radius: 16, dmg: 2, civ: 1.6, aa: .12, year: 2018, rate: .1, price: 1e7, fly: 1000 }
+  hyper: { kind: 'missile', name: 'Гиперзвуковые ракеты', short: 'гиперзвуковые', need: 1, range: 2000, radius: 16, dmg: 2, civ: 1.6, aa: .12, year: 2018, rate: .1, price: 1e7, fly: 1000 },
+  // more drones: grenades dropped from small quadcopters, heavy night bombers, FPV on a fibre (no jamming), a swarm
+  dropper: { kind: 'drone', name: 'Дроны-сбросчики', short: 'сбросчики', need: 6, range: 12, radius: 1, dmg: .4, civ: .15, aa: 0, year: 2016, rate: 25, price: 2000, fly: 1400 },
+  fiber: { kind: 'drone', name: 'FPV на оптоволокне', short: 'оптоволокно', need: 6, range: 20, radius: 1.5, dmg: .55, civ: .2, aa: 0, year: 2024, rate: 12, price: 3000, fly: 1300 },
+  heavy: { kind: 'drone', name: 'Тяжёлые дроны-бомбардировщики', short: '«Баба-Яга»', need: 2, range: 25, radius: 2.5, dmg: .9, civ: .3, aa: .1, year: 2022, rate: 3, price: 2e4, fly: 1900 },
+  swarm: { kind: 'drone', name: 'Рой ударных дронов', short: 'рой', need: 30, range: 1500, radius: 12, dmg: 2.4, civ: 2, aa: .25, year: 2025, rate: 8, price: 4e4, fly: 2400, area: true },
+  // bombs from the air: guided glide bombs dropped short of the front, strategic bombers far behind it
+  kab: { kind: 'bomber', name: 'Управляемые авиабомбы (КАБ)', short: 'КАБ', need: 2, range: 70, radius: 5, dmg: 1.6, civ: 1.1, aa: .15, year: 2015, rate: 2, price: 2e5, fly: 1500, area: true },
+  strategic: { kind: 'bomber', name: 'Стратегические бомбардировщики', short: 'стратегические', need: 2, range: 6000, radius: 18, dmg: 2.2, civ: 2, aa: .45, year: 1950, rate: .1, price: 2e8, fly: 2600, area: true },
+  // more rockets: multiple rocket launchers, light to heavy, and the thermobaric one
+  mlrs: { kind: 'missile', name: 'Реактивные системы залпового огня', short: 'РСЗО', need: 1, range: 40, radius: 8, dmg: .9, civ: .9, aa: .05, year: 1941, rate: 2, price: 1e5, fly: 900, area: true },
+  smerch: { kind: 'missile', name: 'Тяжёлые РСЗО', short: '«Смерч»', need: 1, range: 90, radius: 12, dmg: 1.3, civ: 1.2, aa: .1, year: 1987, rate: 1, price: 6e5, fly: 1100, area: true },
+  thermo: { kind: 'missile', name: 'Термобарические РСЗО', short: '«Солнцепёк»', need: 1, range: 10, radius: 4, dmg: 2.6, civ: 2, aa: 0, year: 2001, rate: .6, price: 8e5, fly: 800, area: true },
+  // nuclear weapons: the blast clears everything within its radius, the fire and the fallout go much farther; the
+  // fallout stays on the land for weeks and wears down any troops in it. The AI never uses them.
+  abomb: { kind: 'bomber', nuke: 1, name: 'Атомная бомба', short: 'атомная', need: 1, range: 2500, radius: 22, dmg: 14, civ: 30, aa: .35, year: 1945, rate: .01, price: 5e8, fly: 2800 },
+  tacnuke: { kind: 'missile', nuke: 1, name: 'Тактический ядерный заряд', short: 'тактический ЯО', need: 1, range: 500, radius: 14, dmg: 10, civ: 18, aa: .4, year: 1958, rate: .02, price: 2e7, fly: 1400 },
+  nukemissile: { kind: 'missile', nuke: 2, name: 'Ядерная баллистическая ракета', short: 'ядерная БР', need: 1, range: 5500, radius: 40, dmg: 18, civ: 45, aa: .25, year: 1959, rate: .01, price: 8e7, fly: 2400 },
+  hbomb: { kind: 'bomber', nuke: 2, name: 'Термоядерная бомба', short: 'термоядерная', need: 1, range: 6000, radius: 55, dmg: 22, civ: 60, aa: .4, year: 1955, rate: .008, price: 3e8, fly: 3000 },
+  icbm: { kind: 'missile', nuke: 3, name: 'МБР с разделяющимися боеголовками', short: 'МБР', need: 1, range: 13000, radius: 80, dmg: 26, civ: 90, aa: .08, year: 1970, rate: .005, price: 3e8, fly: 3200, area: true },
+  tsar: { kind: 'bomber', nuke: 3, name: '«Царь-бомба»', short: 'Царь-бомба', need: 1, range: 6000, radius: 130, dmg: 34, civ: 140, aa: .4, year: 1961, rate: .002, price: 1e9, fly: 3400 }
 };
 // where each kind goes up from, and which weapons a kind has in a given year (cheapest first)
 const LAUNCH = { drone: 'dronepost', missile: 'launcher', bomber: 'bomber' };
@@ -12745,7 +12774,7 @@ function nearestCityName(w) {
 }
 // the first line of a new factory of drones or missiles: the usual weapon of the time; for the AI any of them
 function firstLine(type, any) {
-  const vs = variantsOf(FACT[type].lines); if (!vs.length) return undefined;
+  const vs = variantsOf(FACT[type].lines).filter(v => !any || !STRIKE[v].nuke); if (!vs.length) return undefined;
   // the AI picks the cheap, common ones more often (weight: the root of how many a day)
   if (any) { const w = vs.map(v => Math.sqrt(STRIKE[v].rate)), t = w.reduce((a, b) => a + b, 0); let r = Math.random() * t; for (let i = 0; i < vs.length; i++) if ((r -= w[i]) <= 0) return vs[i]; return vs[0]; }
   return vs.includes(FACT[type].make) ? FACT[type].make : vs[0];
@@ -12952,7 +12981,7 @@ function econAi(k) {
   };
   // missiles and bombers: an enemy factory within reach first (the dear ones keep for those), else a knot of troops
   for (const v of Object.keys(STRIKE)) {
-    const S = STRIKE[v]; if (S.kind === 'drone' || !((st[v] || 0) >= S.need) || Math.random() > .5) continue;
+    const S = STRIKE[v]; if (S.kind === 'drone' || S.nuke || !((st[v] || 0) >= S.need) || Math.random() > .5) continue;
     const fs = econ.facs.filter(f => atWar(k, f.owner) && !f.ruined && econCanReach(k, v, f));
     if (fs.length && (S.dmg >= 1.4 || Math.random() < .5)) { const f = fs[Math.floor(Math.random() * fs.length)]; econStrike(k, v, fromWorld(f), true); }
     else { const ts = targetsNear(v); if (ts.length) econStrike(k, v, ts[Math.floor(Math.random() * ts.length)], true); }
@@ -12991,7 +13020,7 @@ function econStrike(k, kind, g, quiet) {
   let k2 = 1;
   if (dst && dst.aa > 0 && S.aa > 0 && atWar(k, def)) { dst.aa--; stAdd(def, 'aaShots'); if (Math.random() < S.aa) { k2 = S.kind === 'missile' || S.area ? 0 : .5; stAdd(def, 'intercepts'); stAdd(k, 'downed'); } }
   const fg = fromWorld(from);
-  econFx.push({ kind: S.kind, v: kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0, dur: S.fly, n: S.kind === 'drone' ? Math.min(7, 2 + S.need) : 1, sz: .75 + Math.min(.7, S.dmg * .3) });
+  econFx.push({ kind: S.kind, v: kind, a: fg, b: { x: g.x, y: g.y }, t0: performance.now(), hit: k2 > 0, dur: S.fly, n: S.kind === 'drone' ? Math.min(7, 2 + S.need) : 1, sz: .75 + Math.min(.7, S.dmg * .3), nuke: S.nuke, R: S.nuke ? (geo ? S.radius * 1000 / metersPerCell() : 40) : 0 });
   strikeSound(S.kind, k, g, 'launch', S.dmg);
   setTimeout(() => { econImpact(k, kind, g, k2, quiet); if (k2 > 0) strikeSound(S.kind, k, g, 'hit', S.dmg); }, S.fly);
   if (!quiet) toast(S.name + (k2 === 0 ? ' — сбиты ПВО противника.' : '...'));
@@ -13002,11 +13031,13 @@ function econImpact(k, kind, g, k2, quiet) {
   if (k2 <= 0) { logEvent(ownerName(k) + ': ' + STRIKE[kind].name.toLowerCase() + ' сбиты ПВО', k); renderEcon(); return; }
   const S = STRIKE[kind];
   const R = geo ? Math.max(S.radius * 1000 / metersPerCell(), unitCellsAt(g.y) * 1.2) : unitCellsAt(g.y) * 2;
-  const hit = units.filter(u => atWar(k, u.owner) && Math.hypot(u.x - g.x, u.y - g.y) <= R);
+  // a nuclear blast spares no one in its radius, one's own troops included
+  const hit = units.filter(u => (S.nuke || atWar(k, u.owner)) && Math.hypot(u.x - g.x, u.y - g.y) <= R);
   let lost = 0;
+  if (S.nuke) nukeAfter(k, kind, g);
   // troops under the cover of air defence (an AA unit of their side nearby) take half the damage
   const cover = new Map();
-  const aaK = u => { if (!cover.has(u)) { let c = false; forNear(u, bodyS(u) * 3, v => { if (roleOf(v).aa && allied(v.owner, u.owner)) { c = true; return false; } }); cover.set(u, roleOf(u).aa || c ? .5 : 1); } return cover.get(u); };
+  const aaK = u => { if (S.nuke) return 1; if (!cover.has(u)) { let c = false; forNear(u, bodyS(u) * 3, v => { if (roleOf(v).aa && allied(v.owner, u.owner)) { c = true; return false; } }); cover.set(u, roleOf(u).aa || c ? .5 : 1); } return cover.get(u); };
   if (S.kind !== 'drone' || S.area) { const d = 40 * S.dmg; for (const u of hit) { const m = aaK(u); u.hp = hpOf(u) - d * k2 * m; } }
   else for (let d = 0; d < S.need * k2 && hit.length; d++) { const u = hit[Math.floor(Math.random() * hit.length)], m = aaK(u); u.hp = hpOf(u) - 9 * S.dmg * m; }
   const dead = units.filter(u => hpOf(u) <= 0);
@@ -13016,7 +13047,7 @@ function econImpact(k, kind, g, k2, quiet) {
   // map and makes nothing until its owner pays to rebuild it
   let fac = null;
   for (const f of econ.facs) {
-    if (!atWar(k, f.owner) || f.ruined) continue;
+    if ((!S.nuke && !atWar(k, f.owner)) || f.ruined) continue;
     const p = fromWorld(f); if (Math.hypot(p.x - g.x, p.y - g.y) > R) continue;
     f.hp = Math.max(0, hpF(f) - (S.kind === 'missile' ? 45 : S.kind === 'bomber' ? 55 : 15) * S.dmg * k2);
     if (f.rep) { delete f.rep; delete f.repStep; }                 // a repair under way is undone by the strike
@@ -13087,13 +13118,17 @@ function econClick(g) {
 function renderFreeArms() {
   const sb = $('#ecStrikes'); sb.textContent = '';
   if (!player) { sb.textContent = 'Выберите свою страну (щелчок колёсиком по ней или «Играю за» внизу).'; return; }
-  for (const kind of ['missile', 'drone', 'bomber']) for (const v of Object.keys(STRIKE).filter(v => STRIKE[v].kind === kind)) {
-    const S = STRIKE[v], b = document.createElement('button'); b.dataset.strike = v; b.className = econMode && econMode.type === v ? 'on' : '';
+  const groups = [['Ракеты и РСЗО', v => STRIKE[v].kind === 'missile' && !STRIKE[v].nuke], ['Дроны', v => STRIKE[v].kind === 'drone'], ['Авиация и бомбы', v => STRIKE[v].kind === 'bomber' && !STRIKE[v].nuke], ['☢ Ядерное оружие', v => STRIKE[v].nuke]];
+  for (const [title, test] of groups) {
+    const h = document.createElement('h5'); h.className = 'ecgroup' + (title[0] === '☢' ? ' nuke' : ''); h.textContent = title; sb.append(h);
+    for (const v of Object.keys(STRIKE).filter(test).sort((a, b) => (STRIKE[a].nuke || 0) - (STRIKE[b].nuke || 0) || STRIKE[a].dmg - STRIKE[b].dmg)) {
+    const S = STRIKE[v], b = document.createElement('button'); b.dataset.strike = v; b.className = (econMode && econMode.type === v ? 'on' : '') + (S.nuke ? ' nuke' : '');
     b.innerHTML = '<b></b><small></small><em></em>';
     b.querySelector('b').textContent = S.name;
     b.querySelector('small').textContent = 'радиус ' + String(S.radius).replace('.', ',') + ' км · сила ×' + String(S.dmg).replace('.', ',') + (S.aa ? ' · ПВО сбивает ' + Math.round(S.aa * 100) + '%' : '');
-    b.querySelector('em').textContent = 'без ограничений · бесплатно';
+    b.querySelector('em').textContent = S.nuke ? 'ядерный удар · заражение местности на 2 месяца' : 'без ограничений · бесплатно';
     sb.append(b);
+  }
   }
 }
 // the factories on the map, the flights of drones and missiles, the ghost of what is being placed
@@ -13187,9 +13222,10 @@ function drawEcon(c) {
       c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x + 6, y); c.moveTo(x, y - 6); c.lineTo(x, y + 6); c.stroke();
     }
   }
+  drawFallout(c);
   // flights: a missile on an arc with its flame and smoke, a swarm of drones low and steady; a flash where they land
   const now = performance.now();
-  econFx = econFx.filter(e => now - e.t0 < (e.dur || 1100) + 800);
+  econFx = econFx.filter(e => now - e.t0 < (e.dur || 1100) + (e.nuke ? NUKE_MS : 800));
   for (const e of econFx) {
     const dur = e.dur || 1100, t = (now - e.t0) / dur, ax = e.a.x * view.s + view.x, ay = e.a.y * view.s + view.y, bx = e.b.x * view.s + view.x, by = e.b.y * view.s + view.y;
     if (t < 1) {
@@ -13212,7 +13248,8 @@ function drawEcon(c) {
         c.lineWidth = 1.5; c.strokeStyle = 'rgba(220,220,200,.75)'; c.stroke();
         c.save(); c.translate(q.x, q.y); c.rotate(ang + Math.PI / 2); c.scale(9, 9); c.beginPath(); FAC_GLYPH.bomber(c); c.fillStyle = '#e8e2d2'; c.fill(); c.restore();
       }
-    } else if (e.hit) {
+    } else if (e.hit && e.nuke) drawNuke(c, e, bx, by, (now - e.t0 - dur) / NUKE_MS);
+    else if (e.hit) {
       const k = (now - e.t0 - dur) / 720, rr = (e.kind === 'missile' ? 30 : 16) * (e.sz || 1) * (0.3 + k);
       const gr = c.createRadialGradient(bx, by, 0, bx, by, rr);
       gr.addColorStop(0, `rgba(255,236,190,${(1 - k) * .95})`); gr.addColorStop(.4, `rgba(255,120,40,${(1 - k) * .7})`); gr.addColorStop(1, 'rgba(120,20,10,0)');
@@ -13220,6 +13257,54 @@ function drawEcon(c) {
     }
   }
   if (econFx.length) requestAnimationFrame(() => requestUi());
+}
+// a nuclear blast on the map: the flash and the fireball, the shock wave running out to the edge of its radius, then
+// the cloud rising on its stem and spreading into a cap, all fading out over NUKE_MS
+const NUKE_MS = 7000;
+function drawNuke(c, e, x, y, t) {
+  if (t >= 1) return;
+  const R = Math.max(18, e.R * view.s), big = Math.min(1, R / 140), H = Math.max(40, R * .9) * (.6 + .4 * big);
+  c.save();
+  // the flash: white, filling the radius, gone in a fraction of a second
+  if (t < .08) { const a = 1 - t / .08, gr = c.createRadialGradient(x, y, 0, x, y, R * 1.6); gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(.35, `rgba(255,250,220,${a * .8})`); gr.addColorStop(1, 'rgba(255,230,180,0)'); c.fillStyle = gr; c.beginPath(); c.arc(x, y, R * 1.6, 0, Math.PI * 2); c.fill(); }
+  // the shock wave: a ring running out to the radius and a little beyond, thinning as it goes
+  if (t < .45) { const k = t / .45, rr = R * (.1 + 1.15 * k); c.lineWidth = Math.max(2, R * .08 * (1 - k)); c.strokeStyle = `rgba(255,245,225,${.85 * (1 - k)})`; c.beginPath(); c.arc(x, y, rr, 0, Math.PI * 2); c.stroke(); c.lineWidth = Math.max(1, R * .03 * (1 - k)); c.strokeStyle = `rgba(255,170,90,${.6 * (1 - k)})`; c.beginPath(); c.arc(x, y, rr * .92, 0, Math.PI * 2); c.stroke(); }
+  // the scorched ground under it, the fireball at its foot
+  const fade = t < .7 ? 1 : 1 - (t - .7) / .3;
+  { const gr = c.createRadialGradient(x, y, 0, x, y, R); gr.addColorStop(0, `rgba(40,20,10,${.55 * fade})`); gr.addColorStop(.6, `rgba(90,40,20,${.3 * fade})`); gr.addColorStop(1, 'rgba(90,40,20,0)'); c.fillStyle = gr; c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill(); }
+  const fb = R * .32 * Math.min(1, t * 6), heat = Math.max(0, 1 - t * 1.6);
+  { const gr = c.createRadialGradient(x, y, 0, x, y, fb); gr.addColorStop(0, `rgba(255,250,210,${.95 * heat + .2 * fade})`); gr.addColorStop(.5, `rgba(255,140,40,${.8 * heat + .15 * fade})`); gr.addColorStop(1, 'rgba(120,30,10,0)'); c.fillStyle = gr; c.beginPath(); c.arc(x, y, fb, 0, Math.PI * 2); c.fill(); }
+  // the cloud: the stem rising, the cap rolling at its top
+  const rise = Math.min(1, t / .5), top = y - H * rise, capR = R * (.18 + .3 * rise) * (.7 + .3 * big);
+  const smoke = (a, warm) => warm ? `rgba(${200 + 55 * heat | 0},${120 + 60 * heat | 0},${70 + 40 * heat | 0},${a})` : `rgba(150,140,132,${a})`;
+  c.globalAlpha = fade;
+  const sw = capR * .32; c.fillStyle = smoke(.75, heat > .2);
+  c.beginPath(); c.moveTo(x - sw * .7, y); c.quadraticCurveTo(x - sw * .35, (y + top) / 2, x - sw * .5, top + capR * .3); c.lineTo(x + sw * .5, top + capR * .3); c.quadraticCurveTo(x + sw * .35, (y + top) / 2, x + sw * .7, y); c.closePath(); c.fill();
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * Math.PI * 2 + t * 1.5, px = x + Math.cos(a) * capR * .65, py = top + Math.sin(a) * capR * .28;
+    const gr = c.createRadialGradient(px, py, 0, px, py, capR * .55); gr.addColorStop(0, smoke(.9, heat > .1)); gr.addColorStop(1, smoke(0, false));
+    c.fillStyle = gr; c.beginPath(); c.arc(px, py, capR * .55, 0, Math.PI * 2); c.fill();
+  }
+  { const gr = c.createRadialGradient(x, top, 0, x, top, capR * .7); gr.addColorStop(0, `rgba(255,${180 + 60 * heat | 0},${110 + 80 * heat | 0},${.8 * Math.max(heat, .25)})`); gr.addColorStop(1, 'rgba(255,160,90,0)'); c.fillStyle = gr; c.beginPath(); c.arc(x, top, capR * .7, 0, Math.PI * 2); c.fill(); }
+  // the base surge: a low ring of dust spreading at the foot
+  if (t > .15) { const k = Math.min(1, (t - .15) / .5); c.globalAlpha = fade * .6; c.fillStyle = smoke(.5, false); c.beginPath(); c.ellipse(x, y, R * (.25 + .5 * k), R * (.07 + .12 * k), 0, 0, Math.PI * 2); c.fill(); }
+  c.restore();
+}
+// the fallout: land poisoned by a nuclear blast, drawn as a hazard ring that fades over two months of play
+function drawFallout(c) {
+  const F = econ.fallout; if (!F || !F.length || !geo) return;
+  const day = gameDate / 864e5;
+  c.save();
+  for (const z of F) {
+    const fade = clamp(1 - (day - z.day) / 60, 0, 1); if (fade <= 0) continue;
+    const g = fromWorld(z), x = g.x * view.s + view.x, y = g.y * view.s + view.y, R = z.km * 1000 / metersPerCell() * view.s;
+    if (R < 2) continue;
+    const gr = c.createRadialGradient(x, y, 0, x, y, R); gr.addColorStop(0, `rgba(160,190,40,${.32 * fade})`); gr.addColorStop(.7, `rgba(140,170,30,${.18 * fade})`); gr.addColorStop(1, 'rgba(120,150,20,0)');
+    c.fillStyle = gr; c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
+    c.setLineDash([6, 5]); c.lineWidth = 1.5; c.strokeStyle = `rgba(230,210,40,${.75 * fade})`; c.beginPath(); c.arc(x, y, R * .6, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    if (R > 24) { c.font = `700 ${Math.min(22, R * .25) | 0}px ${FONT_UI}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = `rgba(250,230,60,${.9 * fade})`; c.fillText('☢', x, y - R * .6); }
+  }
+  c.restore();
 }
 // the panel's tab and the money in the HUD
 function renderEcon(hudOnly) {
@@ -13259,9 +13344,9 @@ function renderEcon(hudOnly) {
   for (const kind of ['drone', 'bomber', 'missile']) for (const v of Object.keys(STRIKE).filter(v => STRIKE[v].kind === kind)) {
     const S = STRIKE[v], avail = variantsOf(kind).includes(v);
     if (!avail && !(st[v] > 0)) continue;
-    const b = document.createElement('button'); b.dataset.strike = v; b.className = econMode && econMode.type === v ? 'on' : '';
+    const b = document.createElement('button'); b.dataset.strike = v; b.className = (econMode && econMode.type === v ? 'on' : '') + (S.nuke ? ' nuke' : '');
     b.innerHTML = '<b></b><small></small><em></em>';
-    b.querySelector('b').textContent = S.name + ' · ' + S.need + ' шт.';
+    b.querySelector('b').textContent = (S.nuke ? '☢ ' : '') + S.name + ' · ' + S.need + ' шт.';
     b.querySelector('small').textContent = 'до ' + fmtInt(S.range) + ' км · радиус ' + String(S.radius).replace('.', ',') + ' км · сила ×' + String(S.dmg).replace('.', ',') + (S.aa ? ' · ПВО сбивает ' + Math.round(S.aa * 100) + '%' : ' · ПВО не сбивает');
     b.querySelector('em').textContent = 'в запасе ' + (st[v] || 0) + ' · ~' + fmtMoney(strikePrice(v)) + ' за шт.';
     b.disabled = !((st[v] || 0) >= S.need);
@@ -13384,6 +13469,42 @@ function regionPop(f) {
   const now = Math.max(0, start * (1 + .00003 * (econ.day || 0)) - (st.dead || 0) - (st.fled || 0) - (st.mob || 0));
   return { start, now, dead: st.dead || 0, fled: st.fled || 0, strikes: st.strikes || 0, area: popModel.area.get(f), ruin: st.ruin || 0, mob: st.mob || 0 };
 }
+// what a nuclear blast leaves: the people of the regions round it (the fire and the blast reach far beyond the
+// radius that clears the troops), the fallout on the land for weeks, a flash over the screen and its roar
+function nukeAfter(k, kind, g) {
+  const S = STRIKE[kind], km = geo ? metersPerCell() / 1000 : 1, R = S.radius / km;
+  if (geoStore && popModel) {
+    const seen = new Map(), w0 = regionOfPoint(...Object.values(toWorld(g.x, g.y)));
+    for (const [rr, n] of [[.35, 8], [.7, 12], [1.1, 16]]) for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2, w = toWorld(g.x + Math.cos(a) * R * rr, g.y + Math.sin(a) * R * rr), f = regionOfPoint(w.mx, w.my);
+      if (f && f !== w0) seen.set(f, (seen.get(f) || 0) + (rr < .5 ? 1 : rr < 1 ? .6 : .3) / n);
+    }
+    let dead = 0;
+    for (const [f, share] of seen) { const P = regionPop(f), d = Math.floor(P.now * Math.min(.6, share * .25 * S.nuke)); if (d > 0) { popHit(f, d, true); dead += d; } }
+    stAdd(k, 'civKilled', dead); stAdd(fineOwner(g.x, g.y), 'civLost', dead);
+  }
+  const w = toWorld(g.x, g.y);
+  (econ.fallout || (econ.fallout = [])).push({ mx: w.mx, my: w.my, km: S.radius * 1.6, day: Math.floor(gameDate / 864e5), n: S.nuke });
+  const city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) < R);
+  logEvent('☢ ' + ownerName(k) + ': ' + S.name.toLowerCase() + ' — ядерный удар' + (city ? ', город ' + city.name : ' по земле страны «' + ownerName(fineOwner(g.x, g.y)) + '»'), k);
+  const x = g.x * view.s + view.x, y = g.y * view.s + view.y, r = stage.getBoundingClientRect();
+  if (x > -200 && y > -200 && x < r.width + 200 && y < r.height + 200) {
+    const fl = document.createElement('div'); fl.className = 'nukeflash'; fl.style.setProperty('--x', x + 'px'); fl.style.setProperty('--y', y + 'px'); stage.append(fl); setTimeout(() => fl.remove(), 1600);
+    stage.classList.remove('nukeshake'); void stage.offsetWidth; stage.classList.add('nukeshake'); setTimeout(() => stage.classList.remove('nukeshake'), 900);
+  }
+  if (fxSound && !document.hidden) { const ac = fxAudio(); if (ac) { fxBoom(3.2); setTimeout(() => fxBoom(2.4), 180); setTimeout(() => fxBoom(1.6), 650); setTimeout(() => fxBoom(1.1), 1400); } }
+}
+// a day under the fallout: troops in it lose strength, the zone fades over two months
+function falloutDay() {
+  const F = econ.fallout; if (!F || !F.length) return;
+  const day = Math.floor(gameDate / 864e5);
+  econ.fallout = F.filter(z => day - z.day < 60);
+  for (const z of econ.fallout) {
+    const g = fromWorld(z), R = geo ? z.km * 1000 / metersPerCell() * .6 : 0, fade = 1 - (day - z.day) / 60;
+    if (R > 0) for (const u of units) if (Math.hypot(u.x - g.x, u.y - g.y) < R) u.hp = hpOf(u) - 6 * z.n * fade;
+  }
+  if (units.some(u => hpOf(u) <= 0)) { const dead = units.filter(u => hpOf(u) <= 0); noteLosses(dead); units = units.filter(u => hpOf(u) > 0); }
+}
 function popHit(f, dead, strike) {
   const p = econ.pop || (econ.pop = {}), k = regionKey(f), st = p[k] || (p[k] = {});
   st.dead = (st.dead || 0) + dead; if (strike) st.strikes = (st.strikes || 0) + 1;
@@ -13397,7 +13518,7 @@ function strikeCivilians(kind, g, Rkm) {
   const w = toWorld(g.x, g.y), f = regionOfPoint(w.mx, w.my); if (!f) return 0;
   const kmc = geo ? metersPerCell() / 1000 : 1, city = cities.find(c => Math.hypot(c.x - g.x, c.y - g.y) * kmc < 12);
   const P = regionPop(f), dens0 = P.now / Math.max(1, P.area), dens = city ? Math.max(dens0, Math.min(15000, 2500 + (city.vp || 1) * 450)) : dens0;
-  const V = STRIKE[kind] || { kind, civ: 1 }, L = LETHAL[V.kind], e = dens * Math.PI * L.r * L.r * L.k * V.civ * (.4 + Math.random() * 1.2), dead = Math.min(Math.floor(P.now), Math.floor(e) + (Math.random() < e % 1 ? 1 : 0));
+  const V = STRIKE[kind] || { kind, civ: 1 }, L = V.nuke ? { r: V.radius * .3, k: .35 } : LETHAL[V.kind], e = dens * Math.PI * L.r * L.r * L.k * (V.nuke ? 1 : V.civ) * (.4 + Math.random() * 1.2), dead = Math.min(Math.floor(P.now), Math.floor(e) + (Math.random() < e % 1 ? 1 : 0));
   popHit(f, dead, true);
   const st = econ.pop[regionKey(f)]; st.fled = (st.fled || 0) + Math.min(P.now * .004, dens * Math.PI * Math.pow(Rkm * .25, 2) * (V.kind === 'drone' ? .004 : .015) * V.civ);
   return dead;
@@ -16253,7 +16374,7 @@ function mpState(full) {
   if (!full) mpTiles.clear();
   const e = econ;
   return { t: full ? 'full' : 'st', units: units.map(encU), forms, generals, fronts: fronts.map(encF), tiles,
-    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, aidLog: (e.aidLog || []).slice(0, 12), last: e.last, stats: e.stats, statT0: e.statT0, front: e.front, man: e.man, divs: e.divs },
+    econ: { money: e.money, base: e.base, stock: e.stock, facs: e.facs, day: e.day, pop: e.pop, aidLog: (e.aidLog || []).slice(0, 12), last: e.last, stats: e.stats, statT0: e.statT0, front: e.front, man: e.man, divs: e.divs, fallout: e.fallout },
     wars, game, gameDate, on: battlesOn, hpt: hoursPerTick, log: gameLog.slice(0, 40), countries, humans: mp.humans, rules: mp.rules };
 }
 // a tile of borders in bytes: runs of (value, count up to 255)
