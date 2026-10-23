@@ -6266,7 +6266,7 @@ function drawPreview(vecMode) {
 // times a second, and what the hand changed since the last tracing (a patch round the cursor) is traced in place
 // each frame; the map is drawn with the old outlines round the patch and the new ones in it. The patch is traced a
 // few cells wider than it is drawn, so its curves meet the older ones at its edge without a seam.
-let freshLog = [], rubberVec = null;
+let freshLog = [], rubberVec = null, rubberT = -1e9;
 function patchArea() { const p = rubberVec && rubberVec.key ? rubberVec.key.split(',').map(Number) : null; return p ? (p[2] - p[0]) * (p[3] - p[1]) : 0; }
 function rubberPatch() {
   if (!freshLog.length) return null;
@@ -6360,7 +6360,9 @@ function drawMap() {
     // the same view with the land changed under it (troops on the move, a border let go): the old picture fades
     // into the new one, so the front line glides instead of jumping from one tracing to the next
     const viewKey = [view.x, view.y, view.s, cv.width, cv.height].join(), now = performance.now();
-    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast' && !(gfx === 'auto' && battlesOn)) {   // in battle no cross-fade: the land changes every moment
+    // (and none just after the rubber: the layer under its patch is the picture from before the drag, and fading from
+    // it would show the border as it was seconds ago)
+    if (layerSig && viewKey === layerView && vecMode && !editing && !preview && gfx !== 'fast' && !(gfx === 'auto' && battlesOn) && performance.now() - rubberT > 1500) {   // in battle no cross-fade: the land changes every moment
       if (!fadeCv) fadeCv = document.createElement('canvas');
       if (fadeCv.width !== mapCv.width || fadeCv.height !== mapCv.height) { fadeCv.width = mapCv.width; fadeCv.height = mapCv.height; }
       const fc = fadeCv.getContext('2d');
@@ -6383,6 +6385,7 @@ function drawMap() {
   // itself, so it is as sharp and meets it without a seam; the layer under it is left alone, which keeps the drag light
   const patch = vecMode && freshLog.length ? rubberPatch() : null;
   if (patch) {
+    rubberT = performance.now();
     const u = patch.win, k = dpr * view.s, X0 = Math.max(0, Math.round(u[0] * k + view.x * dpr)), Y0 = Math.max(0, Math.round(u[1] * k + view.y * dpr));
     const X1 = Math.min(cv.width, Math.round(u[2] * k + view.x * dpr)), Y1 = Math.min(cv.height, Math.round(u[3] * k + view.y * dpr));
     if (X1 > X0 && Y1 > Y0) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip(); drawLayer(ctx, vecMode, patch); ctx.restore(); }
