@@ -1,0 +1,50 @@
+name: Сборка NewsBot.exe
+
+on:
+  push:
+    paths:
+      - "news-bot/**"
+      - ".github/workflows/news-bot-exe.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установить зависимости
+        working-directory: news-bot
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Собрать exe
+        working-directory: news-bot
+        run: pyinstaller --onefile --console --name NewsBot --collect-data tzdata bot.py
+
+      - name: Проверить, что exe запускается
+        working-directory: news-bot
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\NewsBot.exe -PassThru -RedirectStandardInput NUL -RedirectStandardOutput out.txt -RedirectStandardError err.txt
+          if (-not $p.WaitForExit(60000)) { $p.Kill() }
+          Get-Content out.txt, err.txt
+          if (Select-String -Path out.txt, err.txt -Pattern "ModuleNotFoundError|ImportError|ZoneInfoNotFoundError" -Quiet) { exit 1 }
+          if (-not (Select-String -Path out.txt -Pattern "Developer Portal" -Quiet)) { exit 1 }
+
+      - name: Собрать архив
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory NewsBot | Out-Null
+          Copy-Item news-bot\dist\NewsBot.exe, news-bot\ИНСТРУКЦИЯ.md NewsBot\
+          Compress-Archive NewsBot NewsBot-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NewsBot-Windows
+          path: NewsBot-Windows.zip

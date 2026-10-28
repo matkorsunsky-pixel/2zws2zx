@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -30,7 +31,14 @@ from dotenv import load_dotenv
 
 # ─────────────────────────────── НАСТРОЙКИ ───────────────────────────────
 
-load_dotenv()
+for _stream in (sys.stdout, sys.stderr):   # кириллица в логах при любой кодировке консоли
+    if _stream and hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
+# Папка программы: рядом лежат .env и data.json (и для bot.py, и для собранного bot.exe)
+BASE_DIR = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+ENV_FILE = BASE_DIR / ".env"
+load_dotenv(ENV_FILE)
 
 TOKEN = os.getenv("DISCORD_TOKEN", "")
 TZ = ZoneInfo("Europe/Moscow")
@@ -72,7 +80,7 @@ RUSSIA_KEYWORDS = [
     "романов", "гагарин", "байконур", "кутузов", "суворов", "ломоносов", "пушкин",
 ]
 
-DATA_FILE = Path(__file__).with_name("data.json")   # настройки серверов и уже отправленное
+DATA_FILE = BASE_DIR / "data.json"   # настройки серверов и уже отправленное
 FEED_CACHE_SECONDS = 600                            # не скачивать ленты чаще раза в 10 минут
 
 KINDS = {"news": "📰 Новости", "svo": "🎖️ СВО", "history": "📜 История России"}
@@ -618,7 +626,44 @@ async def on_guild_remove(guild: discord.Guild):
         save_data()
 
 
+def ask_token() -> str:
+    """Первый запуск: спросить токен и сохранить его в .env рядом с программой."""
+    print("Токен бота не найден.\n"
+          "Developer Portal → ваше приложение → «Бот» → «Сбросить токен» → «Копировать».")
+    token = input("Вставьте токен (ПКМ или Ctrl+V) и нажмите Enter: ").strip().strip('"')
+    if token:
+        ENV_FILE.write_text(f"DISCORD_TOKEN={token}\nDEFAULT_TIME={DEFAULT_TIME}\n", encoding="utf-8")
+        print(f"Токен сохранён в {ENV_FILE}")
+    return token
+
+
+def main() -> None:
+    token = TOKEN
+    if not token or token.startswith("вставьте"):
+        token = ask_token()
+    if not token:
+        raise SystemExit("Токен не указан")
+    try:
+        bot.run(token, log_handler=None)
+    except aiohttp.ClientConnectorError:
+        raise SystemExit("Нет связи с Discord. Проверьте интернет; в России Discord открывается только через VPN.")
+    except discord.LoginFailure:
+        ENV_FILE.unlink(missing_ok=True)
+        raise SystemExit("Discord не принял токен. Файл .env удалён — запустите снова и вставьте новый токен.")
+
+
 if __name__ == "__main__":
-    if not TOKEN or TOKEN.startswith("вставьте"):
-        raise SystemExit("Укажите DISCORD_TOKEN в файле .env")
-    bot.run(TOKEN, log_handler=None)
+    try:
+        main()
+    except (SystemExit, KeyboardInterrupt, Exception) as exc:
+        if isinstance(exc, KeyboardInterrupt):
+            pass
+        elif not isinstance(exc, SystemExit):
+            log.exception("Бот остановлен из-за ошибки")
+        elif exc.code not in (None, 0):
+            print(exc.code)
+        if getattr(sys, "frozen", False):   # окно .exe не закрывается само, чтобы было видно ошибку
+            try:
+                input("Нажмите Enter, чтобы закрыть окно…")
+            except EOFError:
+                pass
