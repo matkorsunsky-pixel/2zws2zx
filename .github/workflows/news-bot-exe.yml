@@ -31,7 +31,8 @@ jobs:
         working-directory: news-bot
         shell: pwsh
         run: |
-          $p = Start-Process dist\NewsBot.exe -PassThru -RedirectStandardInput NUL -RedirectStandardOutput out.txt -RedirectStandardError err.txt
+          New-Item -ItemType File empty.txt -Force | Out-Null
+          $p = Start-Process dist\NewsBot.exe -PassThru -RedirectStandardInput empty.txt -RedirectStandardOutput out.txt -RedirectStandardError err.txt
           if (-not $p.WaitForExit(60000)) { $p.Kill() }
           Get-Content out.txt, err.txt
           if (Select-String -Path out.txt, err.txt -Pattern "ModuleNotFoundError|ImportError|ZoneInfoNotFoundError" -Quiet) { exit 1 }
