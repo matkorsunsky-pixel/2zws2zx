@@ -478,17 +478,18 @@ setup_group = app_commands.Group(
 
 @setup_group.command(name="channel", description="В какой канал отправлять сводку")
 @app_commands.describe(kind="Какую сводку", channel="Текстовый канал")
+@app_commands.rename(kind="сводка", channel="канал")
 @app_commands.choices(kind=KIND_CHOICES)
 async def setup_channel(interaction: discord.Interaction, kind: app_commands.Choice[str],
                         channel: discord.TextChannel):
     perms = channel.permissions_for(interaction.guild.me)
-    missing = [name for name, ok in (("Просматривать канал", perms.view_channel),
+    missing = [name for name, ok in (("Просматривать каналы", perms.view_channel),
                                      ("Отправлять сообщения", perms.send_messages),
                                      ("Встраивать ссылки", perms.embed_links)) if not ok]
     if missing:
         await interaction.response.send_message(
             f"❌ У бота нет прав в {channel.mention}: {', '.join(missing)}.\n"
-            "Выдайте их в настройках канала → Права доступа и повторите.", ephemeral=True)
+            "Шестерёнка у канала («Изменить канал») → «Права доступа» → добавьте бота и разрешите эти права.", ephemeral=True)
         return
 
     cfg = guild_cfg(interaction.guild_id)
@@ -506,6 +507,7 @@ async def setup_channel(interaction: discord.Interaction, kind: app_commands.Cho
 
 @setup_group.command(name="time", description="Во сколько публиковать сводки (по Москве)")
 @app_commands.describe(time="Время в формате ЧЧ:ММ, например 09:00")
+@app_commands.rename(time="время")
 async def setup_time(interaction: discord.Interaction, time: str):
     try:
         h, m = parse_time(time)
@@ -525,6 +527,8 @@ async def setup_time(interaction: discord.Interaction, time: str):
 
 
 @setup_group.command(name="off", description="Выключить одну из сводок")
+@app_commands.describe(kind="Какую сводку выключить")
+@app_commands.rename(kind="сводка")
 @app_commands.choices(kind=KIND_CHOICES)
 async def setup_off(interaction: discord.Interaction, kind: app_commands.Choice[str]):
     cfg = guild_cfg(interaction.guild_id)
@@ -547,6 +551,7 @@ async def setup_status(interaction: discord.Interaction):
 
 @app_commands.command(name="post_now", description="Сразу опубликовать сводки (для проверки)")
 @app_commands.describe(kind="Какую сводку (по умолчанию — все)")
+@app_commands.rename(kind="сводка")
 @app_commands.choices(kind=KIND_CHOICES)
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.guild_only()
@@ -580,7 +585,7 @@ async def invite_cmd(interaction: discord.Interaction):
 
 WELCOME = (
     "👋 Привет! Я буду каждый день присылать сводки новостей, СВО и «Этот день в истории России».\n\n"
-    "**Настройка (нужно право «Управлять сервером»):**\n"
+    "**Настройка (нужно право «Управлять сервером»).** Наберите `/` и выберите команду из списка:\n"
     "1. `/setup channel` → выберите сводку и канал (повторите для каждой из трёх)\n"
     "2. `/setup time` → время публикации по Москве (по умолчанию {time})\n"
     "3. `/post_now` → проверить прямо сейчас\n\n"
