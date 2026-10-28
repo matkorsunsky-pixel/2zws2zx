@@ -1,12 +1,13 @@
 """
 Discord-бот: ежедневные сводки в разные каналы.
 
-  • NEWS_CHANNEL_ID    — сводка новостей из RSS-лент
-  • SVO_CHANNEL_ID     — сводка по СВО (новости из тех же лент, отобранные по ключевым словам,
-                         плюс отдельные ленты из SVO_FEEDS, если вы их укажете)
-  • HISTORY_CHANNEL_ID — «Этот день в истории России» (события с этой датой из Википедии)
+  • 📰 новости  — сводка из RSS-лент
+  • 🎖️ СВО      — новости из тех же лент, отобранные по ключевым словам
+                  (плюс отдельные ленты из SVO_FEEDS, если вы их укажете)
+  • 📜 история  — «Этот день в истории России» (события с этой датой из Википедии)
 
-Запуск:  python bot.py
+Каналы и время настраиваются прямо в Discord командой /setup — отдельно на каждом сервере.
+Запуск:  python bot.py   (в файле .env нужен только DISCORD_TOKEN)
 """
 
 import asyncio
@@ -32,14 +33,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN", "")
-NEWS_CHANNEL_ID = int(os.getenv("NEWS_CHANNEL_ID", "0"))
-SVO_CHANNEL_ID = int(os.getenv("SVO_CHANNEL_ID", "0"))
-HISTORY_CHANNEL_ID = int(os.getenv("HISTORY_CHANNEL_ID", "0"))
 TZ = ZoneInfo("Europe/Moscow")
-POST_TIMES = [
-    dt.time(int(h), int(m), tzinfo=TZ)
-    for h, m in (t.strip().split(":") for t in os.getenv("POST_TIMES", "09:00").split(","))
-]
+DEFAULT_TIME = os.getenv("DEFAULT_TIME", "09:00")   # время публикации для новых серверов (МСК)
 
 # Общие новостные ленты: название -> адрес RSS
 NEWS_FEEDS = {
@@ -77,7 +72,10 @@ RUSSIA_KEYWORDS = [
     "романов", "гагарин", "байконур", "кутузов", "суворов", "ломоносов", "пушкин",
 ]
 
-SENT_FILE = Path(__file__).with_name("sent.json")   # здесь бот помнит, что уже отправил
+DATA_FILE = Path(__file__).with_name("data.json")   # настройки серверов и уже отправленное
+FEED_CACHE_SECONDS = 600                            # не скачивать ленты чаще раза в 10 минут
+
+KINDS = {"news": "📰 Новости", "svo": "🎖️ СВО", "history": "📜 История России"}
 
 COLORS = {"news": 0x2B6CB0, "svo": 0xC53030, "history": 0xB7791F}
 MONTHS_GEN = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля",
@@ -88,17 +86,34 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("newsbot")
 
 
-# ─────────────────────────── ПАМЯТЬ ОТПРАВЛЕННОГО ───────────────────────────
+# ─────────────────────────── НАСТРОЙКИ СЕРВЕРОВ ───────────────────────────
+# data.json: {"<id сервера>": {"channels": {"news": id, ...}, "time": "09:00",
+#                              "last": "2026-10-28", "sent": [...]}}
 
-def load_sent() -> list[str]:
+def load_data() -> dict:
     try:
-        return json.loads(SENT_FILE.read_text(encoding="utf-8"))
+        return json.loads(DATA_FILE.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
-        return []
+        return {}
 
 
-def save_sent(ids: list[str]) -> None:
-    SENT_FILE.write_text(json.dumps(ids[-3000:], ensure_ascii=False), encoding="utf-8")
+DATA = load_data()
+
+
+def save_data() -> None:
+    for cfg in DATA.values():
+        cfg["sent"] = cfg.get("sent", [])[-3000:]
+    tmp = DATA_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(DATA, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(DATA_FILE)
+
+
+def guild_cfg(guild_id: int) -> dict:
+    cfg = DATA.setdefault(str(guild_id), {})
+    cfg.setdefault("channels", {})
+    cfg.setdefault("time", DEFAULT_TIME)
+    cfg.setdefault("sent", [])
+    return cfg
 
 
 # ──────────────────────────────── RSS ────────────────────────────────
@@ -130,7 +145,13 @@ def entry_image(entry) -> str | None:
     return None
 
 
+_feed_cache: dict[str, tuple[float, list[dict]]] = {}
+
+
 async def fetch_feed(session: aiohttp.ClientSession, source: str, url: str) -> list[dict]:
+    cached = _feed_cache.get(url)
+    if cached and asyncio.get_running_loop().time() - cached[0] < FEED_CACHE_SECONDS:
+        return cached[1]
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
             resp.raise_for_status()
@@ -156,6 +177,7 @@ async def fetch_feed(session: aiohttp.ClientSession, source: str, url: str) -> l
             "image": entry_image(e),
         })
     log.info("%s: получено %d записей", source, len(items))
+    _feed_cache[url] = (asyncio.get_running_loop().time(), items)
     return items
 
 
@@ -173,9 +195,8 @@ def is_svo(item: dict) -> bool:
     return bool(SVO_RE.search(f"{item['title']} {item['summary']}"))
 
 
-async def collect_news(session: aiohttp.ClientSession) -> tuple[list[dict], list[dict]]:
-    """Возвращает (новости, новости СВО) — только свежие и ещё не отправленные."""
-    sent = set(load_sent())
+async def collect_news(session: aiohttp.ClientSession, sent: set[str]) -> tuple[list[dict], list[dict]]:
+    """Возвращает (новости, новости СВО) — только свежие и ещё не отправленные на этот сервер."""
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=MAX_AGE_HOURS)
 
     general = await asyncio.gather(*(fetch_feed(session, s, u) for s, u in NEWS_FEEDS.items()))
@@ -202,13 +223,12 @@ async def collect_news(session: aiohttp.ClientSession) -> tuple[list[dict], list
     return news[:MAX_ITEMS_PER_DIGEST], svo[:MAX_ITEMS_PER_DIGEST]
 
 
-def mark_sent(items: list[dict]) -> None:
-    sent = load_sent()
+def mark_sent(cfg: dict, items: list[dict]) -> None:
     for it in items:
-        sent.append(it["id"])
+        cfg["sent"].append(it["id"])
         if it["link"] != it["id"]:
-            sent.append(it["link"])
-    save_sent(sent)
+            cfg["sent"].append(it["link"])
+    save_data()
 
 
 def today_ru() -> str:
@@ -243,12 +263,13 @@ def is_russian_history(text: str) -> bool:
     return bool(RUSSIA_RE.search(text))
 
 
-def years_word(n: int) -> str:
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """plural(1, "год", "года", "лет") -> "1 год", plural(5, ...) -> "5 лет"."""
     if n % 10 == 1 and n % 100 != 11:
-        return "год"
+        return f"{n} {one}"
     if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
-        return "года"
-    return "лет"
+        return f"{n} {few}"
+    return f"{n} {many}"
 
 
 async def history_from_api(session: aiohttp.ClientSession, day: dt.date) -> list[dict]:
@@ -297,8 +318,13 @@ async def history_from_page(session: aiohttp.ClientSession, day: dt.date) -> lis
     return events
 
 
+_history_cache: dict[dt.date, list[dict]] = {}
+
+
 async def collect_history(session: aiohttp.ClientSession) -> list[dict]:
     day = dt.datetime.now(TZ).date()
+    if day in _history_cache:
+        return _history_cache[day]
     try:
         events = await history_from_api(session, day)
     except Exception as exc:
@@ -316,6 +342,9 @@ async def collect_history(session: aiohttp.ClientSession) -> list[dict]:
     if len(russian) > MAX_HISTORY_EVENTS:  # равномерно по эпохам
         step = len(russian) / MAX_HISTORY_EVENTS
         russian = [russian[int(i * step)] for i in range(MAX_HISTORY_EVENTS)]
+    if russian:
+        _history_cache.clear()
+        _history_cache[day] = russian
     return russian
 
 
@@ -330,7 +359,7 @@ def build_history_embed(events: list[dict]) -> discord.Embed:
     )
     for ev in events:
         years_ago = now.year - ev["year"] if ev["year"] and ev["year"] > 0 else None
-        name = f"🗓️ {ev['year']} год" + (f" ({years_ago} {years_word(years_ago)} назад)" if years_ago else "")
+        name = f"🗓️ {ev['year']} год" + (f" ({plural(years_ago, 'год', 'года', 'лет')} назад)" if years_ago else "")
         value = shorten(ev["text"], 900) + (f"\n[Подробнее →]({ev['link']})" if ev["link"] else "")
         embed.add_field(name=name, value=value, inline=False)
     image = next((e["image"] for e in events if e["image"]), None)
@@ -342,6 +371,9 @@ def build_history_embed(events: list[dict]) -> discord.Embed:
 
 # ──────────────────────────────── БОТ ────────────────────────────────
 
+BOT_PERMISSIONS = discord.Permissions(view_channel=True, send_messages=True, embed_links=True)
+
+
 class NewsBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents.default())
@@ -349,75 +381,236 @@ class NewsBot(commands.Bot):
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(headers={"User-Agent": USER_AGENT})
-        self.tree.add_command(post_now)
+        self.tree.add_command(setup_group)
+        for cmd in (post_now, history_cmd, invite_cmd):
+            self.tree.add_command(cmd)
         await self.tree.sync()
-        daily_post.start()
+        scheduler.start()
 
     async def close(self):
         if self.http_session:
             await self.http_session.close()
         await super().close()
 
-    async def channel(self, channel_id: int) -> discord.abc.Messageable | None:
-        if not channel_id:
-            return None
-        try:
-            return self.get_channel(channel_id) or await self.fetch_channel(channel_id)
-        except discord.DiscordException as exc:
-            log.error("Канал %s недоступен: %s", channel_id, exc)
-            return None
+    def invite_url(self) -> str:
+        return discord.utils.oauth_url(self.user.id, permissions=BOT_PERMISSIONS,
+                                       scopes=("bot", "applications.commands"))
 
-    async def post_all(self):
-        session = self.http_session
-        news, svo = await collect_news(session)
+    async def post_guild(self, guild: discord.Guild, kinds=tuple(KINDS)) -> list[str]:
+        """Публикует сводки на одном сервере. Возвращает отчёт для пользователя."""
+        cfg = guild_cfg(guild.id)
+        report = []
+        targets = {k: guild.get_channel(cfg["channels"].get(k, 0)) for k in kinds}
 
-        for kind, items, channel_id in (("news", news, NEWS_CHANNEL_ID), ("svo", svo, SVO_CHANNEL_ID)):
-            channel = await self.channel(channel_id)
-            if not channel:
-                continue
-            if not items:
-                log.info("Нет новых публикаций для «%s»", kind)
-                continue
-            await channel.send(embed=build_digest_embed(items, kind))
-            mark_sent(items)
-            log.info("Отправлено «%s»: %d публикаций", kind, len(items))
+        if targets.get("news") or targets.get("svo"):
+            news, svo = await collect_news(self.http_session, set(cfg["sent"]))
+            for kind, items in (("news", news), ("svo", svo)):
+                channel = targets.get(kind)
+                if not channel:
+                    continue
+                if not items:
+                    report.append(f"{KINDS[kind]}: новых публикаций нет")
+                    continue
+                await channel.send(embed=build_digest_embed(items, kind))
+                mark_sent(cfg, items)
+                report.append(f"{KINDS[kind]}: {plural(len(items), 'публикация', 'публикации', 'публикаций')} → {channel.mention}")
 
-        channel = await self.channel(HISTORY_CHANNEL_ID)
+        channel = targets.get("history")
         if channel:
-            events = await collect_history(session)
+            events = await collect_history(self.http_session)
             if events:
                 await channel.send(embed=build_history_embed(events))
-                log.info("Отправлено «история»: %d событий", len(events))
+                report.append(f"{KINDS['history']}: {plural(len(events), 'событие', 'события', 'событий')} → {channel.mention}")
+            else:
+                report.append(f"{KINDS['history']}: не удалось получить события")
+
+        for kind in kinds:
+            if kind in cfg["channels"] and not targets.get(kind):
+                report.append(f"{KINDS[kind]}: канал удалён или недоступен — задайте заново через /setup channel")
+        log.info("Сервер %s: %s", guild.name, "; ".join(report) or "каналы не настроены")
+        return report
 
 
 bot = NewsBot()
 
 
-@tasks.loop(time=POST_TIMES)
-async def daily_post():
-    try:
-        await bot.post_all()
-    except Exception:
-        log.exception("Ошибка при ежедневной рассылке")
+def parse_time(text: str) -> tuple[int, int]:
+    h, m = text.strip().replace(".", ":").split(":")
+    h, m = int(h), int(m)
+    if not (0 <= h < 24 and 0 <= m < 60):
+        raise ValueError
+    return h, m
 
 
-@daily_post.before_loop
-async def before_daily_post():
+@tasks.loop(minutes=1)
+async def scheduler():
+    """Раз в минуту проверяет, не пора ли публиковать. Если бот был выключен — догонит."""
+    now = dt.datetime.now(TZ)
+    today = now.date().isoformat()
+    for guild in bot.guilds:
+        cfg = DATA.get(str(guild.id))
+        if not cfg or not cfg.get("channels") or cfg.get("last") == today:
+            continue
+        if (now.hour, now.minute) < parse_time(cfg.get("time", DEFAULT_TIME)):
+            continue
+        cfg["last"] = today
+        save_data()
+        try:
+            await bot.post_guild(guild)
+        except Exception:
+            log.exception("Ошибка рассылки на сервере %s", guild.name)
+
+
+@scheduler.before_loop
+async def before_scheduler():
     await bot.wait_until_ready()
 
 
-@app_commands.command(name="post_now", description="Сразу опубликовать все сводки (для проверки)")
-@app_commands.default_permissions(administrator=True)
-async def post_now(interaction: discord.Interaction):
-    await interaction.response.send_message("⏳ Собираю сводки…", ephemeral=True)
-    await bot.post_all()
-    await interaction.edit_original_response(content="✅ Готово")
+# ───────────────────────────── КОМАНДЫ ─────────────────────────────
+
+KIND_CHOICES = [app_commands.Choice(name=name, value=kind) for kind, name in KINDS.items()]
+
+setup_group = app_commands.Group(
+    name="setup", description="Настройка ежедневных сводок",
+    default_permissions=discord.Permissions(manage_guild=True), guild_only=True,
+)
+
+
+@setup_group.command(name="channel", description="В какой канал отправлять сводку")
+@app_commands.describe(kind="Какую сводку", channel="Текстовый канал")
+@app_commands.choices(kind=KIND_CHOICES)
+async def setup_channel(interaction: discord.Interaction, kind: app_commands.Choice[str],
+                        channel: discord.TextChannel):
+    perms = channel.permissions_for(interaction.guild.me)
+    missing = [name for name, ok in (("Просматривать канал", perms.view_channel),
+                                     ("Отправлять сообщения", perms.send_messages),
+                                     ("Встраивать ссылки", perms.embed_links)) if not ok]
+    if missing:
+        await interaction.response.send_message(
+            f"❌ У бота нет прав в {channel.mention}: {', '.join(missing)}.\n"
+            "Выдайте их в настройках канала → Права доступа и повторите.", ephemeral=True)
+        return
+
+    cfg = guild_cfg(interaction.guild_id)
+    if not cfg["channels"] and "last" not in cfg:
+        # первая настройка после времени публикации — не слать сразу, начать с завтра
+        now = dt.datetime.now(TZ)
+        if (now.hour, now.minute) >= parse_time(cfg["time"]):
+            cfg["last"] = now.date().isoformat()
+    cfg["channels"][kind.value] = channel.id
+    save_data()
+    await interaction.response.send_message(
+        f"✅ {kind.name} будет приходить в {channel.mention} каждый день в {cfg['time']} (МСК).\n"
+        "Проверить сразу: `/post_now`", ephemeral=True)
+
+
+@setup_group.command(name="time", description="Во сколько публиковать сводки (по Москве)")
+@app_commands.describe(time="Время в формате ЧЧ:ММ, например 09:00")
+async def setup_time(interaction: discord.Interaction, time: str):
+    try:
+        h, m = parse_time(time)
+    except ValueError:
+        await interaction.response.send_message("❌ Укажите время как ЧЧ:ММ, например `09:00`", ephemeral=True)
+        return
+    cfg = guild_cfg(interaction.guild_id)
+    cfg["time"] = f"{h:02d}:{m:02d}"
+    now = dt.datetime.now(TZ)
+    if (now.hour, now.minute) >= (h, m):
+        cfg["last"] = now.date().isoformat()   # сегодняшнее время уже прошло — со следующего дня
+    else:
+        cfg.pop("last", None)
+    save_data()
+    await interaction.response.send_message(f"✅ Сводки будут приходить каждый день в {cfg['time']} (МСК)",
+                                            ephemeral=True)
+
+
+@setup_group.command(name="off", description="Выключить одну из сводок")
+@app_commands.choices(kind=KIND_CHOICES)
+async def setup_off(interaction: discord.Interaction, kind: app_commands.Choice[str]):
+    cfg = guild_cfg(interaction.guild_id)
+    cfg["channels"].pop(kind.value, None)
+    save_data()
+    await interaction.response.send_message(f"🔕 {kind.name}: выключено", ephemeral=True)
+
+
+@setup_group.command(name="status", description="Текущие настройки сводок на этом сервере")
+async def setup_status(interaction: discord.Interaction):
+    cfg = guild_cfg(interaction.guild_id)
+    embed = discord.Embed(title="⚙️ Настройки сводок", color=COLORS["news"])
+    for kind, name in KINDS.items():
+        channel = interaction.guild.get_channel(cfg["channels"].get(kind, 0))
+        embed.add_field(name=name, value=channel.mention if channel else "— не настроено", inline=False)
+    embed.add_field(name="⏰ Время", value=f"{cfg['time']} (МСК)", inline=True)
+    embed.add_field(name="Последняя рассылка", value=cfg.get("last", "ещё не было"), inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@app_commands.command(name="post_now", description="Сразу опубликовать сводки (для проверки)")
+@app_commands.describe(kind="Какую сводку (по умолчанию — все)")
+@app_commands.choices(kind=KIND_CHOICES)
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.guild_only()
+async def post_now(interaction: discord.Interaction, kind: app_commands.Choice[str] | None = None):
+    cfg = guild_cfg(interaction.guild_id)
+    if not cfg["channels"]:
+        await interaction.response.send_message(
+            "Сначала укажите каналы: `/setup channel`", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    report = await bot.post_guild(interaction.guild, (kind.value,) if kind else tuple(KINDS))
+    await interaction.followup.send("\n".join(report) or "Для этой сводки канал не настроен", ephemeral=True)
+
+
+@app_commands.command(name="history", description="Что было в этот день в истории России")
+async def history_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
+    events = await collect_history(bot.http_session)
+    if events:
+        await interaction.followup.send(embed=build_history_embed(events))
+    else:
+        await interaction.followup.send("Не удалось получить события, попробуйте позже.")
+
+
+@app_commands.command(name="invite", description="Ссылка, чтобы добавить бота на другой сервер")
+async def invite_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message(f"🔗 {bot.invite_url()}", ephemeral=True)
+
+
+# ───────────────────────────── СОБЫТИЯ ─────────────────────────────
+
+WELCOME = (
+    "👋 Привет! Я буду каждый день присылать сводки новостей, СВО и «Этот день в истории России».\n\n"
+    "**Настройка (нужно право «Управлять сервером»):**\n"
+    "1. `/setup channel` → выберите сводку и канал (повторите для каждой из трёх)\n"
+    "2. `/setup time` → время публикации по Москве (по умолчанию {time})\n"
+    "3. `/post_now` → проверить прямо сейчас\n\n"
+    "`/setup status` — текущие настройки, `/setup off` — выключить сводку, `/history` — история дня."
+)
 
 
 @bot.event
 async def on_ready():
-    log.info("Бот %s запущен. Публикация каждый день в %s (МСК)", bot.user,
-             ", ".join(t.strftime("%H:%M") for t in POST_TIMES))
+    log.info("Бот %s запущен на %d серверах", bot.user, len(bot.guilds))
+    log.info("Ссылка-приглашение: %s", bot.invite_url())
+
+
+@bot.event
+async def on_guild_join(guild: discord.Guild):
+    log.info("Добавлен на сервер %s", guild.name)
+    channel = guild.system_channel
+    if channel is None or not channel.permissions_for(guild.me).send_messages:
+        channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
+    if channel:
+        try:
+            await channel.send(WELCOME.format(time=DEFAULT_TIME))
+        except discord.DiscordException:
+            pass
+
+
+@bot.event
+async def on_guild_remove(guild: discord.Guild):
+    if DATA.pop(str(guild.id), None) is not None:
+        save_data()
 
 
 if __name__ == "__main__":
