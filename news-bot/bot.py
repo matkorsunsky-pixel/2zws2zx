@@ -88,7 +88,7 @@ KINDS = {"news": "📰 Новости", "svo": "🎖️ СВО", "history": "�
 COLORS = {"news": 0x2B6CB0, "svo": 0xC53030, "history": 0xB7791F}
 MONTHS_GEN = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля",
               "августа", "сентября", "октября", "ноября", "декабря"]
-USER_AGENT = "Mozilla/5.0 (compatible; DiscordNewsBot/1.0)"
+USER_AGENT = "VestnikNewsBot/1.0 (Discord bot; https://github.com/matkorsunsky-pixel/2zws2zx)"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("newsbot")
@@ -329,30 +329,39 @@ async def history_from_page(session: aiohttp.ClientSession, day: dt.date) -> lis
 _history_cache: dict[dt.date, list[dict]] = {}
 
 
+history_error = ""   # почему не удалось получить события — показывается в ответе /post_now
+
+
 async def collect_history(session: aiohttp.ClientSession) -> list[dict]:
+    global history_error
     day = dt.datetime.now(TZ).date()
     if day in _history_cache:
         return _history_cache[day]
-    try:
-        events = await history_from_api(session, day)
-    except Exception as exc:
-        log.warning("REST API Википедии недоступен (%s), читаю статью дня", exc)
-        events = []
-    if not events:
-        try:
-            events = await history_from_page(session, day)
-        except Exception as exc:
-            log.warning("Не удалось получить события дня: %s", exc)
-            return []
 
-    russian = [e for e in events if is_russian_history(e["search"])]
+    events, errors = [], []
+    for source in (history_from_api, history_from_page):
+        try:
+            events = await source(session, day)
+        except Exception as exc:
+            errors.append(f"{source.__name__}: {exc!r}")
+            log.warning("Википедия (%s): %r", source.__name__, exc)
+            continue
+        log.info("Википедия (%s): %d событий", source.__name__, len(events))
+        if any(is_russian_history(e["search"]) for e in events):
+            break
+    if not events:
+        history_error = "; ".join(errors) or "Википедия не вернула событий"
+        return []
+    history_error = ""
+
+    # события России; если их нет — любые события дня, чтобы рубрика не пустовала
+    russian = [e for e in events if is_russian_history(e["search"])] or events
     russian.sort(key=lambda e: e["year"] or 0)
     if len(russian) > MAX_HISTORY_EVENTS:  # равномерно по эпохам
         step = len(russian) / MAX_HISTORY_EVENTS
         russian = [russian[int(i * step)] for i in range(MAX_HISTORY_EVENTS)]
-    if russian:
-        _history_cache.clear()
-        _history_cache[day] = russian
+    _history_cache.clear()
+    _history_cache[day] = russian
     return russian
 
 
@@ -439,7 +448,7 @@ class NewsBot(commands.Bot):
                 await channel.send(embed=build_history_embed(events))
                 report.append(f"{KINDS['history']}: {plural(len(events), 'событие', 'события', 'событий')} → {channel.mention}")
             else:
-                report.append(f"{KINDS['history']}: не удалось получить события")
+                report.append(f"{KINDS['history']}: не удалось получить события ({history_error})")
 
         for kind in kinds:
             if kind in cfg["channels"] and not targets.get(kind):
