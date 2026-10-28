@@ -389,11 +389,20 @@ class NewsBot(commands.Bot):
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(headers={"User-Agent": USER_AGENT})
-        self.tree.add_command(setup_group)
-        for cmd in (post_now, history_cmd, invite_cmd):
-            self.tree.add_command(cmd)
-        await self.tree.sync()
+        self.tree.on_error = on_command_error
+        await self.tree.sync()   # глобальных команд нет: убираем старые, команды живут на каждом сервере
         scheduler.start()
+
+    async def register_commands(self, guild: discord.Guild) -> None:
+        """Команды, записанные прямо на сервер, появляются в Discord сразу."""
+        for cmd in (setup_group, post_now, history_cmd, invite_cmd):
+            self.tree.add_command(cmd, guild=guild, override=True)
+        try:
+            synced = await self.tree.sync(guild=guild)
+            log.info("Сервер «%s»: команды готовы (%s)", guild.name, ", ".join("/" + c.name for c in synced))
+        except discord.Forbidden:
+            log.error("Сервер «%s»: бот добавлен без права на команды. Добавьте его заново по ссылке-приглашению "
+                      "ниже (в ней должно быть applications.commands)", guild.name)
 
     async def close(self):
         if self.http_session:
@@ -604,12 +613,35 @@ WELCOME = (
 @bot.event
 async def on_ready():
     log.info("Бот %s запущен на %d серверах", bot.user, len(bot.guilds))
+    for guild in bot.guilds:
+        await bot.register_commands(guild)
     log.info("Ссылка-приглашение: %s", bot.invite_url())
+    log.info("Готово. Наберите в Discord «/setup» и выберите команду из списка.")
+
+
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command):
+    log.info("Команда /%s от %s на сервере «%s» выполнена", command.qualified_name, interaction.user,
+             interaction.guild.name if interaction.guild else "-")
+
+
+async def on_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    log.error("Ошибка команды: %s", error, exc_info=error)
+    text = "❌ У вас нет прав для этой команды." if isinstance(error, app_commands.MissingPermissions) \
+        else f"❌ Ошибка: {error}"
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(text, ephemeral=True)
+        else:
+            await interaction.response.send_message(text, ephemeral=True)
+    except discord.DiscordException:
+        pass
 
 
 @bot.event
 async def on_guild_join(guild: discord.Guild):
     log.info("Добавлен на сервер %s", guild.name)
+    await bot.register_commands(guild)
     channel = guild.system_channel
     if channel is None or not channel.permissions_for(guild.me).send_messages:
         channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
