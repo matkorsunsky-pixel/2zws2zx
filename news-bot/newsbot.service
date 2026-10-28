@@ -1,0 +1,16 @@
+# Автозапуск бота на Linux-сервере (systemd).
+# Замените /home/USER на свою папку и USER на имя пользователя.
+[Unit]
+Description=Discord news bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=USER
+WorkingDirectory=/home/USER/news-bot
+ExecStart=/home/USER/news-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
