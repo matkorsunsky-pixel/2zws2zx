@@ -44,6 +44,9 @@ ENV_FILE = BASE_DIR / ".env"
 load_dotenv(ENV_FILE)
 
 TOKEN = os.getenv("DISCORD_TOKEN", "")
+# Кто может пользоваться командами бота. Владелец приложения в Developer Portal — всегда;
+# дополнительно можно перечислить ID через запятую в .env: OWNER_IDS=123,456
+EXTRA_OWNER_IDS = {int(x) for x in re.findall(r"\d+", os.getenv("OWNER_IDS", ""))}
 TZ = ZoneInfo("Europe/Moscow")
 
 # Общие новостные ленты: название -> адрес RSS
@@ -881,6 +884,10 @@ class NewsBot(commands.Bot):
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(headers={"User-Agent": USER_AGENT})
         self.tree.on_error = on_command_error
+        info = await self.application_info()
+        owners = {m.id for m in info.team.members} if info.team else {info.owner.id}
+        self.owner_ids = owners | EXTRA_OWNER_IDS
+        log.info("Командами пользуются только: %s", ", ".join(map(str, sorted(self.owner_ids))))
         await self.tree.sync()   # глобальных команд нет: убираем старые, команды живут на каждом сервере
 
     async def register_commands(self, guild: discord.Guild) -> None:
@@ -957,9 +964,31 @@ bot = NewsBot()
 
 KIND_CHOICES = [app_commands.Choice(name=name, value=kind) for kind, name in KINDS.items()]
 
-setup_group = app_commands.Group(
+
+class NotOwner(app_commands.CheckFailure):
+    pass
+
+
+def owner_only():
+    """Команда работает только у владельца бота (и у тех, кто указан в OWNER_IDS)."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.user.id not in getattr(interaction.client, "owner_ids", set()):
+            raise NotOwner()
+        return True
+    return app_commands.check(predicate)
+
+
+# administrator — чтобы команды не были видны обычным участникам; owner_only — чтобы работали только у вас
+class SetupGroup(app_commands.Group):
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id not in getattr(interaction.client, "owner_ids", set()):
+            raise NotOwner()
+        return True
+
+
+setup_group = SetupGroup(
     name="setup", description="Настройка сводок",
-    default_permissions=discord.Permissions(manage_guild=True), guild_only=True,
+    default_permissions=discord.Permissions(administrator=True), guild_only=True,
 )
 
 
@@ -1015,8 +1044,9 @@ async def setup_status(interaction: discord.Interaction):
 @app_commands.describe(kind="Какую сводку (по умолчанию — все)")
 @app_commands.rename(kind="сводка")
 @app_commands.choices(kind=KIND_CHOICES)
-@app_commands.default_permissions(manage_guild=True)
+@app_commands.default_permissions(administrator=True)
 @app_commands.guild_only()
+@owner_only()
 async def post_now(interaction: discord.Interaction, kind: app_commands.Choice[str] | None = None):
     cfg = guild_cfg(interaction.guild_id)
     if not cfg["channels"]:
@@ -1029,6 +1059,8 @@ async def post_now(interaction: discord.Interaction, kind: app_commands.Choice[s
 
 
 @app_commands.command(name="history", description="Что было в этот день в истории России")
+@app_commands.default_permissions(administrator=True)
+@owner_only()
 async def history_cmd(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
     history = await prepare_history(bot.http_session)
@@ -1039,6 +1071,8 @@ async def history_cmd(interaction: discord.Interaction):
 
 
 @app_commands.command(name="invite", description="Ссылка, чтобы добавить бота на другой сервер")
+@app_commands.default_permissions(administrator=True)
+@owner_only()
 async def invite_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(f"🔗 {bot.invite_url()}", ephemeral=True)
 
@@ -1046,8 +1080,8 @@ async def invite_cmd(interaction: discord.Interaction):
 # ───────────────────────────── СОБЫТИЯ ─────────────────────────────
 
 WELCOME = (
-    "👋 Привет! Я публикую сводки новостей, СВО и «Этот день в истории России» — по вашей команде.\n\n"
-    "**Настройка (нужно право «Управлять сервером»).** Наберите `/` и выберите команду из списка:\n"
+    "👋 Привет! Я публикую сводки новостей, СВО и «Этот день в истории России» — по команде владельца.\n\n"
+    "**Настройка (только для владельца бота).** Наберите `/` и выберите команду из списка:\n"
     "1. `/setup channel` → выберите сводку и канал (повторите для каждой из трёх)\n"
     "2. `/post_now` → опубликовать; каждый раз — только то, чего ещё не было\n\n"
     "`/setup status` — текущие настройки, `/setup off` — выключить сводку, `/history` — история дня."
@@ -1070,9 +1104,14 @@ async def on_app_command_completion(interaction: discord.Interaction, command):
 
 
 async def on_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    log.error("Ошибка команды: %s", error, exc_info=error)
-    text = "❌ У вас нет прав для этой команды." if isinstance(error, app_commands.MissingPermissions) \
-        else f"❌ Ошибка: {error}"
+    if isinstance(error, NotOwner):
+        log.warning("Команду попытался использовать не владелец: %s (%s)", interaction.user, interaction.user.id)
+        text = "⛔ Эта команда доступна только владельцу бота."
+    elif isinstance(error, app_commands.MissingPermissions):
+        text = "❌ У вас нет прав для этой команды."
+    else:
+        log.error("Ошибка команды: %s", error, exc_info=error)
+        text = f"❌ Ошибка: {error}"
     try:
         if interaction.response.is_done():
             await interaction.followup.send(text, ephemeral=True)
