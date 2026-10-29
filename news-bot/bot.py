@@ -342,7 +342,74 @@ def today_ru() -> str:
 
 # ──────────────────────────────── ПОСТЫ ────────────────────────────────
 
-DIGEST_TITLES = {"news": "📰 Сводка новостей", "svo": "🎖️ Сводка с фронта"}
+DIGEST_TITLES = {"news": "☀️ Главное за сутки", "svo": "⚔️ Сводка с фронта"}
+
+# Рубрика новости по ключевым словам (начала слов). Первая — для сводки с фронта.
+RUBRICS = [
+    ("🏛️ Политика", ["путин", "кремл", "госдум", "правительств", "министр", "президент", "выбор",
+                     "закон", "депутат", "совфед", "партия", "губернатор", "мэр"]),
+    ("💰 Экономика", ["рубл", "курс", "нефт", "газпром", "банк", "цб", "инфляц", "бирж", "экономик",
+                      "бюджет", "налог", "ценов", "подорож", "зарплат", "пенси", "ипотек", "кредит", "санкци"]),
+    ("🌍 В мире", ["сша", "китай", "европ", "евросоюз", "нато", "трамп", "израил", "иран", "германи",
+                   "франц", "британ", "оон", "турци", "индия", "япони", "вашингтон", "пекин"]),
+    ("🚀 Наука и технологии", ["учён", "наук", "космос", "космическ", "роскосмос", "ракет", "спутник",
+                               "технолог", "интернет", "нейросет", "искусственн", "открыти"]),
+    ("⚽ Спорт", ["матч", "чемпион", "футбол", "хоккей", "олимпи", "спортсмен", "турнир", "сборн"]),
+    ("🎭 Культура", ["фильм", "театр", "музе", "выставк", "концерт", "писател", "режиссёр", "артист", "книг"]),
+    ("🚨 Происшествия", ["пожар", "авари", "дтп", "погиб", "задержан", "судебн", "приговор", "взрыв", "крушени",
+                         "мошенн", "убийств", "уголовн"]),
+]
+_RUBRIC_RES = [(name, word_regex(words)) for name, words in RUBRICS]
+_SPEECH_RE = re.compile(r"(заяв|сказа|отмети|подчеркну|сообщи|пояснил|добави|уверен|признал)", re.I)
+_QUOTE_RE = re.compile(r"«([^«»]{50,280})»")
+
+
+def rubric(item: dict, kind: str) -> str:
+    if kind == "svo":
+        return "⚔️ Фронт"
+    text = f"{item['title']} {item['title']} {' '.join((item.get('paragraphs') or [])[:2])}"
+    scores = [(len(regex.findall(text)), name) for name, regex in _RUBRIC_RES]
+    best = max(scores)
+    return best[1] if best[0] else "🏙️ Общество"
+
+
+def pull_quote(item: dict) -> tuple[str, str, str] | None:
+    """Самая яркая прямая речь из статьи: (цитата, кто сказал, абзац с ней)."""
+    best = None
+    for para in item.get("paragraphs") or []:
+        for m in _QUOTE_RE.finditer(para):
+            score = len(m.group(1)) + (200 if _SPEECH_RE.search(para) else 0)
+            if not best or score > best[0]:
+                after = re.match(r"^[,.]?\s*[—–-]\s*([^.«]{5,160})", para[m.end():])
+                speaker = after.group(1).strip() if after else ""
+                speaker = re.sub(r"^\w+(ся)?\s+(?=\w)", "", speaker) if _SPEECH_RE.match(speaker) else speaker
+                before = re.search(r"([А-ЯЁ][^.:«»]{2,80}):\s*$", para[:m.start()])
+                speaker = speaker or (before.group(1).strip() if before else "")
+                best = (score, m.group(1).strip(), speaker, para)
+    return best[1:] if best else None
+
+
+def quote_block(quote: str, speaker: str) -> str:
+    return f"> 💬 *«{quote}»*" + (f"\n> — {speaker}" if speaker else "")
+
+
+def split_long(paragraphs: list[str], size: int = 550) -> list[str]:
+    """Длинные абзацы режутся пополам по предложению — так текст легче читать с экрана."""
+    out = []
+    for para in paragraphs:
+        while len(para) > size:
+            sentences = re.split(r"(?<=[.!?…])\s+(?=[А-ЯЁA-Z«])", para)
+            if len(sentences) < 2:
+                break
+            head = ""
+            while sentences and len(head) + len(sentences[0]) < len(para) / 2 + 80:
+                head += sentences.pop(0) + " "
+            if not head or not sentences:
+                break
+            out.append(head.strip())
+            para = " ".join(sentences)
+        out.append(para)
+    return out
 
 
 def article_body(paragraphs: list[str], limit: int) -> tuple[str, bool]:
@@ -364,16 +431,27 @@ def article_body(paragraphs: list[str], limit: int) -> tuple[str, bool]:
     return "\n\n".join(out), False
 
 
+def reading_minutes(paragraphs: list[str]) -> int:
+    return max(1, round(sum(len(p.split()) for p in paragraphs) / 180))
+
+
 def build_article_embed(item: dict, kind: str, n: int, total: int) -> discord.Embed:
-    paragraphs = item.get("paragraphs") or []
-    body, cut = article_body(paragraphs[1:], ARTICLE_TEXT_LIMIT - len(paragraphs[0]) if paragraphs else 0)
+    paragraphs = split_long(item.get("paragraphs") or [])
+    lead, rest = (paragraphs[0], paragraphs[1:]) if paragraphs else ("", [])
+    quote = pull_quote({"paragraphs": rest})
+    if quote:   # абзац с яркой прямой речью выделяется цитатой прямо на своём месте
+        text, speaker, para = quote
+        if para in rest and len(para) < len(text) + len(speaker) + 40:
+            rest = [quote_block(text, speaker) if p == para else p for p in rest]
+
+    body, cut = article_body(rest, ARTICLE_TEXT_LIMIT - len(lead))
     parts = []
-    if paragraphs:
-        parts.append(f"**{paragraphs[0]}**")   # лид — жирным, как в газете
+    if lead:
+        parts.append(f"**{lead}**")                          # лид — жирным, как в газете
     if body:
         parts.append(body)
     if cut:
-        parts.append(f"*…продолжение — [в источнике]({item['link']})*")
+        parts.append(f"[Читать продолжение →]({item['link']})")
     embed = discord.Embed(
         title=shorten(item["title"], 256),
         url=item["link"],
@@ -381,28 +459,40 @@ def build_article_embed(item: dict, kind: str, n: int, total: int) -> discord.Em
         color=COLORS[kind],
         timestamp=item["time"] or dt.datetime.now(dt.timezone.utc),
     )
-    embed.set_author(name=f"{DIGEST_TITLES[kind]} · {n} из {total}")
+    embed.set_author(name=f"{rubric(item, kind)}  ·  {n} из {total}")
     if item["image"]:
         embed.set_image(url=item["image"])
     footer = item["source"]
     if item.get("also"):
-        footer += " · также сообщают: " + ", ".join(item["also"])
+        footer += " · также пишут " + ", ".join(item["also"])
+    footer += f" · ⏱ {reading_minutes(item.get('paragraphs') or [item['title']])} мин"
     embed.set_footer(text=shorten(footer, 2048))
     return embed
 
 
 def build_digest_header(items: list[dict], kind: str, links: list[str] | None = None) -> discord.Embed:
-    """Шапка сводки с оглавлением. links — ссылки на посты (появляются, когда посты отправлены)."""
+    """Шапка сводки: оглавление с рубриками и цитата дня. links — ссылки на посты, когда они отправлены."""
     lines = []
     for n, it in enumerate(items, 1):
-        name = shorten(it["title"], 110)
-        lines.append(f"`{n:>2}.` [{name}]({links[n - 1]})" if links else f"`{n:>2}.` {name}")
+        icon = rubric(it, kind).split()[0]
+        name = shorten(it["title"], 100)
+        lines.append(f"{icon} [{name}]({links[n - 1]})" if links else f"{icon} {name}")
+    minutes = sum(reading_minutes(it.get("paragraphs") or [it["title"]]) for it in items)
+    hour = dt.datetime.now(TZ).hour
+    hello = "Доброе утро" if 5 <= hour < 12 else "Добрый день" if hour < 18 else "Добрый вечер"
+    intro = {"news": f"{hello}! Собрали главное, что произошло за сутки.",
+             "svo": "Главные события в зоне СВО за сутки."}[kind]
     embed = discord.Embed(
-        title=f"{DIGEST_TITLES[kind]} — {today_ru()}",
-        description=(f"Главное за сутки — {plural(len(items), 'материал', 'материала', 'материалов')}. "
-                     "Нажмите на заголовок, чтобы перейти к новости, или листайте ниже ⬇️\n\n" + "\n".join(lines)),
+        title=f"{DIGEST_TITLES[kind]} · {today_ru()}",
+        description=(f"{intro}\n*{plural(len(items), 'материал', 'материала', 'материалов')} · "
+                     f"около {minutes} мин чтения · листайте ниже* ⬇️\n\n" + "\n".join(lines)),
         color=COLORS[kind],
     )
+    quotes = [(q, it["source"]) for it in items if (q := pull_quote(it))]
+    if quotes:
+        (text, speaker, _), source = max(quotes, key=lambda x: len(x[0][0]) + 200 * bool(x[0][1]))
+        embed.add_field(name="💬 Цитата дня", value=f"*«{shorten(text, 300)}»*\n— {speaker or source}",
+                        inline=False)
     sources = sorted({s for it in items for s in [it["source"], *it.get("also", [])]})
     embed.set_footer(text="Источники: " + ", ".join(sources))
     return embed
@@ -541,44 +631,56 @@ async def history_from_page(session: aiohttp.ClientSession, day: dt.date) -> lis
 
 
 async def fetch_article(session: aiohttp.ClientSession, title: str) -> dict:
-    """Начало статьи (до ~1200 знаков) и её главная картинка."""
+    """Статья целиком (вступление и разделы вроде «Итоги») и её главная картинка."""
     params = {"action": "query", "prop": "extracts|pageimages|info", "titles": title, "redirects": "1",
-              "exintro": "1", "explaintext": "1", "piprop": "thumbnail", "pithumbsize": "1000",
+              "explaintext": "1", "exsectionformat": "wiki", "piprop": "thumbnail", "pithumbsize": "1000",
               "inprop": "url", "format": "json", "formatversion": "2"}
     async with session.get("https://ru.wikipedia.org/w/api.php", params=params,
-                           timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                           timeout=aiohttp.ClientTimeout(total=30)) as resp:
         resp.raise_for_status()
         page = (await resp.json())["query"]["pages"][0]
-    return {"title": page.get("title", title), "extract": page.get("extract", ""),
+    text = page.get("extract", "")
+    sections = {"": ""}
+    current = ""
+    for line in text.split("\n"):
+        m = re.match(r"^(=+)\s*(.*?)\s*=+$", line.strip())
+        if m:
+            current = m.group(2) if len(m.group(1)) == 2 else current   # подразделы — в свой раздел
+            sections.setdefault(current, "")
+        else:
+            sections[current] += line + "\n"
+    return {"title": page.get("title", title), "intro": sections.pop(""), "sections": sections,
             "url": page.get("fullurl") or f"https://ru.wikipedia.org/wiki/{title.replace(' ', '_')}",
             "image": page.get("thumbnail", {}).get("source")}
 
 
-def tidy_extract(text: str, limit: int = 1200) -> str:
-    """Читабельный текст: без ударений и пустых скобок, по целым предложениям, абзацами."""
+# Скобки со справочными подробностями, которые мешают читать: (англ. …), (22 октября [3 ноября]) …
+_REFERENCE_PARENS_RE = re.compile(
+    r"\s*\((?:[^()]*?(?:англ|лат|нем|фр|франц|греч|польск|укр|тат|швед|тур|дореф|рус|ст\. ст|н\. ст|МФА|"
+    r"произн|род\.|ум\.|\[)[^()]*)\)")
+
+
+def readable(text: str) -> str:
     text = text.replace("́", "")
+    for _ in range(2):
+        text = _REFERENCE_PARENS_RE.sub("", text)
     text = re.sub(r"\(\s*[;,]?\s*\)", "", text)
     text = re.sub(r"[ \t]+", " ", text)
-    paragraphs, total = [], 0
-    for para in (p.strip() for p in text.split("\n") if p.strip()):
-        if total + len(para) > limit:
-            sentences = re.split(r"(?<=[.!?…])\s+", para)
-            part = ""
-            for s in sentences:
-                if total + len(part) + len(s) > limit:
-                    break
-                part += s + " "
-            if part.strip():
-                paragraphs.append(part.strip())
-            break
-        paragraphs.append(para)
-        total += len(para)
-    if paragraphs:  # выделить термин в начале статьи: «Полтавская битва — …»
-        first = paragraphs[0]
-        m = re.match(r"^(.{3,90}?)\s+[—–-]\s+", first)
-        if m:
-            paragraphs[0] = f"**{m.group(1)}** — {first[m.end():]}"
-    return "\n\n".join(paragraphs)
+    return re.sub(r"\s+([,.;:])", r"\1", text)
+
+
+def take_text(text: str, limit: int) -> str:
+    """Начало текста по целым предложениям, абзацами."""
+    paragraphs = [p.strip() for p in readable(text).split("\n") if len(p.strip()) > 30]
+    body, _ = article_body(split_long(paragraphs, 450), limit)
+    return body
+
+
+def find_section(article: dict, *names: str) -> str:
+    for title, text in article["sections"].items():
+        if any(title.lower().startswith(n) for n in names) and len(text.strip()) > 80:
+            return text
+    return ""
 
 
 _history_cache: dict[dt.date, dict] = {}
@@ -624,7 +726,7 @@ async def collect_history(session: aiohttp.ClientSession) -> dict | None:
         except Exception as exc:
             log.warning("Не удалось загрузить статью «%s»: %r", title, exc)
 
-    others = [e for e in ranked[1:] if significance(e) > 0][:MAX_HISTORY_EVENTS - 1]
+    others = [e for e in ranked[1:] if significance(e) > 0][:3]
     others.sort(key=lambda e: e["year"] or 0)
     result = {"main": main, "others": others, "day": day}
     _history_cache.clear()
@@ -640,38 +742,53 @@ def build_history_embed(history: dict) -> discord.Embed:
     day, main, article = history["day"], history["main"], history["main"]["article"]
     year = main["year"] or 0
     date_text = f"{day.day} {MONTHS_GEN[day.month]}"
-    headline = main["text"].rstrip(".")
+    event = main["text"].rstrip(".")
 
-    parts = []
-    if article and article["extract"]:
-        parts.append(tidy_extract(article["extract"]))
-        parts.append(f"📖 [Читать статью «{article['title']}» полностью]({article['url']})")
+    # зачин: «Ровно 214 лет назад, 29 октября 1812 года, …»
+    if 0 < year < day.year:
+        ago = plural(day.year - year, "год", "года", "лет")
+        hook = f"Ровно {ago} назад — {date_text} {year} года. {event}."
     else:
-        parts.append(f"*{main['text']}*")
+        hook = f"{date_text}: {event}."
+    parts = [f"> *{hook}*"]
 
+    if article:
+        story = take_text(article["intro"], 1300)
+        if story:
+            # термин в начале статьи — жирным: «**Сражение при Вязьме** — …»
+            story = re.sub(r"^(.{3,90}?)\s+[—–-]\s+", r"**\1** — ", story, count=1)
+            parts.append(story)
+
+    # заголовок — название события, если статья о нём самом («Сражение при Вязьме»), иначе само событие
+    about_event = article and any(r.search(article["title"]) for r, p in _SIGNIFICANCE_RE if p > 0)
     embed = discord.Embed(
-        title=shorten(f"{year_label(year)} · {headline}", 256),
+        title=shorten(f"{year_label(year)}. {article['title'] if about_event else event}", 256),
         url=article["url"] if article else f"https://ru.wikipedia.org/wiki/{day.day}_{MONTHS_GEN[day.month]}",
         description=shorten("\n\n".join(parts), 4000),
         color=HISTORY_COLOR,
     )
-    embed.set_author(name=f"📜 Этот день в истории России · {date_text}")
-    embed.add_field(name="🗓️ Дата", value=f"{date_text} {year} г." if year > 0 else date_text, inline=True)
-    if 0 < year < day.year:
-        embed.add_field(name="⏳ Прошло", value=plural(day.year - year, "год", "года", "лет"), inline=True)
+    embed.set_author(name=f"📜 Летопись России · {date_text}")
+
+    if article:
+        outcome = find_section(article, "итог", "значени", "последстви", "результат")
+        if outcome:
+            embed.add_field(name="⚖️ Итоги и значение", value=take_text(outcome, 700), inline=False)
+        trivia = find_section(article, "интересн", "любопытн", "факт")
+        if trivia:
+            fact = take_text(trivia, 350).split("\n\n")[0]
+            embed.add_field(name="💡 Любопытный факт", value=fact, inline=False)
+        memory = find_section(article, "памят", "увековеч", "в культуре", "в искусстве")
+        if memory and not trivia:
+            embed.add_field(name="🏛️ Память", value=take_text(memory, 350).split("\n\n")[0], inline=False)
 
     if history["others"]:
-        lines = [f"**{e['year']}** — {shorten(e['text'], 170)}" for e in history["others"]]
-        value = ""
-        for line in lines:
-            if len(value) + len(line) + 1 > 1024:
-                break
-            value += line + "\n"
-        embed.add_field(name="🕯️ Также в этот день", value=value.strip(), inline=False)
+        lines = [f"`{e['year']}` {shorten(e['text'], 150)}" for e in history["others"]]
+        embed.add_field(name="🕯️ Также в этот день", value="\n".join(lines)[:1024], inline=False)
 
     if article and article["image"]:
         embed.set_image(url=article["image"])
-    embed.set_footer(text="Историческая летопись · по материалам Википедии")
+    link = f"📖 Полная статья — Википедия" if article else "По материалам Википедии"
+    embed.set_footer(text=f"{link} · ⏱ {max(1, round(len(embed.description.split()) / 180))} мин чтения")
     return embed
 
 
