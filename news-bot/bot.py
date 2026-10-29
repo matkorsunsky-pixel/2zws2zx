@@ -78,6 +78,10 @@ RUSSIA_KEYWORDS = [
     "ленинград", "новгород", "киевск", "кремл", "рсфср", "пётр", "екатерин", "красной арми",
     "большевик", "сибир", "казан", "волгоград", "сталинград", "севастопол", "крым",
     "романов", "гагарин", "байконур", "кутузов", "суворов", "ломоносов", "пушкин",
+    "великий княз", "великого княз", "грозн", "суздал", "тверск", "рязан", "смоленск", "полтав",
+    "бородин", "куликов", "невск", "донск", "ермак", "минин", "пожарск", "годунов", "рюрик",
+    "царицын", "ленин", "сталин", "хрущёв", "брежнев", "горбачёв", "ельцин", "колчак", "деникин",
+    "врангел", "казак", "русск", "российск", "московск", "петровск", "владивосток", "курил",
 ]
 
 DATA_FILE = BASE_DIR / "data.json"   # настройки серверов и уже отправленное
@@ -280,59 +284,161 @@ def plural(n: int, one: str, few: str, many: str) -> str:
     return f"{n} {many}"
 
 
+# Значимость события: чем выше балл, тем вероятнее оно станет главным событием дня.
+# (начала слов, балл)
+SIGNIFICANCE = [
+    # переломные события
+    ("революц", 8), ("битв", 8), ("сражени", 8), ("побед", 6), ("капитуляц", 7), ("основан", 6),
+    ("коронац", 7), ("венча", 5), ("престол", 6), ("отречени", 7), ("присоедин", 6), ("воссоедин", 6),
+    ("провозглаш", 6), ("манифест", 6), ("конституц", 6), ("отмен", 5), ("крепостн", 6),
+    ("космос", 7), ("космическ", 6), ("спутник", 6), ("гагарин", 8), ("полёт", 4),
+    ("войн", 5), ("восстани", 5), ("освобожд", 5), ("штурм", 5), ("взяти", 5), ("взят", 4),
+    ("договор", 5), ("мирн", 4), ("перемири", 5), ("указ", 4), ("учрежд", 4), ("реформ", 4),
+    ("независимост", 5), ("распад", 6), ("образован", 4), ("создан", 3), ("открыт", 3),
+    ("крещени", 7), ("собор", 3), ("ополчени", 6), ("флот", 3), ("армия", 3), ("арми", 3),
+    ("император", 3), ("импери", 3), ("царь", 4), ("цар", 3), ("княз", 3), ("ссср", 3),
+    ("покорени", 4), ("экспедици", 4), ("первы", 2), ("впервые", 3), ("рекорд", 2),
+]
+# Мелочи, которые не должны становиться «главным событием»
+TRIVIA = [("матч", -6), ("чемпионат", -5), ("футбол", -6), ("хоккей", -4), ("фильм", -5),
+          ("альбом", -6), ("сингл", -6), ("премьер", -3), ("телесериал", -6), ("выпуск", -3),
+          ("серия", -3), ("игр", -2), ("компани", -2), ("магазин", -4)]
+
+_SIGNIFICANCE_RE = [(word_regex([w]), score) for w, score in SIGNIFICANCE + TRIVIA]
+_SERVICE_TITLE_RE = re.compile(r"^(\d{1,4}( год)?( до н\. э\.)?|[IVXLC]+ век.*|\d{1,2} \w+)$")
+HISTORY_COLOR = 0x8B1A1A   # тёмно-красный, «летописный»
+
+
+def significance(event: dict) -> int:
+    text = event["search"]
+    russia = {m.lower() for m in RUSSIA_RE.findall(text)}
+    score = min(len(russia), 3) * 4                           # упор на Россию
+    for regex, points in _SIGNIFICANCE_RE:
+        if regex.search(text):
+            score += points
+    score += min(len(event["text"]) // 60, 4)                 # подробно описанное событие
+    title = main_title(event)
+    if title:
+        score += 3                                            # есть статья для рассказа
+        if any(r.search(title) for r, p in _SIGNIFICANCE_RE if p > 0):
+            score += 4                                        # статья о самом событии («… битва»)
+    return score
+
+
+def main_title(event: dict) -> str | None:
+    """Статья о самом событии: сначала та, в названии которой есть «битва», «договор» и т.п."""
+    titles = [t for t in event.get("titles", []) if not _SERVICE_TITLE_RE.match(t)]
+    if not titles:
+        return None
+    return max(titles, key=lambda t: (sum(p for r, p in _SIGNIFICANCE_RE if r.search(t) and p > 0)
+                                      + 2 * bool(RUSSIA_RE.search(t)), -titles.index(t)))
+
+
+def strip_wiki(text: str) -> str:
+    text = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", "", text, flags=re.S)
+    text = re.sub(r"\{\{[^{}]*\}\}", "", text)
+    text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]", r"\1", text)
+    text = re.sub(r"'{2,}", "", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip(" ;:")
+
+
 async def history_from_api(session: aiohttp.ClientSession, day: dt.date) -> list[dict]:
-    """Готовый список событий дня из REST API Википедии."""
+    """Список событий дня из REST API Википедии."""
     url = f"https://ru.wikipedia.org/api/rest_v1/feed/onthisday/events/{day.month:02d}/{day.day:02d}"
     async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
         resp.raise_for_status()
         data = await resp.json()
     events = []
     for ev in data.get("events", []):
-        pages = ev.get("pages", [])
-        titles = " ".join(p.get("normalizedtitle", p.get("title", "")) for p in pages)
-        link = None
-        if pages:
-            link = pages[0].get("content_urls", {}).get("desktop", {}).get("page")
-        thumb = next((p["thumbnail"]["source"] for p in pages if p.get("thumbnail")), None)
-        events.append({"year": ev.get("year"), "text": ev.get("text", ""),
-                       "search": f"{ev.get('text', '')} {titles}", "link": link, "image": thumb})
+        titles = [p.get("normalizedtitle") or p.get("title", "").replace("_", " ") for p in ev.get("pages", [])]
+        events.append({"year": ev.get("year"), "text": ev.get("text", ""), "titles": titles,
+                       "search": f"{ev.get('text', '')} {' '.join(titles)}"})
     return events
 
 
 async def history_from_page(session: aiohttp.ClientSession, day: dt.date) -> list[dict]:
-    """Запасной вариант: раздел «События» статьи «28 октября»."""
-    page = f"{day.day} {MONTHS_GEN[day.month]}"
-    params = {"action": "query", "prop": "extracts", "explaintext": "1", "titles": page,
-              "format": "json", "formatversion": "2"}
+    """Запасной вариант: раздел «События» статьи «29 октября» (вики-разметка, вместе со ссылками)."""
+    params = {"action": "parse", "page": f"{day.day} {MONTHS_GEN[day.month]}", "prop": "wikitext",
+              "format": "json", "formatversion": "2", "redirects": "1"}
     async with session.get("https://ru.wikipedia.org/w/api.php", params=params,
                            timeout=aiohttp.ClientTimeout(total=20)) as resp:
         resp.raise_for_status()
         data = await resp.json()
-    text = data["query"]["pages"][0].get("extract", "")
-    section = re.search(r"==\s*События\s*==(.*?)(?:\n==\s*[^=]|\Z)", text, re.S)
+    wikitext = data.get("parse", {}).get("wikitext", "")
+    section = re.search(r"==\s*События\s*==(.*?)(?:\n==[^=]|\Z)", wikitext, re.S)
     if not section:
         return []
     events, year = [], None
     for line in section.group(1).splitlines():
-        line = line.strip()
-        m = re.match(r"^(\d{1,4})(?:\s*год)?\s*[—–-]\s*(.+)$", line)
-        if m:
-            year, line = int(m.group(1)), m.group(2)
-        elif re.fullmatch(r"\d{1,4}( год)?", line):
-            year = int(line.split()[0])
+        if not line.startswith("*"):
             continue
-        if year and len(line) > 15 and not line.startswith("="):
-            events.append({"year": year, "text": line, "search": line, "link": None, "image": None})
+        depth = len(line) - len(line.lstrip("*"))
+        body = line.lstrip("*").strip()
+        m = re.match(r"^\[\[(\d{1,4})(?: год)?(?:\|[^\]]*)?\]\]\s*(?:год)?\s*[—–:-]?\s*(.*)$", body)
+        if m:
+            year, body = int(m.group(1)), m.group(2)
+        elif depth == 1:
+            m = re.match(r"^(\d{1,4})\s*(?:год)?\s*[—–:-]\s*(.*)$", body)
+            if not m:
+                continue
+            year, body = int(m.group(1)), m.group(2)
+        text = strip_wiki(body)
+        if not year or len(text) < 15:
+            continue
+        titles = [t.strip() for t in re.findall(r"\[\[([^|\]#]+)", body)]
+        events.append({"year": year, "text": text[0].upper() + text[1:], "titles": titles,
+                       "search": f"{text} {' '.join(titles)}"})
     return events
 
 
-_history_cache: dict[dt.date, list[dict]] = {}
+async def fetch_article(session: aiohttp.ClientSession, title: str) -> dict:
+    """Начало статьи (до ~1200 знаков) и её главная картинка."""
+    params = {"action": "query", "prop": "extracts|pageimages|info", "titles": title, "redirects": "1",
+              "exintro": "1", "explaintext": "1", "piprop": "thumbnail", "pithumbsize": "1000",
+              "inprop": "url", "format": "json", "formatversion": "2"}
+    async with session.get("https://ru.wikipedia.org/w/api.php", params=params,
+                           timeout=aiohttp.ClientTimeout(total=20)) as resp:
+        resp.raise_for_status()
+        page = (await resp.json())["query"]["pages"][0]
+    return {"title": page.get("title", title), "extract": page.get("extract", ""),
+            "url": page.get("fullurl") or f"https://ru.wikipedia.org/wiki/{title.replace(' ', '_')}",
+            "image": page.get("thumbnail", {}).get("source")}
 
 
+def tidy_extract(text: str, limit: int = 1200) -> str:
+    """Читабельный текст: без ударений и пустых скобок, по целым предложениям, абзацами."""
+    text = text.replace("́", "")
+    text = re.sub(r"\(\s*[;,]?\s*\)", "", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    paragraphs, total = [], 0
+    for para in (p.strip() for p in text.split("\n") if p.strip()):
+        if total + len(para) > limit:
+            sentences = re.split(r"(?<=[.!?…])\s+", para)
+            part = ""
+            for s in sentences:
+                if total + len(part) + len(s) > limit:
+                    break
+                part += s + " "
+            if part.strip():
+                paragraphs.append(part.strip())
+            break
+        paragraphs.append(para)
+        total += len(para)
+    if paragraphs:  # выделить термин в начале статьи: «Полтавская битва — …»
+        first = paragraphs[0]
+        m = re.match(r"^(.{3,90}?)\s+[—–-]\s+", first)
+        if m:
+            paragraphs[0] = f"**{m.group(1)}** — {first[m.end():]}"
+    return "\n\n".join(paragraphs)
+
+
+_history_cache: dict[dt.date, dict] = {}
 history_error = ""   # почему не удалось получить события — показывается в ответе /post_now
 
 
-async def collect_history(session: aiohttp.ClientSession) -> list[dict]:
+async def collect_history(session: aiohttp.ClientSession) -> dict | None:
+    """{"main": главное событие дня со статьёй, "others": ещё несколько событий}."""
     global history_error
     day = dt.datetime.now(TZ).date()
     if day in _history_cache:
@@ -341,48 +447,83 @@ async def collect_history(session: aiohttp.ClientSession) -> list[dict]:
     events, errors = [], []
     for source in (history_from_api, history_from_page):
         try:
-            events = await source(session, day)
+            found = await source(session, day)
         except Exception as exc:
             errors.append(f"{source.__name__}: {exc!r}")
             log.warning("Википедия (%s): %r", source.__name__, exc)
             continue
-        log.info("Википедия (%s): %d событий", source.__name__, len(events))
-        if any(is_russian_history(e["search"]) for e in events):
+        log.info("Википедия (%s): %d событий", source.__name__, len(found))
+        if len(found) > len(events):
+            events = found
+        if sum(is_russian_history(e["search"]) for e in found) >= 3:
             break
     if not events:
         history_error = "; ".join(errors) or "Википедия не вернула событий"
-        return []
+        return None
     history_error = ""
 
-    # события России; если их нет — любые события дня, чтобы рубрика не пустовала
-    russian = [e for e in events if is_russian_history(e["search"])] or events
-    russian.sort(key=lambda e: e["year"] or 0)
-    if len(russian) > MAX_HISTORY_EVENTS:  # равномерно по эпохам
-        step = len(russian) / MAX_HISTORY_EVENTS
-        russian = [russian[int(i * step)] for i in range(MAX_HISTORY_EVENTS)]
+    # упор на Россию: берём только российские события; если их нет совсем — любые
+    pool = [e for e in events if is_russian_history(e["search"])] or events
+    ranked = sorted(pool, key=significance, reverse=True)
+    log.info("Главные кандидаты: %s", "; ".join(f"{e['year']} ({significance(e)})" for e in ranked[:5]))
+
+    main = dict(ranked[0])
+    title = main_title(main)
+    main["article"] = None
+    if title:
+        try:
+            main["article"] = await fetch_article(session, title)
+        except Exception as exc:
+            log.warning("Не удалось загрузить статью «%s»: %r", title, exc)
+
+    others = [e for e in ranked[1:] if significance(e) > 0][:MAX_HISTORY_EVENTS - 1]
+    others.sort(key=lambda e: e["year"] or 0)
+    result = {"main": main, "others": others, "day": day}
     _history_cache.clear()
-    _history_cache[day] = russian
-    return russian
+    _history_cache[day] = result
+    return result
 
 
-def build_history_embed(events: list[dict]) -> discord.Embed:
-    now = dt.datetime.now(TZ)
-    page = f"{now.day}_{MONTHS_GEN[now.month]}"
+def year_label(year: int) -> str:
+    return f"{-year} год до н. э." if year < 0 else f"{year} год"
+
+
+def build_history_embed(history: dict) -> discord.Embed:
+    day, main, article = history["day"], history["main"], history["main"]["article"]
+    year = main["year"] or 0
+    date_text = f"{day.day} {MONTHS_GEN[day.month]}"
+    headline = main["text"].rstrip(".")
+
+    parts = []
+    if article and article["extract"]:
+        parts.append(tidy_extract(article["extract"]))
+        parts.append(f"📖 [Читать статью «{article['title']}» полностью]({article['url']})")
+    else:
+        parts.append(f"*{main['text']}*")
+
     embed = discord.Embed(
-        title=f"📜 Этот день в истории России — {now.day} {MONTHS_GEN[now.month]}",
-        url=f"https://ru.wikipedia.org/wiki/{page}",
-        description="Что произошло в этот день в разные годы:",
-        color=COLORS["history"],
+        title=shorten(f"{year_label(year)} · {headline}", 256),
+        url=article["url"] if article else f"https://ru.wikipedia.org/wiki/{day.day}_{MONTHS_GEN[day.month]}",
+        description=shorten("\n\n".join(parts), 4000),
+        color=HISTORY_COLOR,
     )
-    for ev in events:
-        years_ago = now.year - ev["year"] if ev["year"] and ev["year"] > 0 else None
-        name = f"🗓️ {ev['year']} год" + (f" ({plural(years_ago, 'год', 'года', 'лет')} назад)" if years_ago else "")
-        value = shorten(ev["text"], 900) + (f"\n[Подробнее →]({ev['link']})" if ev["link"] else "")
-        embed.add_field(name=name, value=value, inline=False)
-    image = next((e["image"] for e in events if e["image"]), None)
-    if image:
-        embed.set_thumbnail(url=image)
-    embed.set_footer(text="Источник: Википедия")
+    embed.set_author(name=f"📜 Этот день в истории России · {date_text}")
+    embed.add_field(name="🗓️ Дата", value=f"{date_text} {year} г." if year > 0 else date_text, inline=True)
+    if 0 < year < day.year:
+        embed.add_field(name="⏳ Прошло", value=plural(day.year - year, "год", "года", "лет"), inline=True)
+
+    if history["others"]:
+        lines = [f"**{e['year']}** — {shorten(e['text'], 170)}" for e in history["others"]]
+        value = ""
+        for line in lines:
+            if len(value) + len(line) + 1 > 1024:
+                break
+            value += line + "\n"
+        embed.add_field(name="🕯️ Также в этот день", value=value.strip(), inline=False)
+
+    if article and article["image"]:
+        embed.set_image(url=article["image"])
+    embed.set_footer(text="Историческая летопись · по материалам Википедии")
     return embed
 
 
@@ -443,10 +584,11 @@ class NewsBot(commands.Bot):
 
         channel = targets.get("history")
         if channel:
-            events = await collect_history(self.http_session)
-            if events:
-                await channel.send(embed=build_history_embed(events))
-                report.append(f"{KINDS['history']}: {plural(len(events), 'событие', 'события', 'событий')} → {channel.mention}")
+            history = await collect_history(self.http_session)
+            if history:
+                await channel.send(embed=build_history_embed(history))
+                report.append(f"{KINDS['history']}: {history['main']['year']} — "
+                              f"{shorten(history['main']['text'], 80)} → {channel.mention}")
             else:
                 report.append(f"{KINDS['history']}: не удалось получить события ({history_error})")
 
@@ -595,9 +737,9 @@ async def post_now(interaction: discord.Interaction, kind: app_commands.Choice[s
 @app_commands.command(name="history", description="Что было в этот день в истории России")
 async def history_cmd(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
-    events = await collect_history(bot.http_session)
-    if events:
-        await interaction.followup.send(embed=build_history_embed(events))
+    history = await collect_history(bot.http_session)
+    if history:
+        await interaction.followup.send(embed=build_history_embed(history))
     else:
         await interaction.followup.send("Не удалось получить события, попробуйте позже.")
 
