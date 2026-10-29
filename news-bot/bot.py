@@ -14,10 +14,13 @@ import asyncio
 import calendar
 import datetime as dt
 import html
+import io
 import json
 import logging
 import os
 import re
+import struct
+import zlib
 import sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -26,7 +29,7 @@ import aiohttp
 import discord
 import feedparser
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from dotenv import load_dotenv
 
 # ─────────────────────────────── НАСТРОЙКИ ───────────────────────────────
@@ -42,7 +45,6 @@ load_dotenv(ENV_FILE)
 
 TOKEN = os.getenv("DISCORD_TOKEN", "")
 TZ = ZoneInfo("Europe/Moscow")
-DEFAULT_TIME = os.getenv("DEFAULT_TIME", "09:00")   # время публикации для новых серверов (МСК)
 
 # Общие новостные ленты: название -> адрес RSS
 NEWS_FEEDS = {
@@ -99,8 +101,11 @@ log = logging.getLogger("newsbot")
 
 
 # ─────────────────────────── НАСТРОЙКИ СЕРВЕРОВ ───────────────────────────
-# data.json: {"<id сервера>": {"channels": {"news": id, ...}, "time": "09:00",
-#                              "last": "2026-10-28", "sent": [...]}}
+# data.json: {"<id сервера>": {"channels": {"news": id, ...},
+#                              "sent": [ссылки], "sent_titles": [[когда, заголовок], ...],
+#                              "history_done": {"date": "2026-10-29", "events": [...]},
+#                              "last_post": {"news": "29.10 09:00", ...}}}
+SENT_TITLES_DAYS = 3   # сколько дней помнить заголовки, чтобы не повторять ту же новость из другого источника
 
 def load_data() -> dict:
     try:
@@ -113,8 +118,10 @@ DATA = load_data()
 
 
 def save_data() -> None:
+    cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=SENT_TITLES_DAYS)).isoformat()
     for cfg in DATA.values():
         cfg["sent"] = cfg.get("sent", [])[-3000:]
+        cfg["sent_titles"] = [t for t in cfg.get("sent_titles", []) if t[0] >= cutoff]
     tmp = DATA_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(DATA, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(DATA_FILE)
@@ -123,8 +130,11 @@ def save_data() -> None:
 def guild_cfg(guild_id: int) -> dict:
     cfg = DATA.setdefault(str(guild_id), {})
     cfg.setdefault("channels", {})
-    cfg.setdefault("time", DEFAULT_TIME)
+    cfg.pop("time", None)        # от прежней версии с расписанием
+    cfg.pop("last", None)
     cfg.setdefault("sent", [])
+    cfg.setdefault("sent_titles", [])
+    cfg.setdefault("last_post", {})
     return cfg
 
 
@@ -263,14 +273,18 @@ def _title_words(title: str) -> set[str]:
     return {w[:6] for w in re.findall(r"[а-яёa-z0-9]+", title.lower()) if len(w) > 3}
 
 
+def same_story(a: set[str], b: set[str]) -> bool:
+    common = len(a & b)
+    return bool(a) and common >= 2 and common / len(a | b) >= 0.3
+
+
 def group_stories(items: list[dict]) -> list[list[dict]]:
     """Склеивает одну и ту же новость из разных источников в одну «историю»."""
     stories: list[tuple[set[str], list[dict]]] = []
     for it in items:
         words = _title_words(it["title"])
         for story_words, story in stories:
-            common = len(words & story_words)
-            if words and common >= 2 and common / len(words | story_words) >= 0.3:
+            if same_story(words, story_words):
                 story.append(it)
                 story_words |= words
                 break
@@ -295,9 +309,12 @@ def pick_top(items: list[dict], limit: int) -> list[dict]:
     return top
 
 
-async def collect_news(session: aiohttp.ClientSession, sent: set[str]) -> tuple[list[dict], list[dict]]:
-    """Возвращает (новости, новости СВО) — главное за сутки, ещё не отправленное, с полным текстом."""
+async def collect_news(session: aiohttp.ClientSession, sent: set[str],
+                       sent_titles: list[str] = ()) -> tuple[list[dict], list[dict]]:
+    """Возвращает (новости, новости СВО) — главное за сутки с полным текстом.
+    Пропускает всё, что уже было в прошлых сводках: те же ссылки и ту же новость из других источников."""
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=MAX_AGE_HOURS)
+    told = [_title_words(t) for t in sent_titles]
 
     general = await asyncio.gather(*(fetch_feed(session, s, u) for s, u in NEWS_FEEDS.items()))
     special = await asyncio.gather(*(fetch_feed(session, s, u) for s, u in SVO_FEEDS.items()))
@@ -307,6 +324,9 @@ async def collect_news(session: aiohttp.ClientSession, sent: set[str]) -> tuple[
             if it["id"] in sent or it["link"] in sent:
                 continue
             if it["time"] and it["time"] < cutoff:
+                continue
+            words = _title_words(it["title"])
+            if any(same_story(words, t) for t in told):
                 continue
             yield it
 
@@ -326,11 +346,13 @@ async def collect_news(session: aiohttp.ClientSession, sent: set[str]) -> tuple[
 
 
 def mark_sent(cfg: dict, items: list[dict]) -> None:
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
     for main in items:
         for it in main.get("duplicates", [main]):
             cfg["sent"].append(it["id"])
             if it["link"] != it["id"]:
                 cfg["sent"].append(it["link"])
+            cfg["sent_titles"].append([now, it["title"]])
     save_data()
 
 
@@ -504,7 +526,7 @@ def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
             embed.add_field(name="💬 Цитата дня",
                             value=f"> *«{shorten(text, 300)}»*\n> — {speaker or it['source']}", inline=False)
         if top["image"]:
-            embed.set_image(url=top["image"])
+            embed.set_thumbnail(url=top["image"])      # фото — в углу, внизу линия единой ширины
         minutes = max(1, round(len(embed) / 1100))
         embed.set_footer(text=f"{plural(len(items), 'новость', 'новости', 'новостей')} · ⏱ {minutes} мин чтения · "
                               "заголовки кликабельны")
@@ -519,8 +541,25 @@ def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
     return embed
 
 
+def divider_png(color: int, width: int = 1200, height: int = 6) -> bytes:
+    """Тонкая линия цвета рамки на всю ширину: Discord растягивает рамку под картинку,
+    поэтому с ней все сводки одинаковой (максимальной) ширины."""
+    r, g, b = color >> 16 & 255, color >> 8 & 255, color & 255
+    row = b"\x00" + bytes((r, g, b, 255)) * width
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(row * height, 9)) + chunk(b"IEND", b""))
+
+
+def framed(embed: discord.Embed) -> dict:
+    """Аргументы для send(): рамка + линия внизу, задающая единую ширину."""
+    embed.set_image(url="attachment://line.png")
+    return {"embed": embed, "file": discord.File(io.BytesIO(divider_png(embed.color.value)), filename="line.png")}
+
+
 async def send_digest(channel: discord.abc.Messageable, items: list[dict], kind: str) -> None:
-    await channel.send(embed=build_digest_embed(items, kind))
+    await channel.send(**framed(build_digest_embed(items, kind)))
 
 
 # ─────────────────────────── ЭТОТ ДЕНЬ В ИСТОРИИ ───────────────────────────
@@ -704,7 +743,7 @@ history_error = ""   # почему не удалось получить соб�
 
 
 async def collect_history(session: aiohttp.ClientSession) -> dict | None:
-    """{"main": главное событие дня со статьёй, "others": ещё несколько событий}."""
+    """{"day": дата, "ranked": события дня о России, от самого значимого}."""
     global history_error
     day = dt.datetime.now(TZ).date()
     if day in _history_cache:
@@ -732,22 +771,41 @@ async def collect_history(session: aiohttp.ClientSession) -> dict | None:
     pool = [e for e in events if is_russian_history(e["search"])] or events
     ranked = sorted(pool, key=significance, reverse=True)
     log.info("Главные кандидаты: %s", "; ".join(f"{e['year']} ({significance(e)})" for e in ranked[:5]))
-
-    main = dict(ranked[0])
-    title = main_title(main)
-    main["article"] = None
-    if title:
-        try:
-            main["article"] = await fetch_article(session, title)
-        except Exception as exc:
-            log.warning("Не удалось загрузить статью «%s»: %r", title, exc)
-
-    others = [e for e in ranked[1:] if significance(e) > 0][:5]
-    others.sort(key=lambda e: e["year"] or 0)
-    result = {"main": main, "others": others, "day": day}
+    result = {"day": day, "ranked": ranked}
     _history_cache.clear()
     _history_cache[day] = result
     return result
+
+
+def event_key(event: dict) -> str:
+    return f"{event['year']}|{event['text'][:60]}"
+
+
+_article_cache: dict[str, dict | None] = {}
+
+
+async def prepare_history(session: aiohttp.ClientSession, done: set[str] = frozenset()) -> dict | None:
+    """Пост летописи: самое значимое событие дня, которого ещё не было (done — уже выложенные сегодня)."""
+    history = await collect_history(session)
+    if not history:
+        return None
+    fresh = [e for e in history["ranked"] if event_key(e) not in done]
+    if not fresh:
+        return {"day": history["day"], "exhausted": True}
+
+    main = dict(fresh[0])
+    title = main_title(main)
+    if title and title not in _article_cache:
+        try:
+            _article_cache[title] = await fetch_article(session, title)
+        except Exception as exc:
+            log.warning("Не удалось загрузить статью «%s»: %r", title, exc)
+            _article_cache[title] = None
+    main["article"] = _article_cache.get(title) if title else None
+
+    others = [e for e in fresh[1:] if significance(e) > 0][:5]
+    others.sort(key=lambda e: e["year"] or 0)
+    return {"main": main, "others": others, "day": history["day"]}
 
 
 def year_label(year: int) -> str:
@@ -802,7 +860,7 @@ def build_history_embed(history: dict, story_len: int = 2200) -> discord.Embed:
         embed.add_field(name="🕯️ Также в этот день", value="\n".join(lines)[:1024], inline=False)
 
     if article and article["image"]:
-        embed.set_image(url=article["image"])
+        embed.set_thumbnail(url=article["image"])
     link = f"📖 Полная статья — Википедия" if article else "По материалам Википедии"
     embed.set_footer(text=f"{link} · ⏱ {max(1, round(len(embed) / 1100))} мин чтения")
     if len(embed) > 5900 and story_len > 600:        # не влезает в сообщение Discord — рассказ короче
@@ -824,7 +882,6 @@ class NewsBot(commands.Bot):
         self.http_session = aiohttp.ClientSession(headers={"User-Agent": USER_AGENT})
         self.tree.on_error = on_command_error
         await self.tree.sync()   # глобальных команд нет: убираем старые, команды живут на каждом сервере
-        scheduler.start()
 
     async def register_commands(self, guild: discord.Guild) -> None:
         """Команды, записанные прямо на сервер, появляются в Discord сразу."""
@@ -852,24 +909,35 @@ class NewsBot(commands.Bot):
         report = []
         targets = {k: guild.get_channel(cfg["channels"].get(k, 0)) for k in kinds}
 
+        stamp = dt.datetime.now(TZ).strftime("%d.%m %H:%M")
         if targets.get("news") or targets.get("svo"):
-            news, svo = await collect_news(self.http_session, set(cfg["sent"]))
+            news, svo = await collect_news(self.http_session, set(cfg["sent"]), [t for _, t in cfg["sent_titles"]])
             for kind, items in (("news", news), ("svo", svo)):
                 channel = targets.get(kind)
                 if not channel:
                     continue
                 if not items:
-                    report.append(f"{KINDS[kind]}: новых публикаций нет")
+                    report.append(f"{KINDS[kind]}: новых новостей с прошлой сводки нет — всё уже было")
                     continue
                 await send_digest(channel, items, kind)
+                cfg["last_post"][kind] = stamp
                 mark_sent(cfg, items)
                 report.append(f"{KINDS[kind]}: {plural(len(items), 'публикация', 'публикации', 'публикаций')} → {channel.mention}")
 
         channel = targets.get("history")
         if channel:
-            history = await collect_history(self.http_session)
-            if history:
-                await channel.send(embed=build_history_embed(history))
+            today = dt.datetime.now(TZ).date().isoformat()
+            done = cfg.get("history_done", {})
+            if done.get("date") != today:
+                done = cfg["history_done"] = {"date": today, "events": []}
+            history = await prepare_history(self.http_session, set(done["events"]))
+            if history and history.get("exhausted"):
+                report.append(f"{KINDS['history']}: все события этого дня уже выложены")
+            elif history:
+                await channel.send(**framed(build_history_embed(history)))
+                done["events"].append(event_key(history["main"]))
+                cfg["last_post"]["history"] = stamp
+                save_data()
                 report.append(f"{KINDS['history']}: {history['main']['year']} — "
                               f"{shorten(history['main']['text'], 80)} → {channel.mention}")
             else:
@@ -885,44 +953,12 @@ class NewsBot(commands.Bot):
 bot = NewsBot()
 
 
-def parse_time(text: str) -> tuple[int, int]:
-    h, m = text.strip().replace(".", ":").split(":")
-    h, m = int(h), int(m)
-    if not (0 <= h < 24 and 0 <= m < 60):
-        raise ValueError
-    return h, m
-
-
-@tasks.loop(minutes=1)
-async def scheduler():
-    """Раз в минуту проверяет, не пора ли публиковать. Если бот был выключен — догонит."""
-    now = dt.datetime.now(TZ)
-    today = now.date().isoformat()
-    for guild in bot.guilds:
-        cfg = DATA.get(str(guild.id))
-        if not cfg or not cfg.get("channels") or cfg.get("last") == today:
-            continue
-        if (now.hour, now.minute) < parse_time(cfg.get("time", DEFAULT_TIME)):
-            continue
-        cfg["last"] = today
-        save_data()
-        try:
-            await bot.post_guild(guild)
-        except Exception:
-            log.exception("Ошибка рассылки на сервере %s", guild.name)
-
-
-@scheduler.before_loop
-async def before_scheduler():
-    await bot.wait_until_ready()
-
-
 # ───────────────────────────── КОМАНДЫ ─────────────────────────────
 
 KIND_CHOICES = [app_commands.Choice(name=name, value=kind) for kind, name in KINDS.items()]
 
 setup_group = app_commands.Group(
-    name="setup", description="Настройка ежедневных сводок",
+    name="setup", description="Настройка сводок",
     default_permissions=discord.Permissions(manage_guild=True), guild_only=True,
 )
 
@@ -944,37 +980,11 @@ async def setup_channel(interaction: discord.Interaction, kind: app_commands.Cho
         return
 
     cfg = guild_cfg(interaction.guild_id)
-    if not cfg["channels"] and "last" not in cfg:
-        # первая настройка после времени публикации — не слать сразу, начать с завтра
-        now = dt.datetime.now(TZ)
-        if (now.hour, now.minute) >= parse_time(cfg["time"]):
-            cfg["last"] = now.date().isoformat()
     cfg["channels"][kind.value] = channel.id
     save_data()
     await interaction.response.send_message(
-        f"✅ {kind.name} будет приходить в {channel.mention} каждый день в {cfg['time']} (МСК).\n"
-        "Проверить сразу: `/post_now`", ephemeral=True)
-
-
-@setup_group.command(name="time", description="Во сколько публиковать сводки (по Москве)")
-@app_commands.describe(time="Время в формате ЧЧ:ММ, например 09:00")
-@app_commands.rename(time="время")
-async def setup_time(interaction: discord.Interaction, time: str):
-    try:
-        h, m = parse_time(time)
-    except ValueError:
-        await interaction.response.send_message("❌ Укажите время как ЧЧ:ММ, например `09:00`", ephemeral=True)
-        return
-    cfg = guild_cfg(interaction.guild_id)
-    cfg["time"] = f"{h:02d}:{m:02d}"
-    now = dt.datetime.now(TZ)
-    if (now.hour, now.minute) >= (h, m):
-        cfg["last"] = now.date().isoformat()   # сегодняшнее время уже прошло — со следующего дня
-    else:
-        cfg.pop("last", None)
-    save_data()
-    await interaction.response.send_message(f"✅ Сводки будут приходить каждый день в {cfg['time']} (МСК)",
-                                            ephemeral=True)
+        f"✅ {kind.name} будет публиковаться в {channel.mention}.\n"
+        "Опубликовать: `/post_now` (бот сам ничего не отправляет — только по этой команде)", ephemeral=True)
 
 
 @setup_group.command(name="off", description="Выключить одну из сводок")
@@ -994,13 +1004,14 @@ async def setup_status(interaction: discord.Interaction):
     embed = discord.Embed(title="⚙️ Настройки сводок", color=COLORS["news"])
     for kind, name in KINDS.items():
         channel = interaction.guild.get_channel(cfg["channels"].get(kind, 0))
-        embed.add_field(name=name, value=channel.mention if channel else "— не настроено", inline=False)
-    embed.add_field(name="⏰ Время", value=f"{cfg['time']} (МСК)", inline=True)
-    embed.add_field(name="Последняя рассылка", value=cfg.get("last", "ещё не было"), inline=True)
+        last = cfg["last_post"].get(kind)
+        value = (channel.mention if channel else "— не настроено") + (f"\nпоследняя: {last} МСК" if last else "")
+        embed.add_field(name=name, value=value, inline=False)
+    embed.set_footer(text="Публикация — только вручную командой /post_now")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@app_commands.command(name="post_now", description="Сразу опубликовать сводки (для проверки)")
+@app_commands.command(name="post_now", description="Опубликовать сводки (только новое — без повторов)")
 @app_commands.describe(kind="Какую сводку (по умолчанию — все)")
 @app_commands.rename(kind="сводка")
 @app_commands.choices(kind=KIND_CHOICES)
@@ -1020,9 +1031,9 @@ async def post_now(interaction: discord.Interaction, kind: app_commands.Choice[s
 @app_commands.command(name="history", description="Что было в этот день в истории России")
 async def history_cmd(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
-    history = await collect_history(bot.http_session)
-    if history:
-        await interaction.followup.send(embed=build_history_embed(history))
+    history = await prepare_history(bot.http_session)
+    if history and not history.get("exhausted"):
+        await interaction.followup.send(**framed(build_history_embed(history)))
     else:
         await interaction.followup.send("Не удалось получить события, попробуйте позже.")
 
@@ -1035,11 +1046,10 @@ async def invite_cmd(interaction: discord.Interaction):
 # ───────────────────────────── СОБЫТИЯ ─────────────────────────────
 
 WELCOME = (
-    "👋 Привет! Я буду каждый день присылать сводки новостей, СВО и «Этот день в истории России».\n\n"
+    "👋 Привет! Я публикую сводки новостей, СВО и «Этот день в истории России» — по вашей команде.\n\n"
     "**Настройка (нужно право «Управлять сервером»).** Наберите `/` и выберите команду из списка:\n"
     "1. `/setup channel` → выберите сводку и канал (повторите для каждой из трёх)\n"
-    "2. `/setup time` → время публикации по Москве (по умолчанию {time})\n"
-    "3. `/post_now` → проверить прямо сейчас\n\n"
+    "2. `/post_now` → опубликовать; каждый раз — только то, чего ещё не было\n\n"
     "`/setup status` — текущие настройки, `/setup off` — выключить сводку, `/history` — история дня."
 )
 
@@ -1081,7 +1091,7 @@ async def on_guild_join(guild: discord.Guild):
         channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None)
     if channel:
         try:
-            await channel.send(WELCOME.format(time=DEFAULT_TIME))
+            await channel.send(WELCOME)
         except discord.DiscordException:
             pass
 
@@ -1098,7 +1108,7 @@ def ask_token() -> str:
           "Developer Portal → ваше приложение → «Бот» → «Сбросить токен» → «Копировать».")
     token = input("Вставьте токен (ПКМ или Ctrl+V) и нажмите Enter: ").strip().strip('"')
     if token:
-        ENV_FILE.write_text(f"DISCORD_TOKEN={token}\nDEFAULT_TIME={DEFAULT_TIME}\n", encoding="utf-8")
+        ENV_FILE.write_text(f"DISCORD_TOKEN={token}\n", encoding="utf-8")
         print(f"Токен сохранён в {ENV_FILE}")
     return token
 
