@@ -67,7 +67,8 @@ SVO_WORDS = ["сво", "всу", "днр", "лнр", "бпла", "вс рф", "�
 # Если True — новости про СВО не дублируются в общей сводке
 SVO_EXCLUDE_FROM_NEWS = True
 
-MAX_ITEMS_PER_DIGEST = 10       # сколько новостей в одной сводке (Discord разрешает до 25 полей)
+MAX_ITEMS_PER_DIGEST = 8        # сколько новостей в одной сводке (каждая — отдельным постом)
+ARTICLE_TEXT_LIMIT = 2500       # сколько знаков текста статьи показывать в посте (Discord — до 4096)
 MAX_AGE_HOURS = 24              # брать только публикации не старше N часов
 MAX_HISTORY_EVENTS = 6          # сколько исторических событий показывать
 
@@ -87,7 +88,7 @@ RUSSIA_KEYWORDS = [
 DATA_FILE = BASE_DIR / "data.json"   # настройки серверов и уже отправленное
 FEED_CACHE_SECONDS = 600                            # не скачивать ленты чаще раза в 10 минут
 
-KINDS = {"news": "📰 Новости", "svo": "🎖️ СВО", "history": "📜 История России"}
+KINDS = {"news": "📰 Новости", "svo": "🎖️ Фронт (СВО)", "history": "📜 История России"}
 
 COLORS = {"news": 0x2B6CB0, "svo": 0xC53030, "history": 0xB7791F}
 MONTHS_GEN = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля",
@@ -179,8 +180,10 @@ async def fetch_feed(session: aiohttp.ClientSession, source: str, url: str) -> l
         title = clean_html(e.get("title", ""))
         if not link or not title:
             continue
+        full = e.get("yandex_full-text") or (e.get("content") or [{}])[0].get("value", "")
         items.append({
             "id": e.get("id") or link,
+            "fulltext": html_to_text(full),
             "source": source,
             "title": title,
             "link": link,
@@ -207,39 +210,128 @@ def is_svo(item: dict) -> bool:
     return bool(SVO_RE.search(f"{item['title']} {item['summary']}"))
 
 
+# ─────────────────────────── ПОЛНЫЙ ТЕКСТ СТАТЕЙ ───────────────────────────
+
+# Строки, которые не нужны в посте (подписки, «читайте также», подписи к фото)
+_JUNK_LINE_RE = re.compile(
+    r"^(читайте( также)?|смотрите( также)?|подписывайтесь|подпишитесь|фото|видео|источник|реклама|"
+    r"следите за|все новости|новости по теме|по теме|©|теги?:)", re.I)
+
+
+def html_to_text(raw_html: str) -> str:
+    """HTML из RSS (content:encoded / yandex:full-text) в абзацы."""
+    text = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</h\d>|</li>", "\n", raw_html or "")
+    return "\n".join(clean_html(line) for line in text.split("\n"))
+
+
+def tidy_paragraphs(text: str, title: str = "") -> list[str]:
+    paragraphs = []
+    for para in (re.sub(r"\s+", " ", p).strip() for p in (text or "").split("\n")):
+        if len(para) < 25 or _JUNK_LINE_RE.match(para) or para.rstrip(".") == title.rstrip("."):
+            continue
+        if para not in paragraphs:
+            paragraphs.append(para)
+    return paragraphs
+
+
+def _extract_main_text(page_html: str) -> str:
+    import trafilatura   # загружается только когда нужно
+    return trafilatura.extract(page_html, include_comments=False, include_tables=False,
+                               include_images=False, favor_precision=True, deduplicate=True) or ""
+
+
+async def fetch_full_text(session: aiohttp.ClientSession, item: dict) -> None:
+    """Добавляет в новость полный текст: из RSS, если он там есть, иначе со страницы статьи."""
+    paragraphs = tidy_paragraphs(item.get("fulltext", ""), item["title"])
+    if sum(map(len, paragraphs)) < 400:
+        try:
+            async with session.get(item["link"], timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                resp.raise_for_status()
+                page_html = await resp.text(errors="replace")
+            from_page = tidy_paragraphs(await asyncio.to_thread(_extract_main_text, page_html), item["title"])
+            if sum(map(len, from_page)) > sum(map(len, paragraphs)):
+                paragraphs = from_page
+        except Exception as exc:
+            log.warning("Не удалось загрузить текст статьи %s: %r", item["link"], exc)
+    if not paragraphs and item["summary"] and item["summary"] != item["title"]:
+        paragraphs = [item["summary"]]
+    item["paragraphs"] = paragraphs
+
+
+# ──────────────────────────── ОТБОР ГЛАВНОГО ────────────────────────────
+
+def _title_words(title: str) -> set[str]:
+    return {w[:6] for w in re.findall(r"[а-яёa-z0-9]+", title.lower()) if len(w) > 3}
+
+
+def group_stories(items: list[dict]) -> list[list[dict]]:
+    """Склеивает одну и ту же новость из разных источников в одну «историю»."""
+    stories: list[tuple[set[str], list[dict]]] = []
+    for it in items:
+        words = _title_words(it["title"])
+        for story_words, story in stories:
+            common = len(words & story_words)
+            if words and common >= 2 and common / len(words | story_words) >= 0.3:
+                story.append(it)
+                story_words |= words
+                break
+        else:
+            stories.append((set(words), [it]))
+    return [story for _, story in stories]
+
+
+def pick_top(items: list[dict], limit: int) -> list[dict]:
+    """Главное за сутки: о чём написали больше источников, затем — свежее."""
+    newest = lambda i: i["time"] or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    stories = group_stories(sorted(items, key=newest, reverse=True))
+    stories.sort(key=lambda s: (len({i["source"] for i in s}), max(map(newest, s))), reverse=True)
+    top = []
+    for story in stories[:limit]:
+        main = dict(max(story, key=lambda i: (len(i.get("fulltext", "")), bool(i["image"]))))
+        main["also"] = sorted({i["source"] for i in story} - {main["source"]})
+        main["duplicates"] = story
+        main["image"] = main["image"] or next((i["image"] for i in story if i["image"]), None)
+        top.append(main)
+    top.sort(key=newest, reverse=True)
+    return top
+
+
 async def collect_news(session: aiohttp.ClientSession, sent: set[str]) -> tuple[list[dict], list[dict]]:
-    """Возвращает (новости, новости СВО) — только свежие и ещё не отправленные на этот сервер."""
+    """Возвращает (новости, новости СВО) — главное за сутки, ещё не отправленное, с полным текстом."""
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=MAX_AGE_HOURS)
 
     general = await asyncio.gather(*(fetch_feed(session, s, u) for s, u in NEWS_FEEDS.items()))
     special = await asyncio.gather(*(fetch_feed(session, s, u) for s, u in SVO_FEEDS.items()))
 
     def fresh(items):
-        seen_titles = set()
         for it in items:
-            key = it["title"].lower()
-            if it["id"] in sent or it["link"] in sent or key in seen_titles:
+            if it["id"] in sent or it["link"] in sent:
                 continue
             if it["time"] and it["time"] < cutoff:
                 continue
-            seen_titles.add(key)
             yield it
 
     all_general = list(fresh(i for feed in general for i in feed))
     svo = list(fresh(i for feed in special for i in feed)) + [i for i in all_general if is_svo(i)]
     news = [i for i in all_general if not (SVO_EXCLUDE_FROM_NEWS and is_svo(i))]
 
-    newest_first = lambda i: i["time"] or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
-    news.sort(key=newest_first, reverse=True)
-    svo.sort(key=newest_first, reverse=True)
-    return news[:MAX_ITEMS_PER_DIGEST], svo[:MAX_ITEMS_PER_DIGEST]
+    news, svo = pick_top(news, MAX_ITEMS_PER_DIGEST), pick_top(svo, MAX_ITEMS_PER_DIGEST)
+    limit = asyncio.Semaphore(4)
+
+    async def load(item):
+        async with limit:
+            await fetch_full_text(session, item)
+
+    await asyncio.gather(*(load(i) for i in news + svo))
+    return news, svo
 
 
 def mark_sent(cfg: dict, items: list[dict]) -> None:
-    for it in items:
-        cfg["sent"].append(it["id"])
-        if it["link"] != it["id"]:
-            cfg["sent"].append(it["link"])
+    for main in items:
+        for it in main.get("duplicates", [main]):
+            cfg["sent"].append(it["id"])
+            if it["link"] != it["id"]:
+                cfg["sent"].append(it["link"])
     save_data()
 
 
@@ -248,25 +340,81 @@ def today_ru() -> str:
     return f"{now.day} {MONTHS_GEN[now.month]} {now.year}"
 
 
-def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
-    title = {"news": "📰 Сводка новостей", "svo": "🎖️ Сводка СВО"}[kind]
-    embed = discord.Embed(
-        title=f"{title} — {today_ru()}",
-        description=f"Главное за последние {MAX_AGE_HOURS} ч. · публикаций: {len(items)}",
-        color=COLORS[kind],
-        timestamp=dt.datetime.now(dt.timezone.utc),
-    )
-    for n, it in enumerate(items, 1):
-        when = f" · <t:{int(it['time'].timestamp())}:t>" if it["time"] else ""
-        summary = shorten(it["summary"], 180) if it["summary"] and it["summary"] != it["title"] else ""
-        value = (f"{summary}\n" if summary else "") + f"[Читать →]({it['link']}) · *{it['source']}*{when}"
-        embed.add_field(name=shorten(f"{n}. {it['title']}", 256), value=shorten(value, 1024), inline=False)
+# ──────────────────────────────── ПОСТЫ ────────────────────────────────
 
-    image = next((it["image"] for it in items if it["image"]), None)
-    if image:
-        embed.set_image(url=image)
-    embed.set_footer(text="Источники: " + ", ".join(sorted({it["source"] for it in items})))
+DIGEST_TITLES = {"news": "📰 Сводка новостей", "svo": "🎖️ Сводка с фронта"}
+
+
+def article_body(paragraphs: list[str], limit: int) -> tuple[str, bool]:
+    """Текст поста по целым абзацам (последний — по целым предложениям). Возвращает (текст, обрезан ли)."""
+    out, total = [], 0
+    for para in paragraphs:
+        if total + len(para) <= limit:
+            out.append(para)
+            total += len(para) + 2
+            continue
+        part = ""
+        for sentence in re.split(r"(?<=[.!?…»])\s+", para):
+            if total + len(part) + len(sentence) > limit:
+                break
+            part += sentence + " "
+        if part.strip():
+            out.append(part.strip())
+        return "\n\n".join(out), True
+    return "\n\n".join(out), False
+
+
+def build_article_embed(item: dict, kind: str, n: int, total: int) -> discord.Embed:
+    paragraphs = item.get("paragraphs") or []
+    body, cut = article_body(paragraphs[1:], ARTICLE_TEXT_LIMIT - len(paragraphs[0]) if paragraphs else 0)
+    parts = []
+    if paragraphs:
+        parts.append(f"**{paragraphs[0]}**")   # лид — жирным, как в газете
+    if body:
+        parts.append(body)
+    if cut:
+        parts.append(f"*…продолжение — [в источнике]({item['link']})*")
+    embed = discord.Embed(
+        title=shorten(item["title"], 256),
+        url=item["link"],
+        description=shorten("\n\n".join(parts) or "*Текст недоступен — откройте источник.*", 4096),
+        color=COLORS[kind],
+        timestamp=item["time"] or dt.datetime.now(dt.timezone.utc),
+    )
+    embed.set_author(name=f"{DIGEST_TITLES[kind]} · {n} из {total}")
+    if item["image"]:
+        embed.set_image(url=item["image"])
+    footer = item["source"]
+    if item.get("also"):
+        footer += " · также сообщают: " + ", ".join(item["also"])
+    embed.set_footer(text=shorten(footer, 2048))
     return embed
+
+
+def build_digest_header(items: list[dict], kind: str, links: list[str] | None = None) -> discord.Embed:
+    """Шапка сводки с оглавлением. links — ссылки на посты (появляются, когда посты отправлены)."""
+    lines = []
+    for n, it in enumerate(items, 1):
+        name = shorten(it["title"], 110)
+        lines.append(f"`{n:>2}.` [{name}]({links[n - 1]})" if links else f"`{n:>2}.` {name}")
+    embed = discord.Embed(
+        title=f"{DIGEST_TITLES[kind]} — {today_ru()}",
+        description=(f"Главное за сутки — {plural(len(items), 'материал', 'материала', 'материалов')}. "
+                     "Нажмите на заголовок, чтобы перейти к новости, или листайте ниже ⬇️\n\n" + "\n".join(lines)),
+        color=COLORS[kind],
+    )
+    sources = sorted({s for it in items for s in [it["source"], *it.get("also", [])]})
+    embed.set_footer(text="Источники: " + ", ".join(sources))
+    return embed
+
+
+async def send_digest(channel: discord.abc.Messageable, items: list[dict], kind: str) -> None:
+    header = await channel.send(embed=build_digest_header(items, kind))
+    links = []
+    for n, item in enumerate(items, 1):
+        message = await channel.send(embed=build_article_embed(item, kind, n, len(items)))
+        links.append(message.jump_url)
+    await header.edit(embed=build_digest_header(items, kind, links))
 
 
 # ─────────────────────────── ЭТОТ ДЕНЬ В ИСТОРИИ ───────────────────────────
@@ -578,7 +726,7 @@ class NewsBot(commands.Bot):
                 if not items:
                     report.append(f"{KINDS[kind]}: новых публикаций нет")
                     continue
-                await channel.send(embed=build_digest_embed(items, kind))
+                await send_digest(channel, items, kind)
                 mark_sent(cfg, items)
                 report.append(f"{KINDS[kind]}: {plural(len(items), 'публикация', 'публикации', 'публикаций')} → {channel.mention}")
 
@@ -820,7 +968,19 @@ def ask_token() -> str:
     return token
 
 
+def selftest() -> None:
+    """NewsBot.exe --selftest: проверка, что в сборку попало всё нужное для полного текста статей."""
+    sample = "<html><body><article>" + "<p>Проверочный абзац о том, что бот умеет читать статьи целиком.</p>" * 5 \
+             + "</article></body></html>"
+    text = _extract_main_text(sample)
+    ZoneInfo("Europe/Moscow")
+    print("SELFTEST OK" if "Проверочный абзац" in text else "SELFTEST FAIL", len(text))
+
+
 def main() -> None:
+    if "--selftest" in sys.argv:
+        selftest()
+        return
     token = TOKEN
     if not token or token.startswith("вставьте"):
         token = ask_token()

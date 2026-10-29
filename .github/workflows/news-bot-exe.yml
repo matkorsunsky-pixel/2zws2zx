@@ -25,7 +25,7 @@ jobs:
 
       - name: Собрать exe
         working-directory: news-bot
-        run: pyinstaller --onefile --console --name NewsBot --collect-data tzdata bot.py
+        run: pyinstaller --onefile --console --name NewsBot --collect-data tzdata --collect-all trafilatura --collect-all justext --collect-all htmldate --collect-all courlan --hidden-import lxml_html_clean bot.py
 
       - name: Проверить, что exe запускается
         working-directory: news-bot
@@ -37,6 +37,9 @@ jobs:
           Get-Content out.txt, err.txt
           if (Select-String -Path out.txt, err.txt -Pattern "ModuleNotFoundError|ImportError|ZoneInfoNotFoundError" -Quiet) { exit 1 }
           if (-not (Select-String -Path out.txt -Pattern "Developer Portal" -Quiet)) { exit 1 }
+          $selftest = & dist\NewsBot.exe --selftest 2>&1 | Out-String
+          Write-Output $selftest
+          if ($selftest -notmatch "SELFTEST OK") { exit 1 }
 
       - name: Собрать архив
         shell: pwsh
