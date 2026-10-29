@@ -67,8 +67,7 @@ SVO_WORDS = ["сво", "всу", "днр", "лнр", "бпла", "вс рф", "�
 # Если True — новости про СВО не дублируются в общей сводке
 SVO_EXCLUDE_FROM_NEWS = True
 
-MAX_ITEMS_PER_DIGEST = 8        # сколько новостей в одной сводке (каждая — отдельным постом)
-ARTICLE_TEXT_LIMIT = 2500       # сколько знаков текста статьи показывать в посте (Discord — до 4096)
+MAX_ITEMS_PER_DIGEST = 12       # сколько новостей в одной сводке (всё — одним сообщением)
 MAX_AGE_HOURS = 24              # брать только публикации не старше N часов
 MAX_HISTORY_EVENTS = 6          # сколько исторических событий показывать
 
@@ -341,36 +340,53 @@ def today_ru() -> str:
 
 
 # ──────────────────────────────── ПОСТЫ ────────────────────────────────
+# Сводка — одно сообщение: «📌 Главное» и пронумерованные разделы по категориям.
+# Discord вмещает в сообщение около 6000 знаков, поэтому длина пересказа подбирается под это.
 
 DIGEST_TITLES = {"news": "☀️ Главное за сутки", "svo": "⚔️ Сводка с фронта"}
+EMBED_LIMIT = 5900
 
-# Рубрика новости по ключевым словам (начала слов). Первая — для сводки с фронта.
-RUBRICS = [
-    ("🏛️ Политика", ["путин", "кремл", "госдум", "правительств", "министр", "президент", "выбор",
-                     "закон", "депутат", "совфед", "партия", "губернатор", "мэр"]),
-    ("💰 Экономика", ["рубл", "курс", "нефт", "газпром", "банк", "цб", "инфляц", "бирж", "экономик",
-                      "бюджет", "налог", "ценов", "подорож", "зарплат", "пенси", "ипотек", "кредит", "санкци"]),
-    ("🌍 В мире", ["сша", "китай", "европ", "евросоюз", "нато", "трамп", "израил", "иран", "германи",
-                   "франц", "британ", "оон", "турци", "индия", "япони", "вашингтон", "пекин"]),
-    ("🚀 Наука и технологии", ["учён", "наук", "космос", "космическ", "роскосмос", "ракет", "спутник",
-                               "технолог", "интернет", "нейросет", "искусственн", "открыти"]),
-    ("⚽ Спорт", ["матч", "чемпион", "футбол", "хоккей", "олимпи", "спортсмен", "турнир", "сборн"]),
-    ("🎭 Культура", ["фильм", "театр", "музе", "выставк", "концерт", "писател", "режиссёр", "артист", "книг"]),
-    ("🚨 Происшествия", ["пожар", "авари", "дтп", "погиб", "задержан", "судебн", "приговор", "взрыв", "крушени",
-                         "мошенн", "убийств", "уголовн"]),
-]
-_RUBRIC_RES = [(name, word_regex(words)) for name, words in RUBRICS]
+# Разделы сводки в порядке показа: (название, начала слов). Новость без совпадений — в последний раздел.
+SECTIONS = {
+    "news": [
+        ("🏛️ Политика", ["путин", "кремл", "госдум", "правительств", "министр", "президент", "выбор",
+                         "закон", "депутат", "совфед", "партия", "губернатор", "мэр", "песков"]),
+        ("💰 Экономика", ["рубл", "курс", "нефт", "газпром", "банк", "цб", "инфляц", "бирж", "экономик",
+                          "бюджет", "налог", "ценов", "подорож", "зарплат", "пенси", "ипотек", "кредит", "санкци"]),
+        ("🌍 В мире", ["сша", "китай", "европ", "евросоюз", "нато", "трамп", "израил", "иран", "германи",
+                       "франц", "британ", "оон", "турци", "индия", "япони", "вашингтон", "пекин"]),
+        ("🚨 Происшествия", ["пожар", "авари", "дтп", "погиб", "задержан", "судебн", "приговор", "взрыв",
+                             "крушени", "мошенн", "убийств", "уголовн"]),
+        ("🚀 Наука и технологии", ["учён", "наук", "космос", "космическ", "роскосмос", "ракет", "спутник",
+                                   "технолог", "интернет", "нейросет", "искусственн", "открыти"]),
+        ("🎭 Культура", ["фильм", "театр", "музе", "выставк", "концерт", "писател", "режиссёр", "артист", "книг"]),
+        ("⚽ Спорт", ["матч", "чемпион", "футбол", "хоккей", "олимпи", "спортсмен", "турнир", "сборн"]),
+        ("🏙️ Общество", []),
+    ],
+    "svo": [
+        ("🗺️ Обстановка на фронте", ["направлени", "освобожд", "наступлени", "атак", "штурм", "позици",
+                                    "населённ", "продвину", "контрол", "отразил"]),
+        ("🎯 Удары и ПВО", ["удар", "пво", "беспилотник", "бпла", "ракет", "сбит", "сбил", "перехват",
+                           "поражен", "дрон"]),
+        ("🏘️ Приграничье", ["белгород", "курск", "брянск", "приграничн", "эвакуац", "обстрел"]),
+        ("🛡️ Тыл и оснащение", ["техник", "бронетехник", "танк", "уралвагон", "поставк", "оснащ", "вооружени", "производств", "контракт",
+                               "мобилизац", "доброволь", "призыв", "военнослужащ", "ветеран"]),
+        ("🌐 Переговоры и политика", ["переговор", "мирн", "перемири", "обмен", "пленн", "зеленск",
+                                      "трамп", "нато", "запад", "санкци", "путин", "кремл"]),
+        ("📋 Другое", []),
+    ],
+}
+_SECTION_RES = {kind: [(name, word_regex(words) if words else None) for name, words in sections]
+                for kind, sections in SECTIONS.items()}
 _SPEECH_RE = re.compile(r"(заяв|сказа|отмети|подчеркну|сообщи|пояснил|добави|уверен|признал)", re.I)
 _QUOTE_RE = re.compile(r"«([^«»]{50,280})»")
 
 
-def rubric(item: dict, kind: str) -> str:
-    if kind == "svo":
-        return "⚔️ Фронт"
+def section_of(item: dict, kind: str) -> str:
     text = f"{item['title']} {item['title']} {' '.join((item.get('paragraphs') or [])[:2])}"
-    scores = [(len(regex.findall(text)), name) for name, regex in _RUBRIC_RES]
+    scores = [(len(regex.findall(text)), -i, name) for i, (name, regex) in enumerate(_SECTION_RES[kind]) if regex]
     best = max(scores)
-    return best[1] if best[0] else "🏙️ Общество"
+    return best[2] if best[0] else _SECTION_RES[kind][-1][0]
 
 
 def pull_quote(item: dict) -> tuple[str, str, str] | None:
@@ -387,10 +403,6 @@ def pull_quote(item: dict) -> tuple[str, str, str] | None:
                 speaker = speaker or (before.group(1).strip() if before else "")
                 best = (score, m.group(1).strip(), speaker, para)
     return best[1:] if best else None
-
-
-def quote_block(quote: str, speaker: str) -> str:
-    return f"> 💬 *«{quote}»*" + (f"\n> — {speaker}" if speaker else "")
 
 
 def split_long(paragraphs: list[str], size: int = 550) -> list[str]:
@@ -413,7 +425,7 @@ def split_long(paragraphs: list[str], size: int = 550) -> list[str]:
 
 
 def article_body(paragraphs: list[str], limit: int) -> tuple[str, bool]:
-    """Текст поста по целым абзацам (последний — по целым предложениям). Возвращает (текст, обрезан ли)."""
+    """Текст по целым абзацам (последний — по целым предложениям). Возвращает (текст, обрезан ли)."""
     out, total = [], 0
     for para in paragraphs:
         if total + len(para) <= limit:
@@ -431,80 +443,84 @@ def article_body(paragraphs: list[str], limit: int) -> tuple[str, bool]:
     return "\n\n".join(out), False
 
 
+def gist(item: dict, limit: int) -> str:
+    """Суть новости в limit знаков: первые предложения статьи одним абзацем."""
+    sentences = [s for p in item.get("paragraphs") or [] for s in re.split(r"(?<=[.!?…])\s+", p)]
+    text = ""
+    for s in sentences:
+        if text and len(text) + len(s) + 1 > limit:
+            break
+        text += (" " if text else "") + s
+    return shorten(text, limit) if text else ""
+
+
 def reading_minutes(paragraphs: list[str]) -> int:
     return max(1, round(sum(len(p.split()) for p in paragraphs) / 180))
 
 
-def build_article_embed(item: dict, kind: str, n: int, total: int) -> discord.Embed:
-    paragraphs = split_long(item.get("paragraphs") or [])
-    lead, rest = (paragraphs[0], paragraphs[1:]) if paragraphs else ("", [])
-    quote = pull_quote({"paragraphs": rest})
-    if quote:   # абзац с яркой прямой речью выделяется цитатой прямо на своём месте
-        text, speaker, para = quote
-        if para in rest and len(para) < len(text) + len(speaker) + 40:
-            rest = [quote_block(text, speaker) if p == para else p for p in rest]
-
-    body, cut = article_body(rest, ARTICLE_TEXT_LIMIT - len(lead))
-    parts = []
-    if lead:
-        parts.append(f"**{lead}**")                          # лид — жирным, как в газете
-    if body:
-        parts.append(body)
-    if cut:
-        parts.append(f"[Читать продолжение →]({item['link']})")
-    embed = discord.Embed(
-        title=shorten(item["title"], 256),
-        url=item["link"],
-        description=shorten("\n\n".join(parts) or "*Текст недоступен — откройте источник.*", 4096),
-        color=COLORS[kind],
-        timestamp=item["time"] or dt.datetime.now(dt.timezone.utc),
-    )
-    embed.set_author(name=f"{rubric(item, kind)}  ·  {n} из {total}")
-    if item["image"]:
-        embed.set_image(url=item["image"])
-    footer = item["source"]
-    if item.get("also"):
-        footer += " · также пишут " + ", ".join(item["also"])
-    footer += f" · ⏱ {reading_minutes(item.get('paragraphs') or [item['title']])} мин"
-    embed.set_footer(text=shorten(footer, 2048))
-    return embed
+def sources_line(item: dict) -> str:
+    return ", ".join([item["source"], *item.get("also", [])])
 
 
-def build_digest_header(items: list[dict], kind: str, links: list[str] | None = None) -> discord.Embed:
-    """Шапка сводки: оглавление с рубриками и цитата дня. links — ссылки на посты, когда они отправлены."""
-    lines = []
-    for n, it in enumerate(items, 1):
-        icon = rubric(it, kind).split()[0]
-        name = shorten(it["title"], 100)
-        lines.append(f"{icon} [{name}]({links[n - 1]})" if links else f"{icon} {name}")
-    minutes = sum(reading_minutes(it.get("paragraphs") or [it["title"]]) for it in items)
+def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
+    top, rest = items[0], items[1:]
+    grouped: dict[str, list[dict]] = {}
+    for it in rest:
+        grouped.setdefault(section_of(it, kind), []).append(it)
+    order = [name for name, _ in SECTIONS[kind] if name in grouped]
+
     hour = dt.datetime.now(TZ).hour
     hello = "Доброе утро" if 5 <= hour < 12 else "Добрый день" if hour < 18 else "Добрый вечер"
-    intro = {"news": f"{hello}! Собрали главное, что произошло за сутки.",
-             "svo": "Главные события в зоне СВО за сутки."}[kind]
-    embed = discord.Embed(
-        title=f"{DIGEST_TITLES[kind]} · {today_ru()}",
-        description=(f"{intro}\n*{plural(len(items), 'материал', 'материала', 'материалов')} · "
-                     f"около {minutes} мин чтения · листайте ниже* ⬇️\n\n" + "\n".join(lines)),
-        color=COLORS[kind],
-    )
-    quotes = [(q, it["source"]) for it in items if (q := pull_quote(it))]
-    if quotes:
-        (text, speaker, _), source = max(quotes, key=lambda x: len(x[0][0]) + 200 * bool(x[0][1]))
-        embed.add_field(name="💬 Цитата дня", value=f"*«{shorten(text, 300)}»*\n— {speaker or source}",
-                        inline=False)
-    sources = sorted({s for it in items for s in [it["source"], *it.get("also", [])]})
-    embed.set_footer(text="Источники: " + ", ".join(sources))
+    intro = {"news": f"{hello}! Главное, что произошло за сутки, — в одном сообщении.",
+             "svo": "Главные события в зоне СВО за сутки — в одном сообщении."}[kind]
+    quote = next(((q, it) for it in items if (q := pull_quote(it)) and q[1]), None) \
+        or next(((q, it) for it in items if (q := pull_quote(it))), None)
+
+    def build(top_len: int, item_len: int) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"{DIGEST_TITLES[kind]} · {today_ru()}",
+            description=(f"{intro}\n\n**📌 Главное: [{top['title']}]({top['link']})**\n"
+                         f"{gist(top, top_len)}\n*— {sources_line(top)}*"),
+            color=COLORS[kind],
+            timestamp=dt.datetime.now(dt.timezone.utc),
+        )
+        for n, name in enumerate(order, 1):
+            entries = []
+            for it in grouped[name]:
+                text = gist(it, item_len)
+                entries.append(f"▸ **[{shorten(it['title'], 150)}]({it['link']})**"
+                               + (f"\n{text}" if text and text != it["title"] else "")
+                               + f"\n*— {sources_line(it)}*")
+            chunks = [""]                                     # блок Discord — до 1024 знаков,
+            for entry in entries:                             # длинный раздел продолжается в следующем
+                entry = shorten(entry, 1024)
+                if chunks[-1] and len(chunks[-1]) + len(entry) + 2 > 1024:
+                    chunks.append("")
+                chunks[-1] += ("\n\n" if chunks[-1] else "") + entry
+            for i, chunk in enumerate(chunks):
+                embed.add_field(name=f"{n}. {name}" if i == 0 else "\u200b", value=chunk, inline=False)
+        if quote:
+            (text, speaker, _), it = quote
+            embed.add_field(name="💬 Цитата дня",
+                            value=f"> *«{shorten(text, 300)}»*\n> — {speaker or it['source']}", inline=False)
+        if top["image"]:
+            embed.set_image(url=top["image"])
+        minutes = max(1, round(len(embed) / 1100))
+        embed.set_footer(text=f"{plural(len(items), 'новость', 'новости', 'новостей')} · ⏱ {minutes} мин чтения · "
+                              "заголовки кликабельны")
+        return embed
+
+    top_len, item_len = 650, 420
+    embed = build(top_len, item_len)
+    while len(embed) > EMBED_LIMIT and item_len > 60:      # не влезает в сообщение — короче пересказы
+        item_len -= 30
+        top_len = max(250, top_len - 30)
+        embed = build(top_len, item_len)
     return embed
 
 
 async def send_digest(channel: discord.abc.Messageable, items: list[dict], kind: str) -> None:
-    header = await channel.send(embed=build_digest_header(items, kind))
-    links = []
-    for n, item in enumerate(items, 1):
-        message = await channel.send(embed=build_article_embed(item, kind, n, len(items)))
-        links.append(message.jump_url)
-    await header.edit(embed=build_digest_header(items, kind, links))
+    await channel.send(embed=build_digest_embed(items, kind))
 
 
 # ─────────────────────────── ЭТОТ ДЕНЬ В ИСТОРИИ ───────────────────────────
@@ -726,7 +742,7 @@ async def collect_history(session: aiohttp.ClientSession) -> dict | None:
         except Exception as exc:
             log.warning("Не удалось загрузить статью «%s»: %r", title, exc)
 
-    others = [e for e in ranked[1:] if significance(e) > 0][:3]
+    others = [e for e in ranked[1:] if significance(e) > 0][:5]
     others.sort(key=lambda e: e["year"] or 0)
     result = {"main": main, "others": others, "day": day}
     _history_cache.clear()
@@ -738,7 +754,7 @@ def year_label(year: int) -> str:
     return f"{-year} год до н. э." if year < 0 else f"{year} год"
 
 
-def build_history_embed(history: dict) -> discord.Embed:
+def build_history_embed(history: dict, story_len: int = 2200) -> discord.Embed:
     day, main, article = history["day"], history["main"], history["main"]["article"]
     year = main["year"] or 0
     date_text = f"{day.day} {MONTHS_GEN[day.month]}"
@@ -753,7 +769,7 @@ def build_history_embed(history: dict) -> discord.Embed:
     parts = [f"> *{hook}*"]
 
     if article:
-        story = take_text(article["intro"], 1300)
+        story = take_text(article["intro"], story_len)
         if story:
             # термин в начале статьи — жирным: «**Сражение при Вязьме** — …»
             story = re.sub(r"^(.{3,90}?)\s+[—–-]\s+", r"**\1** — ", story, count=1)
@@ -772,23 +788,25 @@ def build_history_embed(history: dict) -> discord.Embed:
     if article:
         outcome = find_section(article, "итог", "значени", "последстви", "результат")
         if outcome:
-            embed.add_field(name="⚖️ Итоги и значение", value=take_text(outcome, 700), inline=False)
+            embed.add_field(name="⚖️ Итоги и значение", value=take_text(outcome, 950), inline=False)
         trivia = find_section(article, "интересн", "любопытн", "факт")
         if trivia:
-            fact = take_text(trivia, 350).split("\n\n")[0]
+            fact = take_text(trivia, 500).split("\n\n")[0]
             embed.add_field(name="💡 Любопытный факт", value=fact, inline=False)
         memory = find_section(article, "памят", "увековеч", "в культуре", "в искусстве")
         if memory and not trivia:
-            embed.add_field(name="🏛️ Память", value=take_text(memory, 350).split("\n\n")[0], inline=False)
+            embed.add_field(name="🏛️ Память", value=take_text(memory, 500).split("\n\n")[0], inline=False)
 
     if history["others"]:
-        lines = [f"`{e['year']}` {shorten(e['text'], 150)}" for e in history["others"]]
+        lines = [f"`{e['year']}` {shorten(e['text'], 180)}" for e in history["others"]]
         embed.add_field(name="🕯️ Также в этот день", value="\n".join(lines)[:1024], inline=False)
 
     if article and article["image"]:
         embed.set_image(url=article["image"])
     link = f"📖 Полная статья — Википедия" if article else "По материалам Википедии"
-    embed.set_footer(text=f"{link} · ⏱ {max(1, round(len(embed.description.split()) / 180))} мин чтения")
+    embed.set_footer(text=f"{link} · ⏱ {max(1, round(len(embed) / 1100))} мин чтения")
+    if len(embed) > 5900 and story_len > 600:        # не влезает в сообщение Discord — рассказ короче
+        return build_history_embed(history, story_len - 300)
     return embed
 
 
