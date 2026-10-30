@@ -366,10 +366,19 @@ def today_ru() -> str:
 
 # ──────────────────────────────── ПОСТЫ ────────────────────────────────
 # Сводка — одно сообщение: «📌 Главное» и пронумерованные разделы по категориям.
-# Discord вмещает в сообщение около 6000 знаков, поэтому длина пересказа подбирается под это.
+# Discord ограничивает размер сообщения в байтах, а русская буква — 2 байта. Поэтому длина пересказов
+# подбирается под этот предел, а если Discord всё равно отказал (ошибка 413) — бот ужимает текст и пробует снова.
 
 DIGEST_TITLES = {"news": "☀️ Главное за сутки", "svo": "⚔️ Сводка с фронта"}
-EMBED_LIMIT = 5900
+EMBED_BYTES = 5800       # начальный предел текста рамки в байтах; при отказе Discord бот снижает его сам
+MIN_EMBED_BYTES = 2000
+
+
+def embed_size(embed: discord.Embed) -> int:
+    """Размер текста рамки в байтах UTF-8 — так его меряет Discord."""
+    parts = [embed.title, embed.description, embed.author.name, embed.footer.text]
+    parts += [x for f in embed.fields for x in (f.name, f.value)]
+    return sum(len(p.encode("utf-8")) for p in parts if p)
 
 # Разделы сводки в порядке показа: (название, начала слов). Новость без совпадений — в последний раздел.
 SECTIONS = {
@@ -487,7 +496,8 @@ def sources_line(item: dict) -> str:
     return ", ".join([item["source"], *item.get("also", [])])
 
 
-def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
+def build_digest_embed(items: list[dict], kind: str, limit: int = EMBED_BYTES) -> tuple[discord.Embed, list[dict]]:
+    """Рамка сводки и список новостей, которые в неё поместились."""
     top, rest = items[0], items[1:]
     grouped: dict[str, list[dict]] = {}
     for it in rest:
@@ -537,11 +547,20 @@ def build_digest_embed(items: list[dict], kind: str) -> discord.Embed:
 
     top_len, item_len = 650, 420
     embed = build(top_len, item_len)
-    while len(embed) > EMBED_LIMIT and item_len > 60:      # не влезает в сообщение — короче пересказы
+    while embed_size(embed) > limit and item_len > 60:     # не влезает в сообщение — короче пересказы
         item_len -= 30
         top_len = max(250, top_len - 30)
         embed = build(top_len, item_len)
-    return embed
+    while embed_size(embed) > limit and len(rest) > 1:     # всё ещё велико — убрать наименее важные новости
+        dropped = min(rest, key=lambda i: (len({i["source"], *i.get("also", [])}), i["time"] or dt.datetime.min.replace(tzinfo=dt.timezone.utc)))
+        rest.remove(dropped)
+        grouped = {}
+        for it in rest:
+            grouped.setdefault(section_of(it, kind), []).append(it)
+        order = [name for name, _ in SECTIONS[kind] if name in grouped]
+        items = [top, *rest]
+        embed = build(top_len, item_len)
+    return embed, [top, *rest]
 
 
 def divider_png(color: int, width: int = 1200, height: int = 6) -> bytes:
@@ -561,8 +580,31 @@ def framed(embed: discord.Embed) -> dict:
     return {"embed": embed, "file": discord.File(io.BytesIO(divider_png(embed.color.value)), filename="line.png")}
 
 
-async def send_digest(channel: discord.abc.Messageable, items: list[dict], kind: str) -> None:
-    await channel.send(**framed(build_digest_embed(items, kind)))
+_size_limit = EMBED_BYTES   # запоминается: если Discord однажды отказал, дальше бот сразу берёт меньший размер
+
+
+async def send_fitting(send, build):
+    """Отправляет рамку build(limit), при отказе Discord «слишком большое сообщение» — ужимает и повторяет."""
+    global _size_limit
+    limit = _size_limit
+    while True:
+        result = build(limit)
+        embed = result[0] if isinstance(result, tuple) else result
+        try:
+            await send(**framed(embed))
+            _size_limit = limit
+            return result
+        except discord.HTTPException as exc:
+            if (exc.status != 413 and exc.code != 40005) or limit <= MIN_EMBED_BYTES:
+                raise
+            log.warning("Discord: сообщение слишком большое (%d байт текста) — ужимаю", embed_size(embed))
+            limit = max(MIN_EMBED_BYTES, int(min(limit, embed_size(embed)) * 0.85))
+
+
+async def send_digest(channel: discord.abc.Messageable, items: list[dict], kind: str) -> list[dict]:
+    """Публикует сводку; возвращает новости, которые в неё вошли."""
+    _, shown = await send_fitting(channel.send, lambda limit: build_digest_embed(items, kind, limit))
+    return shown
 
 
 # ─────────────────────────── ЭТОТ ДЕНЬ В ИСТОРИИ ───────────────────────────
@@ -815,7 +857,7 @@ def year_label(year: int) -> str:
     return f"{-year} год до н. э." if year < 0 else f"{year} год"
 
 
-def build_history_embed(history: dict, story_len: int = 2200) -> discord.Embed:
+def build_history_embed(history: dict, limit: int = EMBED_BYTES, story_len: int = 2200) -> discord.Embed:
     day, main, article = history["day"], history["main"], history["main"]["article"]
     year = main["year"] or 0
     date_text = f"{day.day} {MONTHS_GEN[day.month]}"
@@ -866,8 +908,8 @@ def build_history_embed(history: dict, story_len: int = 2200) -> discord.Embed:
         embed.set_thumbnail(url=article["image"])
     link = f"📖 Полная статья — Википедия" if article else "По материалам Википедии"
     embed.set_footer(text=f"{link} · ⏱ {max(1, round(len(embed) / 1100))} мин чтения")
-    if len(embed) > 5900 and story_len > 600:        # не влезает в сообщение Discord — рассказ короче
-        return build_history_embed(history, story_len - 300)
+    if embed_size(embed) > limit and story_len > 300:     # не влезает в сообщение Discord — рассказ короче
+        return build_history_embed(history, limit, story_len - 200)
     return embed
 
 
@@ -926,7 +968,7 @@ class NewsBot(commands.Bot):
                 if not items:
                     report.append(f"{KINDS[kind]}: новых новостей с прошлой сводки нет — всё уже было")
                     continue
-                await send_digest(channel, items, kind)
+                items = await send_digest(channel, items, kind)
                 cfg["last_post"][kind] = stamp
                 mark_sent(cfg, items)
                 report.append(f"{KINDS[kind]}: {plural(len(items), 'публикация', 'публикации', 'публикаций')} → {channel.mention}")
@@ -941,7 +983,7 @@ class NewsBot(commands.Bot):
             if history and history.get("exhausted"):
                 report.append(f"{KINDS['history']}: все события этого дня уже выложены")
             elif history:
-                await channel.send(**framed(build_history_embed(history)))
+                await send_fitting(channel.send, lambda limit: build_history_embed(history, limit))
                 done["events"].append(event_key(history["main"]))
                 cfg["last_post"]["history"] = stamp
                 save_data()
@@ -1065,7 +1107,7 @@ async def history_cmd(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
     history = await prepare_history(bot.http_session)
     if history and not history.get("exhausted"):
-        await interaction.followup.send(**framed(build_history_embed(history)))
+        await send_fitting(interaction.followup.send, lambda limit: build_history_embed(history, limit))
     else:
         await interaction.followup.send("Не удалось получить события, попробуйте позже.")
 
