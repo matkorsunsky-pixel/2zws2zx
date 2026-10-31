@@ -51,30 +51,30 @@ SC_focus_completed = {
 # and the one-time purchases.
 SC_recalc_construction = {
 	set_variable = { SC_cb_general = SC_build_level }
-	multiply_variable = { SC_cb_general = 0.08 }	# +8% per level, max +24%
+	multiply_variable = { SC_cb_general = 0.10 }	# +10% per level, max +50%
 
 	set_variable = { SC_cb_civ = SC_build_level }
-	multiply_variable = { SC_cb_civ = 0.05 }	# +5% per level, max +15%
+	multiply_variable = { SC_cb_civ = 0.06 }	# +6% per level, max +30%
 
 	set_variable = { SC_cb_mil = SC_build_level }
-	multiply_variable = { SC_cb_mil = 0.05 }	# +5% per level, max +15%
+	multiply_variable = { SC_cb_mil = 0.06 }	# +6% per level, max +30%
 
 	set_variable = { SC_cb_infra = SC_build_level }
-	multiply_variable = { SC_cb_infra = 0.15 }	# +15% per level, max +45%
+	multiply_variable = { SC_cb_infra = 0.20 }	# +20% per level, max +100%
 
 	set_variable = { SC_cb_rail = SC_build_level }
-	multiply_variable = { SC_cb_rail = 0.15 }	# +15% per level, max +45%
+	multiply_variable = { SC_cb_rail = 0.20 }	# +20% per level, max +100%
 
 	set_variable = { SC_cb_slots = 0 }
 	if = {
 		limit = { has_country_flag = SC_slots_bought }
-		set_variable = { SC_cb_slots = 0.15 }
+		set_variable = { SC_cb_slots = 0.25 }
 	}
 
 	set_variable = { SC_cb_repair = 0 }
 	if = {
 		limit = { has_country_flag = SC_repair_bought }
-		set_variable = { SC_cb_repair = 0.40 }
+		set_variable = { SC_cb_repair = 0.75 }
 	}
 
 	if = {
