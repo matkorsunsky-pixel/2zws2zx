@@ -113,7 +113,7 @@ SC_construction_category = {
 		visible = { is_ai = no }
 		ai_will_do = { factor = 0 }
 		modifier = {
-			production_speed_buildings_factor = 0.15
+			production_speed_buildings_factor = 0.25
 		}
 	}
 }
