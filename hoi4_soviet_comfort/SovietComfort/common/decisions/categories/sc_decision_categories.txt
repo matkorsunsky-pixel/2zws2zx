@@ -1,0 +1,8 @@
+# Soviet Comfort - own decision panel for construction buffs.
+SC_construction_category = {
+	icon = generic_construction
+	priority = 100
+	visible = {
+		is_ai = no
+	}
+}

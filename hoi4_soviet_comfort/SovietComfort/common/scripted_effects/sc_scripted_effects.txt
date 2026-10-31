@@ -1,0 +1,86 @@
+# Soviet Comfort - scripted effects.
+
+# Called from completion_reward of every Soviet focus
+# (inserted by tools/patch_vanilla.py).
+# Per focus:  +0.2% stability, +0.15% war support, +0.01 PP/day,
+#             +0.1% research speed, +0.08% factory output,
+#             +0.2% efficiency growth, -0.08% consumer goods,
+#             +0.2% recruitable population.
+# Counted up to 60 focuses -> maximum:
+#             +12% stability, +9% war support, +0.6 PP/day,
+#             +6% research, +4.8% factory output, +12% efficiency growth,
+#             -4.8% consumer goods, +12% recruitable population.
+SC_focus_completed = {
+	custom_effect_tooltip = SC_focus_completed_tt
+	hidden_effect = {
+		add_to_variable = { SC_focus_count = 1 }
+		clamp_variable = { var = SC_focus_count min = 0 max = 60 }
+
+		set_variable = { SC_fb_stability = SC_focus_count }
+		multiply_variable = { SC_fb_stability = 0.002 }
+
+		set_variable = { SC_fb_war_support = SC_focus_count }
+		multiply_variable = { SC_fb_war_support = 0.0015 }
+
+		set_variable = { SC_fb_pp = SC_focus_count }
+		multiply_variable = { SC_fb_pp = 0.01 }
+
+		set_variable = { SC_fb_research = SC_focus_count }
+		multiply_variable = { SC_fb_research = 0.001 }
+
+		set_variable = { SC_fb_factory_output = SC_focus_count }
+		multiply_variable = { SC_fb_factory_output = 0.0008 }
+
+		set_variable = { SC_fb_eff_gain = SC_focus_count }
+		multiply_variable = { SC_fb_eff_gain = 0.002 }
+
+		set_variable = { SC_fb_consumer_goods = SC_focus_count }
+		multiply_variable = { SC_fb_consumer_goods = -0.0008 }
+
+		set_variable = { SC_fb_conscription = SC_focus_count }
+		multiply_variable = { SC_fb_conscription = 0.002 }
+
+		if = {
+			limit = { NOT = { has_dynamic_modifier = { modifier = SC_focus_bonus } } }
+			add_dynamic_modifier = { modifier = SC_focus_bonus }
+		}
+		force_update_dynamic_modifier = yes
+	}
+}
+
+# Recalculates the construction panel bonus from SC_build_level
+# and the one-time purchases.
+SC_recalc_construction = {
+	set_variable = { SC_cb_general = SC_build_level }
+	multiply_variable = { SC_cb_general = 0.05 }	# +5% per level, max +15%
+
+	set_variable = { SC_cb_civ = SC_build_level }
+	multiply_variable = { SC_cb_civ = 0.03 }	# +3% per level, max +9%
+
+	set_variable = { SC_cb_mil = SC_build_level }
+	multiply_variable = { SC_cb_mil = 0.03 }	# +3% per level, max +9%
+
+	set_variable = { SC_cb_infra = SC_build_level }
+	multiply_variable = { SC_cb_infra = 0.10 }	# +10% per level, max +30%
+
+	set_variable = { SC_cb_rail = SC_build_level }
+	multiply_variable = { SC_cb_rail = 0.10 }	# +10% per level, max +30%
+
+	set_variable = { SC_cb_slots = 0 }
+	if = {
+		limit = { has_country_flag = SC_slots_bought }
+		set_variable = { SC_cb_slots = 0.10 }
+	}
+
+	set_variable = { SC_cb_repair = 0 }
+	if = {
+		limit = { has_country_flag = SC_repair_bought }
+		set_variable = { SC_cb_repair = 0.25 }
+	}
+
+	if = {
+		limit = { NOT = { has_dynamic_modifier = { modifier = SC_construction_bonus } } }
+		add_dynamic_modifier = { modifier = SC_construction_bonus }
+	}
+	force_update_dynamic_modifier = yes
+}

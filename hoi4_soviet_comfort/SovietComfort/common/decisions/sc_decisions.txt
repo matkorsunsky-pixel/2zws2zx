@@ -1,0 +1,119 @@
+# Soviet Comfort - construction panel.
+# Available to the human player only (is_ai = no).
+
+SC_construction_category = {
+
+	# ---------- Construction program, level 1..3 ----------
+	SC_build_program_1 = {
+		icon = generic_construction
+		cost = 50
+		visible = {
+			is_ai = no
+			NOT = { check_variable = { SC_build_level > 0 } }
+		}
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_program_1_tt
+			hidden_effect = {
+				set_variable = { SC_build_level = 1 }
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	SC_build_program_2 = {
+		icon = generic_construction
+		cost = 75
+		visible = {
+			is_ai = no
+			check_variable = { SC_build_level = 1 }
+		}
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_program_2_tt
+			hidden_effect = {
+				set_variable = { SC_build_level = 2 }
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	SC_build_program_3 = {
+		icon = generic_construction
+		cost = 100
+		visible = {
+			is_ai = no
+			check_variable = { SC_build_level = 2 }
+		}
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_program_3_tt
+			hidden_effect = {
+				set_variable = { SC_build_level = 3 }
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	# Turn the program off (PP is not refunded).
+	SC_build_program_reset = {
+		icon = generic_political_discourse
+		cost = 0
+		visible = {
+			is_ai = no
+			check_variable = { SC_build_level > 0 }
+		}
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_program_reset_tt
+			hidden_effect = {
+				set_variable = { SC_build_level = 0 }
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	# ---------- One-time purchases ----------
+	SC_build_slots = {
+		icon = generic_industry
+		cost = 100
+		fire_only_once = yes
+		visible = { is_ai = no }
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_slots_tt
+			hidden_effect = {
+				set_country_flag = SC_slots_bought
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	SC_build_repair = {
+		icon = generic_industry
+		cost = 50
+		fire_only_once = yes
+		visible = { is_ai = no }
+		ai_will_do = { factor = 0 }
+		complete_effect = {
+			custom_effect_tooltip = SC_build_repair_tt
+			hidden_effect = {
+				set_country_flag = SC_repair_bought
+				SC_recalc_construction = yes
+			}
+		}
+	}
+
+	# ---------- Temporary push: 90 days, then 180 days cooldown ----------
+	SC_build_shock_work = {
+		icon = generic_construction
+		cost = 75
+		days_remove = 90
+		days_re_enable = 180
+		visible = { is_ai = no }
+		ai_will_do = { factor = 0 }
+		modifier = {
+			production_speed_buildings_factor = 0.15
+		}
+	}
+}

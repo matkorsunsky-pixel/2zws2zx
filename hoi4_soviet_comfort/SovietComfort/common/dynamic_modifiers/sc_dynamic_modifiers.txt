@@ -1,0 +1,31 @@
+# Soviet Comfort - dynamic modifiers.
+# Values are country variables, so the bonus grows smoothly.
+
+# Grows with every completed Soviet focus (see SC_focus_completed).
+SC_focus_bonus = {
+	enable = { always = yes }
+	icon = GFX_idea_generic_production_bonus
+
+	stability_factor = SC_fb_stability
+	war_support_factor = SC_fb_war_support
+	political_power_gain = SC_fb_pp
+	research_speed_factor = SC_fb_research
+	industrial_capacity_factory = SC_fb_factory_output
+	production_factory_efficiency_gain_factor = SC_fb_eff_gain
+	consumer_goods_factor = SC_fb_consumer_goods
+	conscription_factor = SC_fb_conscription
+}
+
+# Construction panel (decision category SC_construction_category).
+SC_construction_bonus = {
+	enable = { always = yes }
+	icon = GFX_idea_generic_production_bonus
+
+	production_speed_buildings_factor = SC_cb_general
+	production_speed_industrial_complex_factor = SC_cb_civ
+	production_speed_arms_factory_factor = SC_cb_mil
+	production_speed_infrastructure_factor = SC_cb_infra
+	production_speed_rail_way_factor = SC_cb_rail
+	global_building_slots_factor = SC_cb_slots
+	repair_speed_factor = SC_cb_repair
+}
